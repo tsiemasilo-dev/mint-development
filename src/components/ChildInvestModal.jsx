@@ -161,18 +161,17 @@ export default function ChildInvestModal({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { setStep("amount"); return; }
 
-      const { data: strategyTxns } = await supabase
-        .from("transactions")
-        .select("name")
-        .eq("user_id", session.user.id)
-        .like("name", "Strategy Investment:%");
+      const { data: childHoldings } = await supabase
+        .from("stock_holdings")
+        .select("strategy_id")
+        .eq("family_member_id", child.id);
 
-      const investedStrategies = new Set(
-        (strategyTxns || []).map(t => t.name.replace("Strategy Investment: ", "").trim())
+      const childStrategyIds = new Set(
+        (childHoldings || []).map(h => h.strategy_id).filter(Boolean)
       );
-      const alreadyInvested = strategy?.name && investedStrategies.has(strategy.name);
+      const alreadyHasThisStrategy = strategy?.id && childStrategyIds.has(strategy.id);
 
-      if (!alreadyInvested && investedStrategies.size >= 1) {
+      if (!alreadyHasThisStrategy && childStrategyIds.size >= 1) {
         setShowFeeModal(true);
       } else {
         setStep("amount");
@@ -243,7 +242,7 @@ export default function ChildInvestModal({
                   {step === "success" ? "Investment Placed!" : step === "amount" ? "Confirm Investment" : (strategy?.short_name || strategy?.name)}
                 </h2>
                 {step === "preview" && minimum && (
-                  <p className="text-[11px] text-slate-400 mt-0.5">Min. R{fmt(minimum)} per unit</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Min. R{fmt(minimum * (1 + CASH_BUFFER_RATE))} per basket</p>
                 )}
                 {step === "amount" && (
                   <p className="text-[11px] text-slate-400 mt-0.5">{strategy?.short_name || strategy?.name}</p>
@@ -334,7 +333,7 @@ export default function ChildInvestModal({
                 {minimum && (
                   <div className="text-right">
                     <p className="text-[10px] text-purple-400 uppercase tracking-wide">Min. invest</p>
-                    <p className="text-sm font-bold text-purple-800">R{fmt(minimum)}</p>
+                    <p className="text-sm font-bold text-purple-800">R{fmt(minimum * (1 + CASH_BUFFER_RATE))}</p>
                   </div>
                 )}
               </div>
@@ -464,10 +463,10 @@ export default function ChildInvestModal({
                 <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
                   <div className="flex items-center gap-1.5 mb-1">
                     <BarChart3 className="h-3 w-3 text-indigo-400" />
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per unit</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Min. per basket</p>
                   </div>
                   <p className="text-base font-bold text-slate-900 tabular-nums">
-                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum)}` : "—"}
+                    {minimumLoading ? "…" : minimum ? `R${fmt(minimum * (1 + CASH_BUFFER_RATE))}` : "—"}
                   </p>
                 </div>
               </div>
@@ -485,9 +484,9 @@ export default function ChildInvestModal({
                   </button>
                   <div className="flex-1 text-center">
                     <p className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
-                      {minimum && baseAmount > 0 ? `R${fmt(baseAmount)}` : "R0.00"}
+                      {minimum && fees.bufferedBase > 0 ? `R${fmt(fees.bufferedBase)}` : "R0.00"}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-1">{units} unit{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum) : "0.00"}</p>
+                    <p className="text-[11px] text-slate-400 mt-1">{units} basket{units !== 1 ? "s" : ""} × R{minimum ? fmt(minimum * (1 + CASH_BUFFER_RATE)) : "0.00"}</p>
                   </div>
                   <button
                     onClick={() => setUnits(u => u + 1)}
@@ -509,14 +508,13 @@ export default function ChildInvestModal({
                 >
                   <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">R{fmt(fees.totalCost - baseAmount)}</span>
                     {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
                   </div>
                 </button>
                 {feeExpanded && (
                   <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
                     <div className="pt-3 flex justify-between">
-                      <p className="text-xs text-slate-500">Investment + 8% reserve</p>
+                      <p className="text-xs text-slate-500">Investment</p>
                       <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
                     </div>
                     <div className="flex justify-between">

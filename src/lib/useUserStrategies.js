@@ -39,7 +39,7 @@ export const useUserStrategies = (familyMemberId = null) => {
     error: null,
   });
 
-  const fetchUserStrategies = useCallback(async () => {
+  const fetchUserStrategies = useCallback(async (silent = false) => {
     if (!supabase) {
       setData((prev) => ({ ...prev, loading: false, error: "Database not connected" }));
       return;
@@ -287,9 +287,105 @@ export const useUserStrategies = (familyMemberId = null) => {
         };
       });
 
+      // ── Live price override ────────────────────────────────────────────────
+      // Fetch stock_holdings_c + stock_intraday_c so currentValue and
+      // investedAmount match the bottom ALL tab (live price × qty instead of
+      // the stale daily basket_value snapshot).
+      try {
+        // Child mode: filter only by family_member_id (no user_id) — matches ChildDashboardPage.fetchHoldings()
+        // Parent mode: filter by user_id + family_member IS NULL
+        // Fetch ALL strategy holdings (pending + filled) so we can detect pending-only strategies.
+        let holdingsQuery;
+        if (familyMemberId) {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("family_member_id", familyMemberId)
+            .not("strategy_id", "is", null)
+            .eq("Status", "active");
+        } else {
+          holdingsQuery = supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, Fill_date")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .not("strategy_id", "is", null)
+            .eq("Status", "active");
+        }
+
+        const { data: allStratHoldings } = await holdingsQuery;
+        // Filled = avg_fill > 0 AND Fill_date set (matches ChildPortfolioTab filter)
+        const allLiveHoldings = (allStratHoldings || []).filter(h => Number(h.avg_fill) > 0 && h.Fill_date != null);
+        // Pending-only = strategy has holdings but NONE are filled
+        const filledStrategyIds = new Set(allLiveHoldings.map(h => h.strategy_id));
+        const pendingOnlyStrategyIds = new Set(
+          (allStratHoldings || [])
+            .filter(h => !(Number(h.avg_fill) > 0))
+            .map(h => h.strategy_id)
+            .filter(id => !filledStrategyIds.has(id))
+        );
+        // Mixed = strategy has BOTH filled holdings AND new pending ones (re-buy scenario)
+        const mixedPendingStrategyIds = new Set(
+          (allStratHoldings || [])
+            .filter(h => !(Number(h.avg_fill) > 0))
+            .map(h => h.strategy_id)
+            .filter(id => filledStrategyIds.has(id))
+        );
+
+        const secIds = [...new Set(allLiveHoldings.map(h => h.security_id).filter(Boolean))];
+
+        let livePriceMap = {};
+        if (secIds.length > 0) {
+          const { data: intradayRows } = await supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price")
+            .in("security_id", secIds)
+            .order("timestamp", { ascending: false });
+          for (const row of (intradayRows || [])) {
+            if (!livePriceMap[row.security_id]) {
+              livePriceMap[row.security_id] = Number(row.current_price); // cents
+            }
+          }
+        }
+
+        for (const strat of formattedStrategies) {
+          const stratHoldings = allLiveHoldings.filter(h => h.strategy_id === strat.strategyId);
+
+          // Strategy has only pending holdings — show R0 until admin fills the order
+          if (stratHoldings.length === 0 && pendingOnlyStrategyIds.has(strat.strategyId)) {
+            strat.currentValue = 0;
+            strat.positionsValue = 0;
+            strat.investedAmount = 0;
+            strat.isPending = true;
+            continue;
+          }
+
+          if (stratHoldings.length === 0) continue;
+
+          // NOTE: the strategy's value (live positions + 8% buffer + residual) and
+          // cost basis are ALREADY set by the holdings-driven computation above
+          // (positionsByStrategy / costBasisByStrategy / cashElement). Do NOT
+          // re-derive/overwrite them here — main's old live-override valued
+          // positions only, which dropped the buffer. This loop now only flags
+          // pending batches so they can be hidden from the strategies tab.
+
+          // Strategy has a new pending batch on top of existing filled holdings
+          if (mixedPendingStrategyIds.has(strat.strategyId)) {
+            strat.hasPendingBatch = true;
+          }
+        }
+      } catch (liveErr) {
+        console.warn("[useUserStrategies] Live price fetch failed, keeping snapshot values:", liveErr.message);
+      }
+      // ── end live price override ────────────────────────────────────────────
+
+      // Pending-only strategies are hidden from the portfolio strategies tab
+      // and dropdown — they appear only on the home tab via the purple
+      // SettlementBadge, matching the behaviour of a normal pending purchase.
+      const visibleStrategies = formattedStrategies.filter(s => !s.isPending && !s.hasPendingBatch);
       const nextData = {
-        strategies: formattedStrategies,
-        selectedStrategy: formattedStrategies[0] || null,
+        strategies: visibleStrategies,
+        selectedStrategy: visibleStrategies[0] || null,
         loading: false,
         error: null,
       };
@@ -320,7 +416,13 @@ export const useUserStrategies = (familyMemberId = null) => {
       setData((prev) => prev.loading ? { ...prev, loading: false } : prev);
     }, 6000);
 
-    return () => clearTimeout(safetyTimer);
+    // Silent refresh every 15 s — keeps live P&L in sync with the top balance card
+    const pollId = setInterval(() => fetchUserStrategies(true), 15000);
+
+    return () => {
+      clearTimeout(safetyTimer);
+      clearInterval(pollId);
+    };
   }, [fetchUserStrategies]);
 
   return { ...data, selectStrategy, refetch: fetchUserStrategies };
@@ -370,6 +472,8 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
             query = query.gte("as_of_date", fromDate.toISOString().split("T")[0]);
           } else if (timeFilter === "ytd") {
             query = query.gte("as_of_date", `${now.getFullYear()}-01-01`);
+          } else if (timeFilter === "all") {
+            // no date restriction — fetch full history
           }
 
           const { data: rows, error } = await query;
@@ -480,11 +584,20 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", fa
 
         const columns = columnMap[activeTab];
 
+        // Cap to the most recent weekday so weekend EOD rows don't pollute the badge.
+        const _now = new Date();
+        const _dow = _now.getUTCDay(); // 0=Sun, 6=Sat
+        const _offset = _dow === 6 ? 1 : _dow === 0 ? 2 : 0;
+        const _lastWeekday = new Date(_now);
+        _lastWeekday.setUTCDate(_now.getUTCDate() - _offset);
+        const lastWeekdayStr = _lastWeekday.toISOString().split("T")[0];
+
         let query = supabase
           .from("client_strategy_returns_c")
           .select("*")
           .eq("user_id", userId)
-          .eq("strategy_id", strategyId);
+          .eq("strategy_id", strategyId)
+          .lte("as_of_date", lastWeekdayStr);
         query = familyMemberId
           ? query.eq("family_member", familyMemberId)
           : query.is("family_member", null);

@@ -86,7 +86,7 @@ const formatKMB = (value) => {
   if (absNum >= 1e9) formatted = (truncateDecimal(absNum / 1e9, 1)).toString() + "b";
   else if (absNum >= 1e6) formatted = (truncateDecimal(absNum / 1e6, 1)).toString() + "m";
   else if (absNum >= 1e3) formatted = (truncateDecimal(absNum / 1e3, 1)).toString() + "k";
-  else formatted = truncateDecimal(absNum, 2).toString();
+  else formatted = truncateDecimal(absNum, 2).toFixed(2);
   return `${sign}R${formatted}`;
 };
 
@@ -160,11 +160,26 @@ const SwipeableBalanceCard = ({
   overrideBalance,       // Rands — replaces the big portfolio number
   overrideWalletBalance, // Rands — replaces the CASH footer value
   managedByLabel,        // For child cards: "Managed by parent · Age X · Independent at Y"
+  livePriceMap: livePriceMapProp = null, // Shared from ChildDashboardPage — skips internal poll
+  onChildYtdMetrics = null, // Callback(pnl, pct) fired when childLiveMetrics updates
 }) => {
   const childMode = !!familyMemberId;
   const _cacheKey = `${userId || ''}:${familyMemberId || ''}`;
   const [activeTab, setActiveTab] = useState("ytd");
   const [periodReturn, setPeriodReturn] = useState(null);
+  const [periodPct, setPeriodPct] = useState(null);
+  const [parentYtdPnl, setParentYtdPnl] = useState(null);
+  const [parentYearStartBasketCents, setParentYearStartBasketCents] = useState(null);
+  const [parentSnapshotPeriodReturn, setParentSnapshotPeriodReturn] = useState(null);
+  const [parentSnapshotPeriodPct, setParentSnapshotPeriodPct] = useState(null);
+  // Start-basket for M/5D — fallback when no stored column available
+  const [parentSnapshotStartBasketCents, setParentSnapshotStartBasketCents] = useState(null);
+  // Stored pre-computed P&L from client_strategy_returns_c (5d_pnl / 1m_pnl) in rands
+  const [parentStoredMDPnl, setParentStoredMDPnl] = useState(null);
+  const [parentStoredMDPct, setParentStoredMDPct] = useState(null);
+  const [childSnapshotCount, setChildSnapshotCount] = useState(null);
+  const [childLivePriceMap, setChildLivePriceMap] = useState({});
+  const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { lastUpdated, isConnected } = useRealtimePrices();
@@ -314,6 +329,13 @@ const SwipeableBalanceCard = ({
     totalInvestedAmount: 0,
     holdingsCount: 0,
   });
+
+  // Stable key: only changes when the SET of strategy IDs changes, not on every live-price tick.
+  // Prevents the parent snapshot effect from re-running on every price poll (which would flash R0).
+  const parentStrategyKey = useMemo(
+    () => [...new Set(dbData.holdings.map(h => h.strategyId || h.strategy_id).filter(Boolean))].sort().join(","),
+    [dbData.holdings]
+  );
 
   const [isVisible, setIsVisible] = useState(() => {
     try { return localStorage.getItem(VISIBILITY_STORAGE_KEY) !== "false"; } catch { return true; }
@@ -516,6 +538,7 @@ const SwipeableBalanceCard = ({
                 security_id: h.security_id,
                 strategy_id: h.strategy_id,
                 last_price: Number(h.last_price || 0),
+                created_at: h.created_at || null,
                 isStrategy: false,
               };
             });
@@ -562,6 +585,9 @@ const SwipeableBalanceCard = ({
               topLogos: [], changePct: 0, holdings: [], firstInvestedDate: null,
             });
           }
+
+          // Pending/gift holdings (avg_fill=0) are intentionally excluded here.
+          // Holdings only appear once officially filled by the broker (avg_fill > 0).
         }
 
         const totalBufferCents = Object.values(bufferCentsByStrategy).reduce((s, v) => s + v, 0);
@@ -673,17 +699,400 @@ const SwipeableBalanceCard = ({
     };
   }, [userId, familyMemberId, lastUpdated]);
 
+  // Fetch total snapshot row count for child accounts so we can lock tabs with insufficient data
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    const fetchCount = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) { setChildSnapshotCount(0); return; }
+      const { count } = await supabase
+        .from("client_strategy_returns_c")
+        .select("as_of_date", { count: "exact", head: true })
+        .eq("family_member", familyMemberId)
+        .in("strategy_id", strategyIds);
+      setChildSnapshotCount(count ?? 0);
+    };
+    fetchCount();
+  }, [childMode, familyMemberId, dbData.holdings]);
+
+  // Clear P&L immediately when tab changes — prevents stale value flashing
+  useEffect(() => {
+    if (childMode) { setPeriodReturn(null); setPeriodPct(null); setYearStartBasketCents(null); }
+  }, [activeTab, childMode]);
+
+  // Child snapshot fetch — runs only when holdings or active tab change, NOT on every live-price tick
+  useEffect(() => {
+    if (!childMode || !familyMemberId) return;
+    let cancelled = false;
+    const fetchChildSnapshots = async () => {
+      const strategyIds = [...new Set(
+        dbData.holdings.map(h => h.strategy_id).filter(Boolean)
+      )];
+      if (!strategyIds.length) return; // keep previous periodReturn — don't flash fallback
+      setChartLoading(true);
+      try {
+        const rowLimit = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : undefined;
+        const now = new Date();
+        const yearStart = `${now.getUTCFullYear()}-01-01`;
+
+        const basketByDate = {};
+        await Promise.all(strategyIds.map(async (sid) => {
+          let q = supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("family_member", familyMemberId)
+            .eq("strategy_id", sid)
+            .order("as_of_date", { ascending: false });
+          if (activeTab === "ytd") q = q.gte("as_of_date", yearStart);
+          if (rowLimit) q = q.limit(rowLimit);
+          const { data } = await q;
+          (data || []).forEach(r => {
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+          });
+        }));
+
+        if (cancelled) return;
+        const dates = Object.keys(basketByDate).sort();
+        if (!dates.length) { setChartData([]); setPeriodReturn(null); return; }
+
+        const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+        if (dates.length < minRows) { setChartData([]); setPeriodReturn(null); return; }
+
+        const firstBasket = basketByDate[dates[0]];
+        // Capture year-start basket for true YTD PnL — but only if the child had investments
+        // before this year. If all data is from this year, YTD should equal ALL (use cost basis).
+        if (activeTab === "ytd") {
+          const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+          const { count: priorYearCount } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date", { count: "exact", head: true })
+            .eq("family_member", familyMemberId)
+            .lt("as_of_date", yearStart);
+          setYearStartBasketCents(priorYearCount > 0 ? firstBasket : null);
+        }
+        const points = [{ d: null, v: 0 }];
+        dates.forEach(d => {
+          points.push({ d, v: Number(((basketByDate[d] - firstBasket) / 100).toFixed(2)) });
+        });
+        setChartData(points);
+
+        // Mirror the portfolio tab's priority exactly (ChildPortfolioTab.jsx lines 572/577):
+        // 1. Use the pre-stored P&L/pct columns if non-zero
+        // 2. Fall back to basket-computed values (same formula as derivedPeriodReturn)
+        const storedPnlCol = { "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" }[activeTab];
+        const storedPctCol = { "5d": "5d_pct", "m": "1m_pct", "ytd": "ytd_pct" }[activeTab];
+        const basketVal = points[points.length - 1].v;
+        // Basket-based pct: (latest - first) / first * 100 — matches derivedPeriodReturn.pct
+        const latestBasketCents = basketByDate[dates[dates.length - 1]];
+        const basketPct = firstBasket > 0 ? ((latestBasketCents - firstBasket) / firstBasket) * 100 : 0;
+
+        if (storedPnlCol) {
+          let totalPnlCents = 0;
+          let totalPctCents = 0;
+          await Promise.all(strategyIds.map(async (sid) => {
+            let q = supabase
+              .from("client_strategy_returns_c")
+              .select(`${storedPnlCol}, ${storedPctCol}`)
+              .eq("family_member", familyMemberId)
+              .eq("strategy_id", sid);
+            if (userId) q = q.eq("user_id", userId); // match useStrategyPeriodReturns hook exactly
+            const { data: pnlRow } = await q
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            totalPnlCents += Number(pnlRow?.[storedPnlCol] || 0);
+            totalPctCents += Number(pnlRow?.[storedPctCol] || 0);
+          }));
+          if (cancelled) return;
+          const storedVal = totalPnlCents / 100;
+          const storedPct = totalPctCents / strategyIds.length;
+          const pctFallback = activeTab === "ytd" ? null : (basketPct || null);
+          const finalReturn = storedVal !== 0 ? storedVal : basketVal;
+          const finalPct = storedPct !== 0 ? storedPct : pctFallback;
+          setPeriodReturn(finalReturn);
+          setPeriodPct(finalPct);
+        } else {
+          setPeriodReturn(basketVal);
+          setPeriodPct(activeTab === "ytd" ? null : (basketPct || null));
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] childMode snapshot error:", e.message);
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+    fetchChildSnapshots();
+    return () => { cancelled = true; };
+  }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
+
+  // Parent snapshot fetch — dedicated effect that mirrors fetchChildSnapshots exactly.
+  // Runs on tab change, NOT on every live-price tick (unlike the chart query).
+  // For YTD: queries current-year basket rows + prior-year count check (same as child).
+  // For M/5D: reads stored 1m_pnl/5d_pnl columns, falls back to basket diff.
+  useEffect(() => {
+    if (childMode || !userId) return;
+    setParentSnapshotPeriodReturn(null);
+    setParentSnapshotPeriodPct(null);
+    setParentSnapshotStartBasketCents(null);
+    setParentStoredMDPnl(null);
+    setParentStoredMDPct(null);
+    if (activeTab === "all" || activeTab === "d") return;
+    let cancelled = false;
+    const runParentSnapshots = async () => {
+      const strategyIds = parentStrategyKey ? parentStrategyKey.split(",") : [];
+      if (!strategyIds.length) return;
+      try {
+        const now = new Date();
+        const dowUtc = now.getUTCDay();
+        const weekendOffset = dowUtc === 6 ? 1 : dowUtc === 0 ? 2 : 0;
+        const lastWeekday = new Date(now);
+        lastWeekday.setUTCDate(now.getUTCDate() - weekendOffset);
+        const lastWeekdayStr = lastWeekday.toISOString().split("T")[0];
+
+        if (activeTab === "ytd") {
+          // YTD: accumulate basket rows to find year-start anchor
+          const yearStart = `${now.getUTCFullYear()}-01-01`;
+          const basketByDate = {};
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data } = await supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .gte("as_of_date", yearStart)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false });
+            (data || []).forEach(r => {
+              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            });
+          }));
+          if (cancelled) return;
+          const dates = Object.keys(basketByDate).sort();
+          if (!dates.length) return;
+          const firstBasket = basketByDate[dates[0]];
+          const { count: priorYearCount } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .is("family_member", null)
+            .lt("as_of_date", yearStart);
+          if (cancelled) return;
+          const anchor = priorYearCount > 0 ? firstBasket : null;
+          setParentYearStartBasketCents(anchor);
+          console.log("[PERIOD_DEBUG parent] YTD anchor set:", {
+            priorYearCount, yearStartBasketCents: anchor,
+            yearStartRands: anchor != null ? anchor / 100 : null,
+            firstDate: dates[0], lastDate: dates[dates.length - 1], rowsFetched: dates.length,
+          });
+        } else {
+          // M or 5D — try stored pre-computed columns FIRST (needs only 1 row, not 22/5).
+          // This prevents the minRows check from blocking users with slightly fewer basket rows.
+          const storedCol = activeTab === "5d" ? "5d_pnl" : "1m_pnl";
+          const storedPctCol = activeTab === "5d" ? "5d_pct" : "1m_pct";
+          const monthOffset = activeTab === "5d" ? 5 : 22;
+          let totalStoredCents = 0;
+          let totalCurrentBasketCents = 0;
+          let hasStored = false;
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data: row } = await supabase
+              .from("client_strategy_returns_c")
+              .select(`${storedCol}, ${storedPctCol}, basket_value`)
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (row?.[storedCol] != null) {
+              totalStoredCents += Number(row[storedCol]);
+              totalCurrentBasketCents += Number(row.basket_value || 0);
+              hasStored = true;
+            }
+          }));
+          if (cancelled) return;
+          if (hasStored) {
+            // Correct for mid-period capital injections.
+            // The stored P&L = basket_today − basket_N_days_ago. Any holding bought AFTER the
+            // anchor date isn't in that baseline, so its full current MV appears as a "gain".
+            // Fix: find the anchor date, then subtract cost basis of holdings bought after it.
+            let correctedCents = totalStoredCents;
+            let anchorBasketCents = totalCurrentBasketCents - totalStoredCents; // implied anchor
+
+            try {
+              // Get the actual anchor date (row at index monthOffset in descending order)
+              const { data: anchorRow } = await supabase
+                .from("client_strategy_returns_c")
+                .select("as_of_date, basket_value")
+                .eq("user_id", userId)
+                .is("family_member", null)
+                .eq("strategy_id", strategyIds[0])
+                .lte("as_of_date", lastWeekdayStr)
+                .order("as_of_date", { ascending: false })
+                .range(monthOffset, monthOffset)
+                .maybeSingle();
+
+              if (anchorRow?.as_of_date) {
+                const anchorDate = anchorRow.as_of_date;
+                // If multiple strategies, sum their anchor basket values for accurate pct
+                if (strategyIds.length > 1) {
+                  anchorBasketCents = 0;
+                  await Promise.all(strategyIds.map(async (sid) => {
+                    const { data: ar } = await supabase
+                      .from("client_strategy_returns_c")
+                      .select("basket_value")
+                      .eq("user_id", userId)
+                      .is("family_member", null)
+                      .eq("strategy_id", sid)
+                      .eq("as_of_date", anchorDate)
+                      .maybeSingle();
+                    anchorBasketCents += Number(ar?.basket_value || 0);
+                  }));
+                } else {
+                  anchorBasketCents = Number(anchorRow.basket_value || 0);
+                }
+                if (cancelled) return;
+
+                // Find holdings bought after anchor date — their cost basis inflates the P&L
+                const { data: midHoldings } = await supabase
+                  .from("stock_holdings_c")
+                  .select("quantity, avg_fill, Fill_date")
+                  .eq("user_id", userId)
+                  .is("family_member_id", null)
+                  .eq("is_active", true)
+                  .gt("Fill_date", anchorDate);
+
+                let injectionCents = 0;
+                for (const h of (midHoldings || [])) {
+                  injectionCents += Number(h.avg_fill || 0) * Number(h.quantity || 0);
+                }
+                correctedCents = totalStoredCents - injectionCents;
+
+                console.log("[PERIOD_DEBUG parent] M/5D mid-period correction:", {
+                  activeTab, anchorDate,
+                  storedPnlRands: totalStoredCents / 100,
+                  injectionRands: injectionCents / 100,
+                  correctedPnlRands: correctedCents / 100,
+                  anchorBasketRands: anchorBasketCents / 100,
+                  midHoldingsCount: (midHoldings || []).length,
+                });
+              }
+            } catch (corrErr) {
+              console.warn("[SwipeableBalanceCard] mid-period correction error:", corrErr.message);
+              // Fall back to uncorrected stored value
+            }
+            if (cancelled) return;
+
+            const correctedPct = anchorBasketCents > 0
+              ? parseFloat(((correctedCents / anchorBasketCents) * 100).toFixed(4))
+              : 0;
+
+            setParentStoredMDPnl(parseFloat((correctedCents / 100).toFixed(2)));
+            setParentStoredMDPct(correctedPct);
+            console.log("[PERIOD_DEBUG parent] M/5D set:", {
+              activeTab, hasStored: true,
+              correctedPnl: correctedCents / 100, correctedPct,
+            });
+            return; // stored columns found — no need for basket-diff fallback
+          }
+          // Fallback: basket-diff (when stored columns absent). Needs minRows to be meaningful.
+          const rowLimit = activeTab === "5d" ? 5 : 22;
+          const basketByDate = {};
+          await Promise.all(strategyIds.map(async (sid) => {
+            const { data } = await supabase
+              .from("client_strategy_returns_c")
+              .select("as_of_date, basket_value")
+              .eq("user_id", userId)
+              .is("family_member", null)
+              .eq("strategy_id", sid)
+              .lte("as_of_date", lastWeekdayStr)
+              .order("as_of_date", { ascending: false })
+              .limit(rowLimit);
+            (data || []).forEach(r => {
+              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            });
+          }));
+          if (cancelled) return;
+          const dates = Object.keys(basketByDate).sort();
+          if (dates.length < rowLimit) return;
+          const firstBasket = basketByDate[dates[0]];
+          setParentSnapshotStartBasketCents(firstBasket);
+          console.log("[PERIOD_DEBUG parent] M/5D set:", {
+            activeTab, hasStored: false,
+            fallbackFirstBasketRands: firstBasket / 100,
+            dates: [dates[0], dates[dates.length - 1]], rowsFetched: dates.length,
+          });
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] parentMode snapshot error:", e.message);
+      }
+    };
+    runParentSnapshots();
+    return () => { cancelled = true; };
+  }, [childMode, userId, parentStrategyKey, activeTab]);
+
+  // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
+  useEffect(() => {
+    if (!childMode || !familyMemberId || !dbData.holdings.length || livePriceMapProp) return;
+    const securityIds = [...new Set(dbData.holdings.map(h => h.security_id).filter(Boolean))];
+    if (!securityIds.length) return;
+    const fetchLive = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) map[row.security_id] = Number(row.current_price);
+      }
+      setChildLivePriceMap(map);
+    };
+    fetchLive();
+    const id = setInterval(fetchLive, 15000);
+    return () => clearInterval(id);
+  }, [childMode, familyMemberId, dbData.holdings, livePriceMapProp]);
+
+  // Trigger parent live-returns on mount / holdings change so client_strategy_returns_c
+  // stays current without depending on an external script — mirrors the child's approach.
+  // NOTE: collect strategy IDs from ALL holdings (including non-isStrategy ones that have
+  // a strategy_id) so this fires even when client_strategy_returns_c has no rows yet.
+  useEffect(() => {
+    if (childMode || !userId) return;
+    const strategyIds = [...new Set(
+      dbData.holdings
+        .map(h => h.strategyId || h.strategy_id)
+        .filter(Boolean)
+    )];
+    if (!strategyIds.length) return;
+
+    const triggerParentReturns = async () => {
+      try {
+        const session = await getSessionWithRetry();
+        const token = session?.access_token;
+        if (!token) return;
+        await Promise.all(strategyIds.map(sid =>
+          fetch(`/api/parent-live-returns?user_id=${encodeURIComponent(userId)}&strategy_id=${encodeURIComponent(sid)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(e => console.warn('[SwipeableBalanceCard] parent-live-returns trigger failed:', e.message))
+        ));
+      } catch (e) {
+        console.warn('[SwipeableBalanceCard] parent-live-returns trigger error:', e.message);
+      }
+    };
+    triggerParentReturns();
+  }, [childMode, userId, dbData.holdings]);
+
   useEffect(() => {
     let chartCancelled = false;
     const fetchChartPrices = async () => {
       if (!userId && !familyMemberId) return;
-      // Child cards have no chart history — clear any stale state and stop
-      if (childMode) {
-        setChartData([]);
-        setPeriodReturn(null);
-        setChartLoading(false);
-        return;
-      }
+      // Child cards are handled by the separate snapshot effect above
+      if (childMode) return;
 
       // Ensure we don't leave chart stuck in loading if no holdings
       if (dbData.holdings.length === 0) {
@@ -720,16 +1129,26 @@ const SwipeableBalanceCard = ({
         const limitValue = activeTab === "5d" ? 5 : undefined;
 
         if (userId) {
-          const strategyHoldings = holdingsToChart.filter(h => h.isStrategy && h.strategyId);
+          // Collect unique strategy IDs from ALL holdings — not just isStrategy entries.
+          // Parent holdings tagged with strategy_id (but isStrategy=false) must also use
+          // client_strategy_returns_c so YTD and ALL share the same data source.
+          const uniqueStrategyIds = [...new Set(
+            holdingsToChart
+              .map(h => h.strategyId || h.strategy_id)
+              .filter(Boolean)
+          )];
           // Collect daily 1d_pnl per date (summed across all strategies)
           const strategyDailyPnl = {};
-          await Promise.all(strategyHoldings.map(async (sh) => {
+          const parentBasketByDate = {}; // for computing year-start anchor (live parent YTD)
+          let latestYtdPnlCents = null;
+          let latestYtdDate = null;
+          await Promise.all(uniqueStrategyIds.map(async (sid) => {
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("*")
+                .select("as_of_date, 1d_pnl, ytd_pnl, basket_value")
                 .eq("user_id", userId)
-                .eq("strategy_id", sh.strategyId)
+                .eq("strategy_id", sid)
                 .is("family_member", null) // parent chart only
                 .order("as_of_date", { ascending: true });
 
@@ -748,12 +1167,39 @@ const SwipeableBalanceCard = ({
                   const dateKey = row.as_of_date;
                   const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
                   strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
+                  // Sum basket_value across strategies per date (for live YTD anchor)
+                  parentBasketByDate[dateKey] = (parentBasketByDate[dateKey] || 0) + Number(row["basket_value"] || 0);
+                  // Track the latest row's ytd_pnl (fallback when no prior-year basket available)
+                  if (latestYtdDate === null || dateKey > latestYtdDate) {
+                    latestYtdDate = dateKey;
+                    latestYtdPnlCents = Number(row["ytd_pnl"] || 0);
+                  }
                 });
               }
             } catch (e) {
-              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sh.strategyId}:`, e);
+              console.warn(`[Chart] Failed to fetch strategy 1d_pnl for ${sid}:`, e);
             }
           }));
+          // Store the stored ytd_pnl as fallback
+          if (!childMode && latestYtdPnlCents !== null) {
+            setParentYtdPnl(latestYtdPnlCents / 100);
+          }
+          // Compute year-start basket for live parent YTD — mirrors child mode exactly:
+          // anchor = FIRST basket of the current year, only set when prior-year data exists.
+          // (Child uses gte(yearStart) → dates[0]; we replicate that from our already-fetched rows.)
+          if (!childMode && activeTab === "ytd") {
+            const yearStr = `${new Date().getFullYear()}-01-01`;
+            const allDates = Object.keys(parentBasketByDate).sort();
+            const priorDates = allDates.filter(d => d < yearStr);
+            const currentYearDates = allDates.filter(d => d >= yearStr);
+            // Only activate live YTD when prior-year history exists AND current-year rows are present.
+            // If no prior-year data, fall back to stored ytd_pnl (same as child mode's null path).
+            if (priorDates.length > 0 && currentYearDates.length > 0) {
+              setParentYearStartBasketCents(parentBasketByDate[currentYearDates[0]]);
+            } else {
+              setParentYearStartBasketCents(null);
+            }
+          }
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -768,18 +1214,26 @@ const SwipeableBalanceCard = ({
         // in client_strategy_returns_c (strategyBasketByDate). Double-counting
         // would add both the per-stock stock_returns_c P&L AND the strategy 1d_pnl.
         const chartedStrategyIds = new Set(
-          holdingsToChart.filter(h => h.isStrategy).map(h => h.strategyId).filter(Boolean)
+          holdingsToChart
+            .map(h => h.strategyId || h.strategy_id)
+            .filter(Boolean)
         );
         const stockHoldings = holdingsToChart.filter(h =>
           h.security_id && !h.isStrategy && !chartedStrategyIds.has(h.strategy_id)
         );
         const pricePromises = stockHoldings.map(async (h) => {
           try {
+            // Compute purchase date before querying so we can use it as the query floor.
+            // This prevents the Supabase 1000-row cap from hiding recent data when the
+            // tab window (e.g. ALL = 5 years) would return thousands of stale rows first.
+            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
+            const queryStart = pDateStr && pDateStr > startDateStr ? pDateStr : startDateStr;
+
             let { data, error } = await supabase
               .from("stock_returns_c")
               .select("as_of_date, current_price")
               .eq("security_id", h.security_id)
-              .gte("as_of_date", startDateStr)
+              .gte("as_of_date", queryStart)
               .order("as_of_date", { ascending: true });
 
             if (error || !data || data.length < 2) {
@@ -794,7 +1248,6 @@ const SwipeableBalanceCard = ({
               } else if (!data || data.length === 0) return null;
             }
 
-            const pDateStr = (h.created_at || h.as_of_date || "").split("T")[0];
             // Chart's "purchase price" anchor prefers Expected_fill (rands) over avg_fill (cents).
             // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
             const expectedFillRaw = Number(h.Expected_fill || 0);
@@ -837,36 +1290,8 @@ const SwipeableBalanceCard = ({
         const hasStrategyData = Object.keys(strategyBasketByDate).length > 0;
 
         if (allPriceData.length === 0 && !hasStrategyData) {
-          // No price history in DB — synthesize a 2-point chart from cost basis → current market value
-          const activeHoldings = holdingsToChart.filter(h => !h.isStrategy && Number(h.avg_fill || 0) > 0);
-          // Cost basis prefers Expected_fill (rands → cents) over avg_fill (cents).
-          // Defensive: Expected_fill > 5x avg_fill/100 is legacy cents — divide by 100.
-          const costBasisCents = (h) => {
-            const expectedRaw = Number(h.Expected_fill || 0);
-            const qty = Number(h.quantity || 0);
-            const avgFillCents = Number(h.avg_fill || 0);
-            const avgFillRands = avgFillCents / 100;
-            const expectedRands = expectedRaw > 0
-              ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
-              : 0;
-            if (expectedRands > 0) return Math.round(expectedRands * 100 * qty);
-            return avgFillCents * qty;
-          };
-          if (activeHoldings.length > 0) {
-            const totalCostCents = activeHoldings.reduce((s, h) => s + costBasisCents(h), 0);
-            const totalMarketCents = activeHoldings.reduce((s, h) => s + Number(h.market_value || 0), 0);
-            const totalPnl = (totalMarketCents - totalCostCents) / 100;
-            const earliest = activeHoldings
-              .map(h => (h.created_at || h.as_of_date || "").slice(0, 10))
-              .filter(Boolean).sort()[0] || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-            const today = new Date().toISOString().slice(0, 10);
-            setChartData([
-              { d: earliest, v: 0 },
-              { d: today, v: Number(totalPnl.toFixed(2)) },
-            ]);
-          } else {
-            setChartData([]);
-          }
+          setChartData([]);
+          setPeriodReturn(null);
           return;
         }
 
@@ -926,11 +1351,133 @@ const SwipeableBalanceCard = ({
 
         console.log(`[SwipeableBalanceCard] Final chart points: ${points.length}`);
         setChartData(points);
-        // Period return = last point's v (already normalized to period start by the loop above)
-        if (points.length >= 2) {
-          setPeriodReturn(points[points.length - 1].v);
-        } else {
-          setPeriodReturn(null);
+
+        // Badge logic — each branch owns exactly one setPeriodReturn call:
+        //   isStockOnlyPeriodTab    → stock-only block below (pre-computed stock_returns_c columns)
+        //   isStrategyOnlyPeriodTab → strategy block below  (pre-computed client_strategy_returns_c columns)
+        //   otherwise               → post-norm chart last point (mixed portfolio / ALL tab)
+        const isStockOnlyPeriodTab    = stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all";
+        const isStrategyOnlyPeriodTab = hasStrategyData && stockHoldings.length === 0 && activeTab !== "all";
+
+        if (!isStockOnlyPeriodTab && !isStrategyOnlyPeriodTab) {
+          if (points.length >= 2) {
+            setPeriodReturn(points[points.length - 1].v);
+          } else {
+            setPeriodReturn(null);
+          }
+        }
+
+        // Strategy-only badge — read pre-computed columns from client_strategy_returns_c.
+        // This matches exactly what the portfolio tab shows via useStrategyPeriodReturns.
+        //   D   → 1d_pnl  (today's P&L)
+        //   5D  → 5d_pnl  (true 5-trading-day return)
+        //   M   → 1m_pnl  (true 1-month return)
+        //   YTD → ytd_pnl (year-to-date return)
+        if (isStrategyOnlyPeriodTab && userId) {
+          const stratColMap = { "d": "1d_pnl", "5d": "5d_pnl", "m": "1m_pnl", "ytd": "ytd_pnl" };
+          const stratCol = stratColMap[activeTab];
+          if (stratCol) {
+            const strategyIds = [...new Set(
+              holdingsToChart.filter(h => h.isStrategy && h.strategyId).map(h => h.strategyId)
+            )];
+            let totalCents = 0;
+            let hasStratPreData = false;
+            await Promise.all(strategyIds.map(async (sid) => {
+              try {
+                const { data: sret } = await supabase
+                  .from("client_strategy_returns_c")
+                  .select(stratCol)
+                  .eq("user_id", userId)
+                  .eq("strategy_id", sid)
+                  .is("family_member", null)
+                  .order("as_of_date", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (sret?.[stratCol] != null) {
+                  totalCents += Number(sret[stratCol]);
+                  hasStratPreData = true;
+                }
+              } catch (e) {
+                console.warn(`[Chart] strategy pre-computed fetch failed for ${sid}:`, e);
+              }
+            }));
+            if (!chartCancelled && hasStratPreData) {
+              setPeriodReturn(parseFloat((totalCents / 100).toFixed(2)));
+            }
+          }
+        }
+
+        // Badge override for stock-only holdings (no strategy):
+        // 5D / M  → pre-computed columns from stock_returns_c (5d_abs, 1m_abs)
+        // YTD     → if bought this calendar year: (last_price − avg_fill) × qty  (= ALL, exact match)
+        //           if bought a prior year: ytd_abs × qty / 100
+        // ALL     → chart-derived value is correct, no override needed
+        if (stockHoldings.length > 0 && !hasStrategyData && activeTab !== "all") {
+          if (activeTab === "ytd") {
+            const currentYear = new Date().getUTCFullYear();
+            const allBoughtThisYear = stockHoldings.every(h => {
+              const d = h.created_at || h.as_of_date || "";
+              return new Date(d).getUTCFullYear() >= currentYear;
+            });
+            if (allBoughtThisYear) {
+              let totalPnl = 0;
+              stockHoldings.forEach(h => {
+                const qty = Number(h.quantity || 0);
+                const avgFillCents = Number(h.avg_fill || 0);
+                const lastPriceCents = Number(h.last_price || 0);
+                if (lastPriceCents > 0 && avgFillCents > 0) {
+                  totalPnl += ((lastPriceCents - avgFillCents) / 100) * qty;
+                }
+              });
+              if (!chartCancelled) setPeriodReturn(parseFloat(totalPnl.toFixed(2)));
+            } else {
+              let totalAbsRands = 0;
+              let hasPreData = false;
+              await Promise.all(stockHoldings.map(async (h) => {
+                try {
+                  const { data: ret } = await supabase
+                    .from("stock_returns_c")
+                    .select("ytd_abs")
+                    .eq("security_id", h.security_id)
+                    .order("as_of_date", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (ret?.ytd_abs != null) {
+                    totalAbsRands += (Number(ret.ytd_abs) / 100) * Number(h.quantity || 0);
+                    hasPreData = true;
+                  }
+                } catch (e) {
+                  console.warn(`[Chart] ytd_abs fetch failed for ${h.security_id}:`, e);
+                }
+              }));
+              if (!chartCancelled && hasPreData) setPeriodReturn(parseFloat(totalAbsRands.toFixed(2)));
+            }
+          } else {
+            const preComputedAbsCol = { "5d": "5d_abs", "m": "1m_abs" }[activeTab];
+            if (preComputedAbsCol) {
+              let totalAbsRands = 0;
+              let hasPreData = false;
+              await Promise.all(stockHoldings.map(async (h) => {
+                try {
+                  const { data: ret } = await supabase
+                    .from("stock_returns_c")
+                    .select(`${preComputedAbsCol}`)
+                    .eq("security_id", h.security_id)
+                    .order("as_of_date", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                  if (ret && ret[preComputedAbsCol] != null) {
+                    const qty = Number(h.quantity || 0);
+                    totalAbsRands += (Number(ret[preComputedAbsCol]) / 100) * qty;
+                    hasPreData = true;
+                  }
+                } catch (e) {
+                  console.warn(`[Chart] Pre-computed fetch failed for ${h.security_id}:`, e);
+                }
+              }));
+              if (!chartCancelled && hasPreData) setPeriodReturn(parseFloat(totalAbsRands.toFixed(2)));
+            }
+          }
         }
       } catch (err) {
         console.error("❌ [SwipeableBalanceCard] Chart fetch error:", err);
@@ -980,16 +1527,133 @@ const SwipeableBalanceCard = ({
   const isPeriodTab = ["5d", "m", "ytd", "all"].includes(activeTab);
   // Total PnL (all-time): live market value minus higher-of cost basis.
   const displayReturn = displayMarketValue - displayBigValue;
+
+  // Live P&L for child YTD — uses 15s price poll, mirrors ChildPortfolioTab.liveStrategyMetrics
+  const childLiveMetrics = useMemo(() => {
+    if (!childMode || !dbData.holdings.length) return null;
+    let liveValue = 0;
+    let costBasis = 0;
+    let hasPrices = false;
+    for (const h of dbData.holdings) {
+      const qty = Number(h.quantity || 0);
+      if (qty <= 0) continue;
+      // Prefer shared prop (rich format) → internal poll (number) → fallback
+      const liveCents = livePriceMapProp
+        ? livePriceMapProp[h.security_id]?.priceCents
+        : childLivePriceMap[h.security_id];
+      const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
+      const priceCents = liveCents > 0 ? liveCents : fallbackCents;
+      if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
+      // Cost basis in Rands — invested_amount stored as cents
+      costBasis += Number(h.invested_amount || 0) / 100;
+    }
+    if (!hasPrices || costBasis === 0) return null;
+    // True YTD: compare live value to start-of-year portfolio value, not all-time cost basis
+    if (activeTab === "ytd" && yearStartBasketCents > 0) {
+      const yearStartRands = yearStartBasketCents / 100;
+      const pnl = liveValue - yearStartRands;
+      const pct = (pnl / yearStartRands) * 100;
+      return { pnl, pct };
+    }
+    const pnl = liveValue - costBasis;
+    const pct = (pnl / costBasis) * 100;
+    return { pnl, pct };
+  }, [childMode, dbData.holdings, childLivePriceMap, livePriceMapProp, activeTab, yearStartBasketCents]);
+
+  useEffect(() => {
+    if (childMode && childLiveMetrics && onChildYtdMetrics) {
+      onChildYtdMetrics(childLiveMetrics);
+    }
+  }, [childMode, childLiveMetrics, onChildYtdMetrics]);
+
   const displayBalance = overrideBalance !== undefined
     ? overrideBalance
     : displayMarketValue;
 
-  // PnL pill: use period-specific return from client_strategy_returns_c chart data when a period tab
-  // is active and data is available; fall back to all-time return.
-  const activeReturn = (isPeriodTab && periodReturn !== null) ? periodReturn : displayReturn;
+  // For child accounts: derive a locked label when the active tab needs more data
+  const _childLockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
+  const childLockedLabel = (() => {
+    if (!childMode || childSnapshotCount === null) return null;
+    const minRows = activeTab === "5d" ? 5 : activeTab === "m" ? 22 : 1;
+    return (childSnapshotCount < minRows && _childLockedLabels[activeTab]) ? _childLockedLabels[activeTab] : null;
+  })();
+
+  // PnL pill: for child YTD use live metrics (15s poll); for other period tabs use stored/basket.
+  // "all" always uses displayReturn (live market value − cost basis).
+  // Parent YTD: liveMarketValue − yearStartBasket. Prior-year count check (in fetchParentSnapshots)
+  //   sets parentYearStartBasketCents=null when all invested this year → falls back to displayReturn.
+  // Parent M/5D: parentSnapshotPeriodReturn from dedicated snapshot query (stored cols or basket diff).
+  const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
+  const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
+  // Cap YTD at all-time (displayReturn) to prevent mid-year deposit inflation.
+  // Prior-year count check already ensures parentYearStartBasketCents is only set when
+  // prior-year rows exist — the cap adds a second safety layer for net-new deposits.
+  const parentYtdReturn = useParentLiveYtd
+    ? Math.min(displayMarketValue - parentYearStartBasketCents / 100, displayReturn)
+    : 0;
+
+  // Parent M/5D: prefer stored pre-computed columns (5d_pnl / 1m_pnl) — industry standard.
+  // Fall back to basket-diff (live price − period-start basket) when stored columns absent.
+  const parentMDBasketPnl = (!childMode && parentSnapshotStartBasketCents != null && displayMarketValue > 0)
+    ? parseFloat((displayMarketValue - parentSnapshotStartBasketCents / 100).toFixed(2))
+    : null;
+  const parentMDBasketPct = (parentMDBasketPnl !== null && parentSnapshotStartBasketCents > 0)
+    ? parseFloat(((parentMDBasketPnl / (parentSnapshotStartBasketCents / 100)) * 100).toFixed(4))
+    : null;
+  const parentMDLivePnl = parentStoredMDPnl !== null ? parentStoredMDPnl : parentMDBasketPnl;
+  const parentMDLivePct = parentStoredMDPct !== null ? parentStoredMDPct : parentMDBasketPct;
+
+  const useParentMD = !childMode && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl !== null;
+  // Parent M/5D when data not yet fetched: show R0 explicitly — no stale chart periodReturn fallback.
+  // Only applies to strategy accounts — stock-only accounts never populate parentMDLivePnl
+  // (the snapshot effect exits early when strategyIds is empty), so they must fall through to periodReturn.
+  const parentHasStrategyHoldings = !childMode && dbData.holdings.some(h => h.strategyId || h.strategy_id);
+  const isParentMDTabWaiting = !childMode && parentHasStrategyHoldings && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
+  // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
+  // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
+  const useParentYtdTab = !childMode && activeTab === "ytd";
+
+  const activeReturn = useChildLiveYtd
+    ? childLiveMetrics.pnl
+    : useParentLiveYtd
+      ? parentYtdReturn
+      : useParentMD
+        ? parentMDLivePnl
+        : useParentYtdTab
+          ? displayReturn            // No prior-year anchor → All-time (never fall through to periodReturn)
+          : isParentMDTabWaiting
+            ? 0                      // Basket data not yet fetched — R0, no stale chart fallback
+            : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+
+  // Debug log — fires on every relevant render so values can be compared in console
+  if (!childMode && activeTab !== "all" && activeTab !== "d") {
+    console.log("[PERIOD_DEBUG parent] RENDER:", {
+      activeTab,
+      parentYearStartBasketCents,
+      yearStartRands: parentYearStartBasketCents != null ? parentYearStartBasketCents / 100 : null,
+      parentSnapshotStartBasketCents,
+      startBasketRands: parentSnapshotStartBasketCents != null ? parentSnapshotStartBasketCents / 100 : null,
+      displayMarketValue,
+      displayBigValue,
+      displayReturn,
+      parentYtdReturn: useParentLiveYtd ? parentYtdReturn : "n/a (no prior-year anchor)",
+      parentMDLivePnl,
+      useParentLiveYtd,
+      useParentMD,
+      useParentYtdTab,
+      activeReturn,
+    });
+  }
+
   const activeReturnPct = displayBigValue > 0
-    ? truncateDecimal((activeReturn / displayBigValue) * 100, 2).toFixed(2)
-    : "0.00";
+    ? (useChildLiveYtd
+        ? Math.abs(childLiveMetrics.pct).toFixed(1)
+        : (useParentMD && parentMDLivePct !== null
+            ? Math.abs(parentMDLivePct).toFixed(1)
+            : ((childMode && isPeriodTab && activeTab !== "all" && periodPct !== null)
+                ? Math.abs(periodPct).toFixed(1)
+                : ((Math.abs(activeReturn) / displayBigValue) * 100).toFixed(1))))
+    : "0.0";
 
   const isLoss = activeReturn < 0;
   const returnPct = activeReturnPct;
@@ -1042,6 +1706,17 @@ const SwipeableBalanceCard = ({
           <div className="flex items-center gap-2 mt-1.5">
             {!dataSettled ? (
               <Skeleton className="h-5 w-24 bg-white/15 rounded-full animate-pulse" />
+            ) : childLockedLabel ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-white/70 text-[11px] font-semibold">{childLockedLabel}</span>
+                <span className="text-white/40 text-[10px]">Check back once more data has been recorded</span>
+              </div>
+            ) : (childMode && periodReturn === null) ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-2" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/60 loading-dot-3" />
+              </span>
             ) : (
               <>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isLoss ? "bg-destructive/20 text-destructive" : "bg-success/20 text-success"}`}>
@@ -1053,7 +1728,7 @@ const SwipeableBalanceCard = ({
                           {activeTab === "5d" && "5D:"}{activeTab === "m" && "1M:"}{activeTab === "ytd" && "YTD:"}{activeTab === "all" && "Inc:"}
                         </span>
                       )}
-                      {activeReturn == null ? "N/A" : formatKMB(Math.abs(activeReturn))}
+                      {activeReturn == null ? "N/A" : `${isLoss ? "-" : "+"}${formatKMB(Math.abs(activeReturn))}`}
                     </>
                   ) : (
                     masked

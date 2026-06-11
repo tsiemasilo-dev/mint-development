@@ -45,8 +45,13 @@ const uploadPdf = multer({ storage: multer.memoryStorage(), limits: { fileSize: 
 
 let _anthropicClient = null;
 function getAnthropicClient() {
-  const key = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
-  if (!_anthropicClient && key) _anthropicClient = new Anthropic({ apiKey: key });
+  const key = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+  if (!_anthropicClient && key) {
+    const opts = { apiKey: key };
+    if (baseURL) opts.baseURL = baseURL;
+    _anthropicClient = new Anthropic(opts);
+  }
   return _anthropicClient;
 }
 
@@ -59,6 +64,119 @@ function getResendClient() {
     _resendClient = new Resend(process.env.RESEND_API_KEY);
   }
   return _resendClient;
+}
+
+/**
+ * Send an IT incident alert email to the configured IT admin list.
+ * Only fires for "critical" or "high" severity incidents.
+ * Recipients are read from IT_ALERT_EMAILS (comma-separated).
+ */
+async function sendItIncidentAlert(incident) {
+  try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.warn('[it-incidents] Resend not configured — skipping alert email');
+      return;
+    }
+    const rawEmails = process.env.IT_ALERT_EMAILS || '';
+    const recipients = rawEmails.split(',').map(e => e.trim()).filter(Boolean);
+    if (!recipients.length) {
+      console.warn('[it-incidents] IT_ALERT_EMAILS not set — skipping alert email');
+      return;
+    }
+
+    const severityColor = incident.severity === 'critical' ? '#dc2626' : '#ea580c';
+    const severityLabel = incident.severity.toUpperCase();
+    const startFormatted = new Date(incident.start_time).toLocaleString('en-ZA', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg'
+    }) + ' SAST';
+    const adminPanelUrl = 'https://my-mint-admin.vercel.app/it-register.html';
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0f0b1e;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0b1e;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#1a1030;border-radius:12px;border:1px solid #4c1d95;overflow:hidden;">
+        <!-- Header -->
+        <tr>
+          <td style="background:#160d2e;padding:24px 32px;border-bottom:1px solid #2d1b5e;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td><span style="font-size:20px;font-weight:700;color:#ffffff;">Mint <span style="color:#a78bfa;">IT Alerts</span></span></td>
+                <td align="right">
+                  <span style="background:${severityColor};color:#ffffff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">⚠ ${severityLabel}</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px;">
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 8px 0;">NEW INCIDENT LOGGED</p>
+            <h2 style="color:#ffffff;font-size:22px;margin:0 0 24px 0;">${incident.title}</h2>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#160d2e;border-radius:8px;border:1px solid #2d1b5e;">
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">AFFECTED SERVICE</span>
+                  <span style="color:#e2e8f0;font-size:15px;font-weight:600;">${incident.affected_service}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">SEVERITY</span>
+                  <span style="color:${severityColor};font-size:15px;font-weight:700;">${severityLabel}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 16px;border-bottom:1px solid #2d1b5e;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">START TIME</span>
+                  <span style="color:#e2e8f0;font-size:15px;">${startFormatted}</span>
+                </td>
+              </tr>
+              ${incident.description ? `
+              <tr>
+                <td style="padding:12px 16px;">
+                  <span style="color:#6b7280;font-size:12px;display:block;margin-bottom:4px;">DESCRIPTION</span>
+                  <span style="color:#cbd5e1;font-size:14px;">${incident.description}</span>
+                </td>
+              </tr>` : ''}
+            </table>
+            <div style="margin-top:28px;text-align:center;">
+              <a href="${adminPanelUrl}" style="display:inline-block;background:#7C3AED;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">View in IT Register →</a>
+            </div>
+            <p style="color:#4b5563;font-size:12px;margin:24px 0 0 0;text-align:center;">
+              This alert was sent because the incident severity is <strong style="color:${severityColor};">${severityLabel}</strong>.<br/>
+              Alerts are sent for Critical and High severity incidents only.
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:16px 32px;border-top:1px solid #2d1b5e;text-align:center;">
+            <span style="color:#374151;font-size:11px;">Mint Platforms · IT Governance &amp; Compliance</span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    await resend.emails.send({
+      from: 'Mint IT Alerts <alerts@thealgohive.com>',
+      to: recipients,
+      subject: `[${severityLabel}] IT Incident: ${incident.title} — ${incident.affected_service}`,
+      html,
+    });
+    console.log(`[it-incidents] Alert email sent to ${recipients.length} recipient(s) for incident "${incident.title}"`);
+  } catch (err) {
+    console.error('[it-incidents] Failed to send alert email:', err.message);
+  }
 }
 
 async function sendOrderFillEmail(db, { transactionId, holdingId }) {
@@ -760,6 +878,40 @@ async function migrateGiftClaimsColumns() {
   }
 }
 migrateGiftClaimsColumns();
+
+// ── IT Incidents table ────────────────────────────────────────────────────────
+async function ensureItIncidentsTable() {
+  if (!pgPool) return;
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS it_incidents (
+        id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title         text NOT NULL,
+        affected_service text NOT NULL,
+        severity      text NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+        status        text NOT NULL DEFAULT 'open' CHECK (status IN ('open','investigating','resolved')),
+        start_time    timestamptz NOT NULL DEFAULT now(),
+        resolved_time timestamptz,
+        downtime_duration_minutes integer,
+        description   text,
+        root_cause    text,
+        resolution_notes text,
+        created_by    text,
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        updated_at    timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS it_incidents_status_idx ON it_incidents (status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS it_incidents_start_time_idx ON it_incidents (start_time DESC)`);
+    console.log('[it-incidents] it_incidents table ready');
+  } catch (e) {
+    console.error('[it-incidents] Failed to create table:', e.message);
+  } finally {
+    client.release();
+  }
+}
+ensureItIncidentsTable();
 
 async function ensureUserSessionsTable() {
   if (!pgPool) return;
@@ -2692,7 +2844,7 @@ app.post("/api/banking/verify-letter", uploadPdf.single("file"), async (req, res
 }` }];
 
     const response = await claude.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content }],
     });
@@ -4340,12 +4492,15 @@ app.get("/api/user/holdings", async (req, res) => {
     const filterValue = familyMemberId || userId;
 
     // Attempt queries with progressively fewer optional columns to handle missing DB columns
+    // Only return officially filled holdings (avg_fill > 0) — pending/gift holdings must not
+    // appear in portfolio, holdings tab, or strategy charts until the broker fills the order.
     const holdingsFull = await db
       .from("stock_holdings_c")
       .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, settlement_status, is_active, exit_price")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .eq("Status", "active");
+      .eq("Status", "active")
+      .gt("avg_fill", 0);
 
     if (!holdingsFull.error) {
       holdings = holdingsFull.data;
@@ -4357,7 +4512,8 @@ app.get("/api/user/holdings", async (req, res) => {
         .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, is_active, exit_price")
         .eq("user_id", userId)
         .is("family_member_id", null)
-        .eq("Status", "active");
+        .eq("Status", "active")
+        .gt("avg_fill", 0);
 
       if (!noSettlement.error) {
         holdings = noSettlement.data;
@@ -4369,7 +4525,8 @@ app.get("/api/user/holdings", async (req, res) => {
           .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status")
           .eq("user_id", userId)
           .is("family_member_id", null)
-          .eq("Status", "active");
+          .eq("Status", "active")
+          .gt("avg_fill", 0);
         holdings = (noExtras.data || []).map(h => ({ ...h, is_active: true, exit_price: null }));
         holdingsError = noExtras.error;
       } else {
@@ -4609,12 +4766,14 @@ app.get("/api/user/strategies", async (req, res) => {
 
     // Also check stock_holdings_c for holdings with strategy_id (fallback when transactions are empty or RLS blocks them).
     // Parent view only includes direct parent investments; child-linked holdings stay on the child dashboard.
+    // Status = active ensures cancelled/exited rows don't inflate cost basis.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, created_at")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, created_at, Status")
       .eq("user_id", userId)
       .is("family_member_id", null)
-      .not("strategy_id", "is", null);
+      .not("strategy_id", "is", null)
+      .eq("Status", "active");
 
     const holdingStrategyIds = [...new Set((userStratHoldings || []).map(h => h.strategy_id).filter(Boolean))];
     console.log("[user/strategies] Holdings with strategy_id found:", (userStratHoldings || []).length, "unique strategy IDs:", holdingStrategyIds);
@@ -4630,30 +4789,50 @@ app.get("/api/user/strategies", async (req, res) => {
       stratHoldingsByStratId[h.strategy_id].push(h);
     }
 
-    // Fetch live prices for those securities
-    const stratSecIds = (userStratHoldings || []).map(h => h.security_id).filter(Boolean);
-    let stratLivePriceMap = {};
+    // Fetch live prices for those securities.
+    // Priority: stock_intraday_c (refreshed every ~15s) > securities_c.last_price (daily fallback).
+    // This matches the balance card's live price source so P&L figures stay in sync.
+    const stratSecIds = [...new Set((userStratHoldings || []).map(h => h.security_id).filter(Boolean))];
+    let stratLivePriceMap = {}; // security_id → price in rands
     const symbolPnlMap = {};
     if (stratSecIds.length > 0) {
-      const { data: stratSecs } = await db
-        .from("securities_c")
-        .select("id, symbol, last_price")
-        .in("id", stratSecIds);
-      (stratSecs || []).forEach(s => { stratLivePriceMap[s.id] = (s.last_price || 0); }); // Keep as Rands as in DB
+      const [secsResult, intradayResult] = await Promise.all([
+        db.from("securities_c").select("id, symbol, last_price").in("id", stratSecIds),
+        db.from("stock_intraday_c").select("security_id, current_price").in("security_id", stratSecIds).order("timestamp", { ascending: false }),
+      ]);
 
-      // Build per-symbol P&L from actual user holdings (skip pending - no avg_fill)
+      // Build intraday map (current_price is in cents → convert to rands; first-seen = latest)
+      const intradayMap = {};
+      for (const row of (intradayResult.data || [])) {
+        if (!intradayMap[row.security_id]) intradayMap[row.security_id] = Number(row.current_price) / 100;
+      }
+
+      const stratSecs = secsResult.data || [];
+      stratSecs.forEach(s => {
+        stratLivePriceMap[s.id] = intradayMap[s.id] != null ? intradayMap[s.id] : Number(s.last_price || 0);
+      });
+
+      // Build per-symbol P&L using the same cost basis formula as the balance card:
+      // max(Expected_fill, avg_fill/100) with a legacy-cents guard on Expected_fill.
       for (const h of (userStratHoldings || [])) {
-        const sec = (stratSecs || []).find(s => s.id === h.security_id);
+        const sec = stratSecs.find(s => s.id === h.security_id);
         if (!sec) continue;
-        const qty = Number(h.quantity || 0);
-        const avgFill = Number(h.avg_fill || 0);
-        if (!avgFill) continue;
-        const livePrice = (sec.last_price != null) ? (sec.last_price) : (avgFill / 100);
+        const qty = Math.abs(Number(h.quantity || 0));
+        const avgFillCents = Number(h.avg_fill || 0);
+        if (!avgFillCents) continue;
+        const avgFillRands = avgFillCents / 100;
+        const expectedRaw = Number(h.Expected_fill || 0);
+        // Legacy-cents guard: if Expected_fill > 5× avg_fill/100 it was stored in cents — divide by 100
+        const expectedRands = expectedRaw > 0
+          ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+          : 0;
+        const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+        const livePrice = stratLivePriceMap[h.security_id] || costBasisRands;
         symbolPnlMap[sec.symbol] = {
-          pnlRands: (livePrice - (avgFill / 100)) * qty,
-          pnlPct: avgFill > 0 ? ((livePrice - (avgFill / 100)) / (avgFill / 100)) * 100 : 0,
-          currentValue: (livePrice * qty) * 100, // Send as cents
-          costBasis: (avgFill * qty), // avgFill is already cents
+          pnlRands: (livePrice - costBasisRands) * qty,
+          pnlPct: costBasisRands > 0 ? ((livePrice - costBasisRands) / costBasisRands) * 100 : 0,
+          currentValue: (livePrice * qty) * 100, // cents
+          costBasis: Math.round(costBasisRands * 100) * qty, // cents
         };
       }
     }
@@ -4780,10 +4959,31 @@ app.get("/api/user/strategies", async (req, res) => {
           };
         });
 
-        // Emits one card per transaction
+        // Compute investedAmount and currentMarketValue from live holdings — same method as the
+        // balance card's "All" tab — so this card always agrees with the purple card's figures.
+        // inception_pnl from client_strategy_returns_c is intentionally NOT used here: it was
+        // computed by a background job using a different cost basis which caused sign disagreements.
+        const filledHoldings = (stratHoldingsByStratId[strategy.id] || []).filter(h => Number(h.avg_fill || 0) > 0);
+        let liveInvested = 0;
+        let liveCurrent = 0;
+        for (const h of filledHoldings) {
+          const qty = Math.abs(Number(h.quantity || 0));
+          const avgFillCents = Number(h.avg_fill || 0);
+          const avgFillRands = avgFillCents / 100;
+          const expectedRaw = Number(h.Expected_fill || 0);
+          const expectedRands = expectedRaw > 0
+            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+            : 0;
+          const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+          liveInvested += costBasisRands * qty;
+          liveCurrent += (stratLivePriceMap[h.security_id] || costBasisRands) * qty;
+        }
+        const hasLiveData = filledHoldings.length > 0;
+
         for (const tx of matchingTxs) {
-          const txInvested = Number(tx.amount || 0) / 100; // in Rands
-          const currentValue = txInvested * performanceFactor; // in Rands
+          // Use live holdings P&L when available; fall back to transaction amount + performance factor.
+          const txInvested = hasLiveData ? liveInvested : Number(tx.amount || 0) / 100;
+          const currentValue = hasLiveData ? liveCurrent : txInvested * performanceFactor;
 
           const date = new Date(tx.created_at);
           const pad = (num) => String(num).padStart(2, '0');
@@ -4802,8 +5002,8 @@ app.get("/api/user/strategies", async (req, res) => {
             imageUrl: strategy.image_url,
             isKidStrategy: !!strategy.is_kid_strategy,
             holdings: enrichedHoldings,
-            investedAmount: txInvested, // Return as Rands
-            currentMarketValue: currentValue, // Return as Rands
+            investedAmount: txInvested, // Return as Rands (cost basis)
+            currentMarketValue: currentValue, // Return as Rands (basket value)
             currentValue: currentValue, // Return as Rands
             metrics: latestMetric ? { ...latestMetric, r_ytd: rytd } : { r_ytd: rytd },
             firstInvestedDate: tx.transaction_date || null,
@@ -6340,8 +6540,11 @@ app.post("/api/onboarding/complete", async (req, res) => {
       expected_monthly_investment,
       agreed_terms,
       agreed_privacy,
+      tax_number,
       bank_name,
       bank_account_number,
+      bank_account_name,
+      bank_account_type,
       bank_branch_code,
       signed_agreement_url,
       signed_at,
@@ -6386,6 +6589,8 @@ app.post("/api/onboarding/complete", async (req, res) => {
     const bankDetails = (bank_name || bank_account_number || bank_branch_code) ? {
       bank_name: bank_name || null,
       bank_account_number: bank_account_number || null,
+      bank_account_name: bank_account_name || null,
+      bank_account_type: bank_account_type || null,
       bank_branch_code: bank_branch_code || null,
       savedAt: new Date().toISOString(),
     } : null;
@@ -6407,9 +6612,11 @@ app.post("/api/onboarding/complete", async (req, res) => {
       downloaded_at: downloaded_at || null,
     };
 
+    if (tax_number) updatePayload.Tax_number = tax_number;
     if (bank_name) updatePayload.bank_name = bank_name;
     if (bank_account_number) updatePayload.bank_account_number = bank_account_number;
     if (bank_branch_code) updatePayload.bank_branch_code = bank_branch_code;
+    if (tax_number) insertPayload.Tax_number = tax_number;
     if (bank_name) insertPayload.bank_name = bank_name;
     if (bank_account_number) insertPayload.bank_account_number = bank_account_number;
     if (bank_branch_code) insertPayload.bank_branch_code = bank_branch_code;
@@ -6770,12 +6977,36 @@ app.get("/api/health", async (req, res) => {
     const db = supabaseAdmin || supabase;
     const { error } = await db.from('profiles').select('id').limit(1);
 
+    // Fetch open incident count + last incident date across ALL statuses
+    let openIncidents = 0;
+    let lastIncidentDate = null;
+    try {
+      if (pgPool) {
+        const pgClient = await pgPool.connect();
+        try {
+          const { rows } = await pgClient.query(
+            `SELECT
+               COUNT(*) FILTER (WHERE status != 'resolved') AS open_count,
+               MAX(start_time) AS last_incident_at
+             FROM it_incidents`
+          );
+          if (rows[0]) {
+            openIncidents = parseInt(rows[0].open_count, 10) || 0;
+            lastIncidentDate = rows[0].last_incident_at || null;
+          }
+        } finally {
+          pgClient.release();
+        }
+      }
+    } catch (_) {}
+
     res.json({
       status: 'ok',
       database: error ? 'disconnected' : 'connected',
       version: packageJson.version,
       uptime: process.uptime(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      incidents: { open: openIncidents, last_incident_at: lastIncidentDate }
     });
   } catch (err) {
     res.status(503).json({
@@ -7489,13 +7720,6 @@ app.get('/api/family-members', async (req, res) => {
   const userId = req.query.user_id;
   if (!userId) return res.status(400).json({ error: 'user_id required' });
   try {
-    if (pgPool) {
-      const rows = await fmQuery(
-        'SELECT * FROM family_members WHERE primary_user_id = $1 ORDER BY created_at ASC',
-        [userId]
-      );
-      return res.json({ members: rows });
-    }
     const db = supabaseAdmin || supabase;
     const { data, error } = await db.from('family_members').select('*').eq('primary_user_id', userId).order('created_at', { ascending: true });
     if (error) throw error;
@@ -8608,13 +8832,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
   const secMap = {};
   (securities || []).forEach(s => { secMap[s.symbol] = s; });
 
-  let totalBasketCost = 0;
+  // last_price in securities_c is in CENTS — convert to rands for basket cost
+  let totalBasketCostRands = 0;
   for (const h of strategyHoldings) {
-    if (secMap[h.symbol]?.last_price) totalBasketCost += secMap[h.symbol].last_price * (h.weight || 1);
+    if (secMap[h.symbol]?.last_price) totalBasketCostRands += (secMap[h.symbol].last_price / 100) * (h.weight || 1);
   }
 
-  if (totalBasketCost > 0) {
-    const scale = investAmountRands / totalBasketCost;
+  if (totalBasketCostRands > 0) {
+    const scale = investAmountRands / totalBasketCostRands;
     for (const h of strategyHoldings) {
       const sec = secMap[h.symbol];
       if (!sec?.last_price) continue;
@@ -8627,8 +8852,7 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
           await db.from("stock_holdings_c").update({
             quantity: Number(existing.quantity || 0) + qty,
             avg_fill: null, market_value: 0, unrealized_pnl: 0,
-            as_of_date: null, settlement_status: "pending",
-            updated_at: new Date().toISOString(),
+            as_of_date: null, updated_at: new Date().toISOString(),
           }).eq("id", existing.id);
         } else {
           await db.from("stock_holdings_c").insert({
@@ -8636,7 +8860,6 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
             avg_fill: null, market_value: 0,
             unrealized_pnl: 0, as_of_date: null,
             strategy_id: strategyId, Status: "active",
-            settlement_status: "pending",
           });
         }
         holdingsCreated++;
@@ -8648,13 +8871,14 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
     const sorted = [...strategyHoldings].sort((a, b) => (b.weight || 0) - (a.weight || 0));
     const fallback = secMap[sorted[0]?.symbol];
     if (fallback?.id) {
-      const qty = Math.max(1, Math.floor((investAmountRands / (fallback.last_price || 1))));
+      // last_price is in cents — divide to get rands, then calculate qty
+      const fallbackPriceRands = (fallback.last_price || 1) / 100;
+      const qty = Math.max(1, Math.floor(investAmountRands / fallbackPriceRands));
       try {
         await db.from("stock_holdings_c").insert({
           user_id: userId, security_id: fallback.id, quantity: qty,
           avg_fill: null, market_value: 0, unrealized_pnl: 0,
           as_of_date: null, strategy_id: strategyId, Status: "active",
-          settlement_status: "pending",
         });
         holdingsCreated = 1;
       } catch (e) { console.warn("[gift] strategy fallback holding:", e.message); }
@@ -8666,7 +8890,8 @@ async function giftAllocateStrategyHoldings(db, userId, strategyId, strategyHold
 async function giftAllocateStockHolding(db, userId, securityId, amountCents) {
   const { data: sec } = await db.from("securities_c").select("id, symbol, last_price").eq("id", securityId).maybeSingle();
   if (!sec?.last_price) return 0;
-  const qty = Math.max(1, Math.floor((amountCents / 100) / sec.last_price));
+  // last_price is in CENTS — divide amountCents by last_price_cents = share count
+  const qty = Math.max(1, Math.floor(amountCents / sec.last_price));
   try {
     // Always insert a NEW row per gift-claimed stock so each claim is a
     // discrete pending position. Mirrors the strategy-gift pattern.
@@ -8760,6 +8985,11 @@ app.post("/api/gift/create", async (req, res) => {
   } else {
     const { data: rp } = await db.from("profiles").select("id, email").eq("phone", identifier).maybeSingle();
     if (rp) { recipientUserId = rp.id; recipientEmail = rp.email; }
+  }
+
+  // Secondary guard: if the resolved recipient is the sender themselves, block it
+  if (recipientUserId && recipientUserId === user.id) {
+    return res.status(400).json({ error: "You cannot gift to yourself." });
   }
 
   const status = recipientUserId ? "pending_claim" : "pending_registration";
@@ -8864,10 +9094,13 @@ app.post("/api/gift/claim", async (req, res) => {
   const { data: { user }, error: authErr } = await db.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
-  const { token: giftToken } = req.body || {};
-  if (!giftToken) return res.status(400).json({ error: "Token is required." });
+  const { token: giftToken, gift_id } = req.body || {};
+  if (!giftToken && !gift_id) return res.status(400).json({ error: "Token or gift_id is required." });
 
-  const { data: gift, error: giftErr } = await db.from("gift_claims").select("*").eq("token", giftToken).maybeSingle();
+  const giftQuery = db.from("gift_claims").select("*");
+  const { data: gift, error: giftErr } = await (gift_id
+    ? giftQuery.eq("id", gift_id).maybeSingle()
+    : giftQuery.eq("token", giftToken).maybeSingle());
   if (giftErr || !gift) return res.status(404).json({ error: "Gift not found." });
 
   if (gift.status === "claimed") return res.status(400).json({ error: "This gift has already been claimed." });
@@ -8996,6 +9229,85 @@ app.get("/api/gift/sent", async (req, res) => {
   });
 });
 
+app.get("/api/gift/received", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+  const userEmail = (user.email || "").trim().toLowerCase();
+
+  // Query gifts matched by recipient_user_id (already claimed) OR by email (pending claim sent to this email)
+  const [byUserId, byEmail] = await Promise.all([
+    db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_user_id", user.id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    userEmail ? db.from("gift_claims")
+      .select("id, amount, asset_type, asset_name, status, message, expires_at, created_at, claimed_at, sender_user_id, recipient_user_id, recipient_identifier")
+      .eq("recipient_identifier", userEmail)
+      .is("recipient_user_id", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(100) : Promise.resolve({ data: [] }),
+  ]);
+
+  if (byUserId.error) return res.status(500).json({ error: "Failed to load received gifts." });
+
+  // Merge and deduplicate by id
+  const seen = new Set();
+  const gifts = [];
+  for (const g of [...(byUserId.data || []), ...(byEmail.data || [])]) {
+    if (!seen.has(g.id)) { seen.add(g.id); gifts.push(g); }
+  }
+  gifts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const formatted = await Promise.all(gifts.map(async (g) => {
+    let sender_name = "Someone";
+    try {
+      const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", g.sender_user_id).maybeSingle();
+      if (sender) sender_name = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+    } catch (_) {}
+    let personal_message = null;
+    try { personal_message = JSON.parse(g.message || "{}").msg || null; } catch (_) {}
+    const unclaimed = g.status === "pending_claim" && !g.recipient_user_id;
+    return { ...g, sender_name, personal_message, unclaimed };
+  }));
+
+  return res.json({
+    active: formatted.filter(g => g.status === "pending_claim"),
+    history: formatted.filter(g => g.status !== "pending_claim"),
+  });
+});
+
+app.get("/api/gift/by-id/:id", async (req, res) => {
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(500).json({ error: "Database not available" });
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "ID is required." });
+  const { data: gift, error } = await db.from("gift_claims")
+    .select("id, amount, asset_type, asset_name, status, message, expires_at, sender_user_id")
+    .eq("id", id).maybeSingle();
+  if (error) return res.status(500).json({ error: "Failed to load gift." });
+  if (!gift) return res.status(404).json({ error: "Gift not found." });
+  let senderName = "Someone";
+  let personalMessage = null;
+  try {
+    const { data: sender } = await db.from("profiles").select("first_name, last_name").eq("id", gift.sender_user_id).maybeSingle();
+    if (sender) senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Someone";
+  } catch (_) {}
+  try { personalMessage = JSON.parse(gift.message || "{}").msg || null; } catch (_) {}
+  return res.json({
+    id: gift.id, amount: gift.amount, asset_type: gift.asset_type, asset_name: gift.asset_name,
+    status: gift.status, message: personalMessage, expires_at: gift.expires_at, sender_name: senderName,
+  });
+});
+
 app.get("/api/gift/:token", async (req, res) => {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
@@ -9041,12 +9353,16 @@ async function generateUniqueGiftCode(db) {
 }
 
 app.post("/api/gift/create-v2", async (req, res) => {
+  console.log("[gift/create-v2] incoming request from", req.headers["x-forwarded-for"] || req.socket?.remoteAddress);
+  try {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "");
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available" });
 
-  const { data: { user }, error: authErr } = await db.auth.getUser(token);
+  const authResult = await db.auth.getUser(token);
+  const user = authResult?.data?.user;
+  const authErr = authResult?.error;
   if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
 
   const { asset_type, strategy_id, security_id, security_symbol, asset_name, amount, recipient_identifier, recipient_first_name, recipient_last_name, message } = req.body || {};
@@ -9056,6 +9372,22 @@ app.post("/api/gift/create-v2", async (req, res) => {
   if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
   if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
   if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
+
+  // Block self-gifting: compare recipient email against sender's auth email and profile email
+  if (recipient_identifier?.trim()) {
+    const recipId = recipient_identifier.trim().toLowerCase();
+    const senderAuthEmail = user.email?.toLowerCase() || "";
+    const { data: senderProf } = await db.from("profiles").select("email").eq("id", user.id).maybeSingle();
+    const senderProfileEmail = senderProf?.email?.toLowerCase() || "";
+    if (recipId === senderAuthEmail || recipId === senderProfileEmail) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+    // Also block by resolved user ID in case email was looked up differently
+    const { data: recipProf } = await db.from("profiles").select("id").eq("email", recipId).maybeSingle();
+    if (recipProf?.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself." });
+    }
+  }
 
   const { data: wallet, error: walletErr } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
   if (walletErr || !wallet) return res.status(400).json({ error: "Wallet not found." });
@@ -9114,7 +9446,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   // Post-creation: emails + in-app notification
   const recipientEmail = recipient_identifier?.trim().toLowerCase();
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://mymint.co.za";
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
 
   // Fetch sender name + use auth email (more reliable than profiles.email)
   const senderAuthEmail = user.email;
@@ -9135,7 +9467,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
             user_id: recipientProfile.id,
             title: `You've been gifted ${asset_name}! 🎁`,
             body: `${senderName} gifted you ${asset_name} on Mint. Ask them for your 6-digit claim code to claim it.`,
-            type: "investment",
+            type: "system",
             payload: { action: "gift_received", gift_id: gift.id, asset_name },
           });
         }
@@ -9313,7 +9645,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
       <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
     </div>
 
-    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">${emailCta}</a>
+    <a href="https://mint-development.vercel.app/?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:15px;font-weight:700;margin-bottom:12px">🎁 Claim Gift</a>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
   </div>
@@ -9329,6 +9661,16 @@ app.post("/api/gift/create-v2", async (req, res) => {
   }
 
   return res.json({ success: true, token: gift.token, expires_at: gift.expires_at, gift_id: gift.id });
+  } catch (e) {
+    console.error("[gift/create-v2] unhandled exception:", e?.message, e?.stack);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to create gift.", detail: e?.message });
+  }
+});
+
+app.post("/api/gift/reset-rate-limit", (req, res) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+  giftV2RateLimit.delete(ip);
+  return res.json({ ok: true, cleared: ip });
 });
 
 app.post("/api/gift/verify-code", async (req, res) => {
@@ -9392,16 +9734,16 @@ app.post("/api/gift/claim-v2", async (req, res) => {
 
   const { code, id_number } = req.body || {};
   if (!code) return res.status(400).json({ error: "code is required." });
-  if (!id_number?.trim()) return res.status(400).json({ error: "id_number is required." });
 
   const cleanCode = String(code).replace(/\D/g, "");
-  const cleanId = String(id_number).replace(/\D/g, "");
 
   const { data: claimantProfile } = await db.from("profiles").select("id, id_number, first_name, last_name, mint_number")
     .eq("id", user.id).maybeSingle();
   if (!claimantProfile) return res.status(400).json({ error: "Profile not found." });
-  if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
-  if (!claimantProfile.mint_number) return res.status(403).json({ error: "Please complete your Mint account setup before claiming.", mint_number_required: true });
+  if (id_number?.trim()) {
+    const cleanId = String(id_number).replace(/\D/g, "");
+    if (claimantProfile.id_number !== cleanId) return res.status(403).json({ error: "SA ID number does not match your account." });
+  }
 
   const { data: onboarding } = await db.from("user_onboarding").select("kyc_status").eq("user_id", user.id).maybeSingle();
   const kycStatus = onboarding?.kyc_status;
@@ -9409,21 +9751,13 @@ app.post("/api/gift/claim-v2", async (req, res) => {
     return res.status(403).json({ error: "FICA verification required to claim this gift.", kyc_required: true });
   }
 
-  const { data: gift } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  const { data: gift, error: giftLookupErr } = await db.from("gift_claims").select("*").eq("token", cleanCode).eq("status", "pending_claim").maybeSingle();
+  console.log(`[gift/claim-v2] code="${cleanCode}" gift=${gift?.id || "null"} err=${giftLookupErr?.message || "none"}`);
   if (!gift) return res.status(404).json({ error: "Gift not found or already claimed." });
   if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: "This gift has expired." });
   if (gift.sender_user_id === user.id) return res.status(400).json({ error: "You cannot claim your own gift." });
 
-  // Debit sender's wallet now that gift is being claimed
-  const giftAmountRands = gift.amount / 100;
-  const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
-  if (!senderWallet) return res.status(500).json({ error: "Sender wallet not found." });
-  const senderBalance = Number(senderWallet.balance);
-  if (senderBalance < giftAmountRands) return res.status(400).json({ error: "Sender has insufficient funds. The gift cannot be claimed." });
-
-  const { error: debitErr } = await db.from("wallets").update({ balance: senderBalance - giftAmountRands })
-    .eq("user_id", gift.sender_user_id).eq("balance", senderBalance);
-  if (debitErr) return res.status(500).json({ error: "Failed to process gift payment." });
+  // Sender's wallet was already debited at gift creation time — nothing to deduct here.
 
   let holdingsCreated = 0;
   let holdingId = null;
@@ -9437,37 +9771,34 @@ app.post("/api/gift/claim-v2", async (req, res) => {
   }
 
   if (holdingsCreated === 0) {
-    // Rollback sender wallet debit
-    await db.from("wallets").update({ balance: senderBalance }).eq("user_id", gift.sender_user_id);
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  const totalExtFees = Number(gift.extension_fees || 0);
-  const totalChargedCents = gift.amount + totalExtFees;
   const now = new Date().toISOString();
 
-  // Sender debit transaction (mark the held amount as posted)
-  try {
-    // Update the held transaction to posted
-    await db.from("transactions")
-      .update({ status: "posted", description: `Gift to recipient — claimed and settled` })
-      .eq("store_reference", `GIFT2-HOLD-${gift.id}`);
-  } catch (e) { console.warn("[gift/claim-v2] update hold tx:", e.message); }
-
-  // Recipient credit transaction
+  // Recipient debit transaction — same format as record-investment.js so the
+  // pending-orders card appears on the home screen exactly like a normal purchase.
+  const txName = gift.asset_type === "strategy"
+    ? `Strategy Investment: ${gift.asset_name}`
+    : `Purchased ${gift.asset_name}`;
   try {
     await db.from("transactions").insert({
-      user_id: user.id, direction: "credit",
-      name: `Gift Received — ${gift.asset_name}`, description: "Investment gift claimed",
+      user_id: user.id, direction: "debit",
+      name: txName, description: "Investment gift claimed",
       amount: gift.amount, store_reference: `GIFT2-CLAIM-${gift.id}`,
-      currency: "ZAR", status: "posted", settlement_status: "pending",
-      transaction_date: now, created_at: now,
+      status: "posted", transaction_date: now,
     });
   } catch (e) { console.warn("[gift/claim-v2] tx:", e.message); }
 
-  await db.from("gift_claims").update({
-    status: "claimed", recipient_user_id: user.id, recipient_identifier: cleanId, claimed_at: now,
-  }).eq("id", gift.id);
+  const claimUpdate = { status: "claimed", recipient_user_id: user.id, claimed_at: now };
+  if (claimantProfile.id_number) claimUpdate.recipient_identifier = claimantProfile.id_number;
+  const { error: updateErr } = await db.from("gift_claims").update(claimUpdate).eq("id", gift.id);
+
+  if (updateErr) {
+    console.error(`[gift/claim-v2] FAILED to update gift_claims status for gift ${gift.id}:`, updateErr.message);
+    return res.status(500).json({ error: "Claim failed to finalise. Please try again." });
+  }
+  console.log(`[gift/claim-v2] gift ${gift.id} status updated to claimed for user ${user.id}`);
 
   const recipientName = [claimantProfile.first_name, claimantProfile.last_name].filter(Boolean).join(" ") || "Your recipient";
   try {
@@ -9828,6 +10159,851 @@ setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
+
+// ── Child Portfolio Returns ───────────────────────────────────────────────────
+// Calculates a child's live portfolio returns using intraday prices.
+// Expected_fill is in Rands (e.g. 34.38), intraday current_price is in ZAc (cents).
+// basket_value and pnl values are stored in cents to match parent convention.
+
+async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return null;
+
+  // 1. Get child's active holdings for this strategy
+  const { data: holdings, error: hErr } = await db
+    .from('stock_holdings_c')
+    .select('security_id, quantity, Expected_fill, strategy_id')
+    .eq('family_member_id', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .eq('is_active', true);
+
+  if (hErr || !holdings?.length) return null;
+
+  const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+  // 2. Get latest intraday prices for those securities
+  const { data: intradayRows, error: iErr } = await db
+    .from('stock_intraday_c')
+    .select('security_id, current_price, 1d_abs, 1d_pct, symbol')
+    .in('security_id', securityIds)
+    .order('timestamp', { ascending: false });
+
+  if (iErr) return null;
+
+  // Build latest price map per security (first row = most recent)
+  const priceMap = {};
+  (intradayRows || []).forEach(p => {
+    if (!priceMap[p.security_id]) {
+      priceMap[p.security_id] = {
+        current_price: Number(p.current_price || 0),
+        change_abs: Number(p['1d_abs'] || 0),
+        change_pct: Number(p['1d_pct'] || 0),
+        symbol: p.symbol,
+      };
+    }
+  });
+
+  // 3. Calculate portfolio metrics
+  let basketValueCents = 0;   // live value in cents
+  let costBasisCents = 0;     // what was paid in cents
+  let oneDayPnlCents = 0;     // today's gain/loss in cents
+  const holdingsSnapshot = [];
+
+  for (const h of holdings) {
+    const qty = Number(h.quantity || 0);
+    const expectedFill = Number(h.Expected_fill || 0); // Rands
+    const costBasisForHolding = Math.round(expectedFill * 100 * qty); // convert to cents
+
+    const price = priceMap[h.security_id];
+    const livePriceCents = price?.current_price || 0;
+    const liveValueCents = Math.round(livePriceCents * qty);
+    const dayChangeCents = Math.round((price?.change_abs || 0) * qty);
+
+    basketValueCents += liveValueCents;
+    costBasisCents += costBasisForHolding;
+    oneDayPnlCents += dayChangeCents;
+
+    holdingsSnapshot.push({
+      security_id: h.security_id,
+      symbol: price?.symbol || null,
+      qty,
+      avg_fill_rands: expectedFill,
+      current_price_cents: livePriceCents,
+      live_value_cents: liveValueCents,
+      cost_basis_cents: costBasisForHolding,
+      unrealized_pnl_cents: liveValueCents - costBasisForHolding,
+    });
+  }
+
+  const inceptionPnlCents = basketValueCents - costBasisCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
+  const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
+
+  // 4. Look up historical records to calculate 5D, 1M, YTD periods
+  // We fetch enough past records and find the closest one to each target date.
+  const today = new Date();
+  const yearStart = `${today.getUTCFullYear()}-01-01`;
+  const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
+  const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
+
+  const { data: historyRows } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date, basket_value')
+    .eq('family_member', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .gte('as_of_date', yearStart)
+    .order('as_of_date', { ascending: true });
+
+  // Helper: find the record closest to (but not after) a target date string
+  function closestRecord(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate instanceof Date ? targetDate.toISOString().split('T')[0] : targetDate;
+    let best = null;
+    for (const r of rows) {
+      if (r.as_of_date <= target) best = r;
+      else break;
+    }
+    return best;
+  }
+
+  function periodMetrics(historicRecord) {
+    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
+    // If the reference basket equals the current value, P&L is genuinely 0 — store 0 not null.
+    const pnl = basketValueCents - Number(historicRecord.basket_value);
+    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }
+
+  const earliestRecord = historyRows?.length ? historyRows[0] : null;
+  // If no record old enough exists (child invested < 9 days ago), fall back to the earliest
+  // available record so we show a real change instead of storing null.
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
+  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+
+  // Mirror the frontend's logic: if the child has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the diff from the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('family_member', familyMemberId)
+    .eq('strategy_id', strategyId)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
+
+  const p5d  = periodMetrics(rec5d);
+  const p1m  = periodMetrics(rec1m);
+  // If invested this year only → YTD = inception (same as ALL)
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
+
+  return {
+    user_id: userId,
+    strategy_id: strategyId,
+    family_member: familyMemberId,
+    basket_value: basketValueCents,
+    portfolio_value: basketValueCents,
+    inception_pnl: inceptionPnlCents,
+    inception_pct: parseFloat(inceptionPct.toFixed(4)),
+    '1d_pnl': oneDayPnlCents,
+    '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    '5d_pnl': p5d.pnl,
+    '5d_pct': p5d.pct,
+    '1m_pnl': p1m.pnl,
+    '1m_pct': p1m.pct,
+    ytd_pnl: pYtd.pnl,
+    ytd_pct: pYtd.pct,
+    holdings_snapshot: JSON.stringify(holdingsSnapshot),
+    as_of_date: today.toISOString().split('T')[0],
+    fetched_at: today.toISOString(),
+  };
+}
+
+// Saves end-of-day returns for all children with active holdings
+async function saveAllChildReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  console.log('[child-returns-eod] Running end-of-day save...');
+
+  try {
+    // Find all unique (user_id, family_member_id, strategy_id) combinations
+    const { data: childHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, family_member_id, strategy_id')
+      .not('family_member_id', 'is', null)
+      .not('strategy_id', 'is', null)
+      .eq('is_active', true);
+
+    if (hErr || !childHoldings?.length) {
+      console.log('[child-returns-eod] No active child holdings found.');
+      return;
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    const combos = [];
+    for (const h of childHoldings) {
+      const key = `${h.user_id}:${h.family_member_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); combos.push(h); }
+    }
+
+    console.log(`[child-returns-eod] Saving returns for ${combos.length} child-strategy combination(s)...`);
+    let saved = 0, failed = 0;
+
+    for (const { user_id, family_member_id, strategy_id } of combos) {
+      try {
+        const returns = await calculateChildPortfolioReturns(family_member_id, strategy_id, user_id);
+        if (!returns) { failed++; continue; }
+
+        const { error: upsertErr } = await db
+          .from('client_strategy_returns_c')
+          .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[child-returns-eod] Upsert failed for child ${family_member_id}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[child-returns-eod] Error for child ${family_member_id}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[child-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[child-returns-eod] Unexpected error:', err.message);
+  }
+}
+
+// Live endpoint — calculates child returns on the fly without writing to DB.
+// Also triggers an immediate upsert during trading hours so the tab is never blank.
+app.get('/api/child-live-returns', async (req, res) => {
+  const { family_member_id, strategy_id, user_id } = req.query;
+  if (!family_member_id || !strategy_id || !user_id) {
+    return res.status(400).json({ error: 'family_member_id, strategy_id, and user_id are required' });
+  }
+
+  try {
+    const returns = await calculateChildPortfolioReturns(family_member_id, strategy_id, user_id);
+    if (!returns) {
+      return res.json({ basket_value: 0, portfolio_value: 0, inception_pnl: 0, inception_pct: 0, '1d_pnl': 0, '1d_pct': 0, holdings_snapshot: [] });
+    }
+
+    // Also upsert so client_strategy_returns_c stays current during the day
+    const db = supabaseAdmin || supabase;
+    if (db) {
+      db.from('client_strategy_returns_c')
+        .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false })
+        .then(({ error }) => { if (error) console.warn('[child-live-returns] upsert warn:', error.message); });
+    }
+
+    return res.json({
+      ...returns,
+      holdings_snapshot: JSON.parse(returns.holdings_snapshot || '[]'),
+    });
+  } catch (err) {
+    console.error('[child-live-returns] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to calculate child returns' });
+  }
+});
+
+// ── Parent live-returns ───────────────────────────────────────────────────────
+// Mirrors calculateChildPortfolioReturns exactly, but for the primary account
+// holder (family_member_id IS NULL). Reads live intraday prices + historical
+// basket rows to compute 1D / 5D / 1M / YTD period P&L on the fly.
+async function calculateParentPortfolioReturns(userId, strategyId) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return null;
+
+  // 1. Get parent's active holdings for this strategy
+  const { data: holdings, error: hErr } = await db
+    .from('stock_holdings_c')
+    .select('security_id, quantity, Expected_fill, avg_fill, strategy_id')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member_id', null)
+    .or('is_active.eq.true,Status.eq.active');
+
+  if (hErr || !holdings?.length) return null;
+
+  const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+  // 2. Get latest intraday prices for those securities
+  const { data: intradayRows, error: iErr } = await db
+    .from('stock_intraday_c')
+    .select('security_id, current_price, 1d_abs, 1d_pct, symbol')
+    .in('security_id', securityIds)
+    .order('timestamp', { ascending: false });
+
+  if (iErr) return null;
+
+  const priceMap = {};
+  (intradayRows || []).forEach(p => {
+    if (!priceMap[p.security_id]) {
+      priceMap[p.security_id] = {
+        current_price: Number(p.current_price || 0),
+        change_abs: Number(p['1d_abs'] || 0),
+        change_pct: Number(p['1d_pct'] || 0),
+        symbol: p.symbol,
+      };
+    }
+  });
+
+  // 3. Calculate portfolio metrics
+  let basketValueCents = 0;
+  let costBasisCents = 0;
+  let oneDayPnlCents = 0;
+  const holdingsSnapshot = [];
+
+  for (const h of holdings) {
+    const qty = Number(h.quantity || 0);
+    const avgFillCents = Number(h.avg_fill || 0);
+    const avgFillRands = avgFillCents / 100;
+    const expectedFillRands = Number(h.Expected_fill || 0);
+    const costBasisRands = expectedFillRands > 0 ? Math.max(expectedFillRands, avgFillRands) : avgFillRands;
+    const costBasisForHolding = Math.round(costBasisRands * 100 * qty);
+
+    const price = priceMap[h.security_id];
+    const livePriceCents = price?.current_price || 0;
+    const liveValueCents = Math.round(livePriceCents * qty);
+    const dayChangeCents = Math.round((price?.change_abs || 0) * qty);
+
+    basketValueCents += liveValueCents;
+    costBasisCents += costBasisForHolding;
+    oneDayPnlCents += dayChangeCents;
+
+    holdingsSnapshot.push({
+      security_id: h.security_id,
+      symbol: price?.symbol || null,
+      qty,
+      avg_fill_rands: costBasisRands,
+      current_price_cents: livePriceCents,
+      live_value_cents: liveValueCents,
+      cost_basis_cents: costBasisForHolding,
+      unrealized_pnl_cents: liveValueCents - costBasisForHolding,
+    });
+  }
+
+  // Same formula as child: basket value now minus what was originally paid.
+  const inceptionPnlCents = basketValueCents - costBasisCents;
+  const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
+  const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
+
+  // 4. Look up historical basket rows to compute 5D / 1M / YTD periods
+  const today = new Date();
+  const yearStart = `${today.getUTCFullYear()}-01-01`;
+  const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
+  const fiveDaysAgo = new Date(today); fiveDaysAgo.setUTCDate(today.getUTCDate() - 9);
+
+  const { data: historyRows } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date, basket_value')
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .gte('as_of_date', yearStart)
+    .order('as_of_date', { ascending: true });
+
+  function closestRecord(rows, targetDate) {
+    if (!rows?.length) return null;
+    const target = targetDate instanceof Date ? targetDate.toISOString().split('T')[0] : targetDate;
+    let best = null;
+    for (const r of rows) {
+      if (r.as_of_date <= target) best = r;
+      else break;
+    }
+    return best;
+  }
+
+  function periodMetrics(historicRecord) {
+    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
+    const pnl = basketValueCents - Number(historicRecord.basket_value);
+    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }
+
+  const earliestRecord = historyRows?.length ? historyRows[0] : null;
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
+  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+
+  // Mirror the child's logic: if the parent has NO rows before Jan 1 (invested this year),
+  // YTD should equal ALL (inception), not the earliest row this year.
+  const { count: priorYearCount } = await db
+    .from('client_strategy_returns_c')
+    .select('as_of_date', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('strategy_id', strategyId)
+    .is('family_member', null)
+    .lt('as_of_date', yearStart);
+
+  const investedThisYearOnly = (priorYearCount || 0) === 0;
+
+  const p5d  = periodMetrics(rec5d);
+  const p1m  = periodMetrics(rec1m);
+  // If invested this year only → YTD = inception (same as ALL), not earliest-row diff
+  const pYtd = investedThisYearOnly
+    ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
+    : periodMetrics(earliestRecord);
+
+  return {
+    user_id: userId,
+    strategy_id: strategyId,
+    family_member: null,
+    basket_value: basketValueCents,
+    portfolio_value: basketValueCents,
+    inception_pnl: inceptionPnlCents,
+    inception_pct: parseFloat(inceptionPct.toFixed(4)),
+    '1d_pnl': oneDayPnlCents,
+    '1d_pct': parseFloat(oneDayPct.toFixed(4)),
+    '5d_pnl': p5d.pnl,
+    '5d_pct': p5d.pct,
+    '1m_pnl': p1m.pnl,
+    '1m_pct': p1m.pct,
+    ytd_pnl: pYtd.pnl,
+    ytd_pct: pYtd.pct,
+    holdings_snapshot: JSON.stringify(holdingsSnapshot),
+    as_of_date: today.toISOString().split('T')[0],
+    fetched_at: today.toISOString(),
+  };
+}
+
+// Live endpoint — calculates parent returns on demand and upserts today's row
+// so client_strategy_returns_c history builds up day by day (no external script needed).
+app.get('/api/parent-live-returns', async (req, res) => {
+  const { user_id, strategy_id } = req.query;
+  if (!user_id || !strategy_id) {
+    return res.status(400).json({ error: 'user_id and strategy_id are required' });
+  }
+
+  try {
+    const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+    if (!returns) {
+      return res.json({ basket_value: 0, portfolio_value: 0, inception_pnl: 0, inception_pct: 0, '1d_pnl': 0, '1d_pct': 0, holdings_snapshot: [] });
+    }
+
+    const db = supabaseAdmin || supabase;
+    if (db) {
+      db.from('client_strategy_returns_c')
+        .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false })
+        .then(({ error }) => { if (error) console.warn('[parent-live-returns] upsert warn:', error.message); });
+    }
+
+    return res.json({
+      ...returns,
+      holdings_snapshot: JSON.parse(returns.holdings_snapshot || '[]'),
+    });
+  } catch (err) {
+    console.error('[parent-live-returns] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to calculate parent returns' });
+  }
+});
+
+// Saves end-of-day returns for all parent accounts with active strategy holdings
+async function saveAllParentReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  console.log('[parent-returns-eod] Running end-of-day save...');
+
+  try {
+    const { data: parentHoldings, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('user_id, strategy_id')
+      .is('family_member_id', null)
+      .not('strategy_id', 'is', null)
+      .eq('is_active', true);
+
+    if (hErr || !parentHoldings?.length) {
+      console.log('[parent-returns-eod] No active parent strategy holdings found.');
+      return;
+    }
+
+    const seen = new Set();
+    const combos = [];
+    for (const h of parentHoldings) {
+      const key = `${h.user_id}:${h.strategy_id}`;
+      if (!seen.has(key)) { seen.add(key); combos.push(h); }
+    }
+
+    console.log(`[parent-returns-eod] Saving returns for ${combos.length} parent-strategy combination(s)...`);
+    let saved = 0, failed = 0;
+
+    for (const { user_id, strategy_id } of combos) {
+      try {
+        const returns = await calculateParentPortfolioReturns(user_id, strategy_id);
+        if (!returns) { failed++; continue; }
+
+        const { error: upsertErr } = await db
+          .from('client_strategy_returns_c')
+          .upsert(returns, { onConflict: 'user_id,strategy_id,as_of_date,family_member', ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error(`[parent-returns-eod] Upsert failed for user ${user_id}:`, upsertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[parent-returns-eod] Error for user ${user_id}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[parent-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[parent-returns-eod] Unexpected error:', err.message);
+  }
+}
+
+// ── EOD Stock Returns Save ─────────────────────────────────────────────────
+// Saves end-of-day price + period returns for all held securities into stock_returns_c.
+// Runs at 17:30 SAST alongside strategy EOD saves.
+async function saveAllStockReturnsEOD() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  console.log('[stock-returns-eod] Running end-of-day save...');
+
+  try {
+    // 1. Get all unique active security_ids from held positions
+    const { data: holdingRows, error: hErr } = await db
+      .from('stock_holdings_c')
+      .select('security_id')
+      .eq('is_active', true)
+      .not('security_id', 'is', null);
+
+    if (hErr || !holdingRows?.length) {
+      console.log('[stock-returns-eod] No active holdings found.');
+      return;
+    }
+
+    const securityIds = [...new Set(holdingRows.map(h => h.security_id).filter(Boolean))];
+    console.log(`[stock-returns-eod] Processing ${securityIds.length} held securities...`);
+
+    // 2. Get latest intraday prices for all held securities
+    const { data: intradayRows, error: iErr } = await db
+      .from('stock_intraday_c')
+      .select('security_id, symbol, current_price, 1d_abs, 1d_pct, timestamp')
+      .in('security_id', securityIds)
+      .order('timestamp', { ascending: false });
+
+    if (iErr) { console.error('[stock-returns-eod] Intraday fetch error:', iErr.message); return; }
+
+    // Build latest price map (first row per security = most recent)
+    const priceMap = {};
+    for (const row of (intradayRows || [])) {
+      if (!priceMap[row.security_id]) {
+        priceMap[row.security_id] = {
+          current_price: Number(row.current_price || 0),
+          '1d_abs': Number(row['1d_abs'] || 0),
+          '1d_pct': Number(row['1d_pct'] || 0),
+          symbol: row.symbol,
+        };
+      }
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Reference windows (calendar days — we snap to nearest available trading record)
+    const ref5d  = new Date(today); ref5d.setUTCDate(today.getUTCDate() - 9);   // ~5 trading days
+    const ref1m  = new Date(today); ref1m.setUTCDate(today.getUTCDate() - 31);  // ~1 month
+    const ref6m  = new Date(today); ref6m.setUTCDate(today.getUTCDate() - 190); // ~6 months
+    const ref1y  = new Date(today); ref1y.setUTCDate(today.getUTCDate() - 370); // ~1 year
+    const str5d  = ref5d.toISOString().split('T')[0];
+    const str1m  = ref1m.toISOString().split('T')[0];
+    const str6m  = ref6m.toISOString().split('T')[0];
+    const str1y  = ref1y.toISOString().split('T')[0];
+    const strYtd = `${today.getUTCFullYear()}-01-01`;
+
+    // Helper: find the closest record whose as_of_date <= targetStr (binary search on sorted asc array)
+    function closestPriceBefore(rows, targetStr) {
+      if (!rows?.length) return null;
+      let best = null;
+      for (const r of rows) {
+        if (r.as_of_date <= targetStr) best = r;
+        else break;
+      }
+      return best ? Number(best.current_price) : null;
+    }
+
+    function absAndPct(todayCents, refCents) {
+      if (refCents == null || refCents <= 0) return { abs: null, pct: null };
+      const abs = todayCents - refCents;
+      const pct = parseFloat(((abs / refCents) * 100).toFixed(4));
+      return { abs, pct };
+    }
+
+    let saved = 0, failed = 0;
+
+    for (const secId of securityIds) {
+      try {
+        const price = priceMap[secId];
+        if (!price || !price.current_price) { failed++; continue; }
+
+        const todayCents = price.current_price;
+
+        // Fetch historical rows back to ~1 year (for all reference windows)
+        const { data: histRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .gte('as_of_date', str1y)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true });
+
+        // For ALL-time we need the earliest available record
+        const { data: earliestRows } = await db
+          .from('stock_returns_c')
+          .select('as_of_date, current_price')
+          .eq('security_id', secId)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: true })
+          .limit(1);
+
+        const p5d  = absAndPct(todayCents, closestPriceBefore(histRows, str5d));
+        const p1m  = absAndPct(todayCents, closestPriceBefore(histRows, str1m));
+        const p6m  = absAndPct(todayCents, closestPriceBefore(histRows, str6m));
+        const p1y  = absAndPct(todayCents, closestPriceBefore(histRows, str1y));
+        const pYtd = absAndPct(todayCents, closestPriceBefore(histRows, strYtd));
+        const pAll = earliestRows?.length ? absAndPct(todayCents, Number(earliestRows[0].current_price)) : { abs: null, pct: null };
+
+        const upsertRow = {
+          security_id: secId,
+          symbol: price.symbol,
+          as_of_date: todayStr,
+          fetched_at: today.toISOString(),
+          current_price: todayCents,
+          '1d_abs': price['1d_abs'],
+          '1d_pct': price['1d_pct'],
+          '5d_abs': p5d.abs,
+          '5d_pct': p5d.pct,
+          '1m_abs': p1m.abs,
+          '1m_pct': p1m.pct,
+          '6m_abs': p6m.abs,
+          '6m_pct': p6m.pct,
+          '1y_abs': p1y.abs,
+          '1y_pct': p1y.pct,
+          'ytd_abs': pYtd.abs,
+          'ytd_pct': pYtd.pct,
+          'all_abs': pAll.abs,
+          'all_pct': pAll.pct,
+        };
+
+        // Delete any existing row for this security + date, then insert fresh
+        await db.from('stock_returns_c')
+          .delete()
+          .eq('security_id', secId)
+          .eq('as_of_date', todayStr);
+
+        const { error: insertErr } = await db
+          .from('stock_returns_c')
+          .insert(upsertRow);
+
+        if (insertErr) {
+          console.error(`[stock-returns-eod] Insert failed for ${price.symbol}:`, insertErr.message);
+          failed++;
+        } else {
+          saved++;
+        }
+      } catch (e) {
+        console.error(`[stock-returns-eod] Error for security ${secId}:`, e.message);
+        failed++;
+      }
+    }
+
+    console.log(`[stock-returns-eod] Done — saved: ${saved}, failed: ${failed}`);
+  } catch (err) {
+    console.error('[stock-returns-eod] Unexpected error:', err.message);
+  }
+}
+
+// End-of-day save: runs at 17:30 SAST (15:30 UTC) Mon–Fri
+cron.schedule('30 15 * * 1-5', () => {
+  console.log('[eod-cron] Market close triggered — saving all EOD returns');
+  saveAllStockReturnsEOD();
+  saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
+});
+
+// Also run at startup (90s delay) to seed any missing today's records
+setTimeout(() => {
+  saveAllStockReturnsEOD();
+  saveAllChildReturnsEOD();
+  saveAllParentReturnsEOD();
+}, 90 * 1000);
+
+// ── IT Incident Register API ──────────────────────────────────────────────────
+// Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
+
+// Allowed origins for the IT Incident Register endpoints (admin panel + local dev)
+const IT_ALLOWED_ORIGINS = [
+  'https://my-mint-admin.vercel.app',
+  'http://localhost:5000',
+  'http://localhost:3001',
+  'http://127.0.0.1:5000',
+];
+const IT_REPLIT_ORIGIN_RE = /^https:\/\/[a-z0-9-]+(\.replit\.dev|\.spock\.replit\.dev|\.repl\.co)$/;
+
+function setItCors(req, res) {
+  const origin = req.headers.origin || '';
+  const allowed = IT_ALLOWED_ORIGINS.includes(origin) || IT_REPLIT_ORIGIN_RE.test(origin);
+  if (allowed) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
+}
+
+/**
+ * Verify the request carries a valid admin API key.
+ * Accepts: Authorization: Bearer <key>
+ * Key is read from ADMIN_API_KEY env var, falling back to CRON_SECRET.
+ * Returns null on success, or an error message string on failure.
+ */
+function checkAdminKey(req) {
+  const adminKey = process.env.ADMIN_API_KEY || process.env.CRON_SECRET;
+  if (!adminKey) return 'ADMIN_API_KEY not configured on this server';
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return 'Missing Authorization: Bearer <key> header';
+  const supplied = auth.slice(7).trim();
+  if (supplied !== adminKey) return 'Invalid admin key';
+  return null;
+}
+
+// OPTIONS preflight for CORS
+app.options('/api/incidents', (req, res) => { setItCors(req, res); res.sendStatus(204); });
+app.options('/api/incidents/:id', (req, res) => { setItCors(req, res); res.sendStatus(204); });
+
+// GET /api/incidents — list all incidents, filterable by status and severity
+app.get('/api/incidents', async (req, res) => {
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  const client = await pgPool.connect();
+  try {
+    const params = [];
+    const conditions = [];
+    if (req.query.status) { params.push(req.query.status); conditions.push(`status = $${params.length}`); }
+    if (req.query.severity) { params.push(req.query.severity); conditions.push(`severity = $${params.length}`); }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { rows } = await client.query(
+      `SELECT * FROM it_incidents ${where} ORDER BY start_time DESC`,
+      params
+    );
+    res.json({ incidents: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/incidents — log a new incident
+app.post('/api/incidents', async (req, res) => {
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const { title, affected_service, severity, start_time, description, created_by } = req.body || {};
+    if (!title || !affected_service || !severity) {
+      return res.status(400).json({ error: 'title, affected_service, and severity are required' });
+    }
+    const validSeverities = ['low', 'medium', 'high', 'critical'];
+    if (!validSeverities.includes(severity)) {
+      return res.status(400).json({ error: `severity must be one of: ${validSeverities.join(', ')}` });
+    }
+    const client = await pgPool.connect();
+    try {
+      const { rows } = await client.query(
+        `INSERT INTO it_incidents (title, affected_service, severity, status, start_time, description, created_by)
+         VALUES ($1, $2, $3, 'open', $4, $5, $6)
+         RETURNING *`,
+        [
+          title.trim(),
+          affected_service.trim(),
+          severity,
+          start_time || new Date().toISOString(),
+          description || null,
+          created_by || null,
+        ]
+      );
+      const incident = rows[0];
+      console.log(`[it-incidents] New incident logged: "${title}" (${severity})`);
+      res.status(201).json({ incident });
+      // Fire alert email asynchronously — does not block the response
+      if (severity === 'critical' || severity === 'high') {
+        sendItIncidentAlert(incident);
+      }
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/incidents/:id — update or resolve an incident
+app.patch('/api/incidents/:id', async (req, res) => {
+  setItCors(req, res);
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  if (!pgPool) return res.status(503).json({ error: 'Database not configured' });
+  const client = await pgPool.connect();
+  try {
+    const { id } = req.params;
+    const { status, root_cause, resolution_notes, resolved_time } = req.body || {};
+    const validStatuses = ['open', 'investigating', 'resolved'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    // Fetch existing incident to calculate downtime
+    const existing = await client.query('SELECT * FROM it_incidents WHERE id = $1', [id]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Incident not found' });
+    const inc = existing.rows[0];
+
+    // Build dynamic SET clause
+    const sets = ['updated_at = NOW()'];
+    const params = [];
+    if (status) { params.push(status); sets.push(`status = $${params.length}`); }
+    if (root_cause !== undefined) { params.push(root_cause); sets.push(`root_cause = $${params.length}`); }
+    if (resolution_notes !== undefined) { params.push(resolution_notes); sets.push(`resolution_notes = $${params.length}`); }
+
+    // Auto-calculate downtime when resolving
+    if (status === 'resolved') {
+      const resolvedAt = resolved_time ? new Date(resolved_time) : new Date();
+      const startedAt = new Date(inc.start_time);
+      const durationMins = Math.round((resolvedAt - startedAt) / 60000);
+      params.push(resolvedAt.toISOString());
+      sets.push(`resolved_time = $${params.length}`);
+      params.push(durationMins);
+      sets.push(`downtime_duration_minutes = $${params.length}`);
+    }
+
+    params.push(id);
+    const { rows } = await client.query(
+      `UPDATE it_incidents SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
+    );
+    console.log(`[it-incidents] Incident ${id} updated to status: ${status || inc.status}`);
+    res.json({ incident: rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Global Express error middleware — catches any next(err) or async throws
+app.use((err, req, res, next) => {
+  console.error("[GLOBAL_ERROR]", req.method, req.path, err?.message, err?.stack?.split("\n")[1]);
+  if (!res.headersSent) res.status(500).json({ error: err?.message || "Internal server error" });
+});
 
 // Catch-all 404 handler - MUST be after all route definitions
 app.use((req, res) => {

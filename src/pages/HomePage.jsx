@@ -25,6 +25,7 @@ import {
   Clock3,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import { useNotificationsContext } from "../lib/NotificationsContext.jsx";
 import NavigationPill from "../components/NavigationPill";
 import { useRequiredActions } from "../lib/useRequiredActions";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
@@ -485,6 +486,7 @@ const HomePage = ({
   onOpenFamily,
   onOpenInsure,
   onSelectMember,
+  onOpenGiftClaim,
   onNavigate,
 }) => {
   const { profile, loading } = useProfile();
@@ -515,7 +517,102 @@ const HomePage = ({
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingNews, setLoadingNews] = useState(false);
   const [homeTab, setHomeTab] = useState("balance");
+  const [showGiftingIntro, setShowGiftingIntro] = useState(false);
+  const [giftingIntroSeen, setGiftingIntroSeen] = useState(() => !!localStorage.getItem('mint_gifting_intro_seen'));
   const [userId, setUserId] = useState(null);
+  const [pendingGiftId, setPendingGiftId] = useState(() => localStorage.getItem('mint_pending_gift_id'));
+  const [pendingGiftExpiry, setPendingGiftExpiry] = useState(() => localStorage.getItem('mint_pending_gift_expires'));
+  const [giftCountdown, setGiftCountdown] = useState(null);
+  const { notifications: _homeNotifs, markAsRead: _markGiftNotifRead } = useNotificationsContext();
+  const [_pendingGiftNotifId, _setPendingGiftNotifId] = useState(null);
+
+  function _fmtGiftCountdown(expiresAt) {
+    const ms = new Date(expiresAt) - Date.now();
+    if (ms <= 0) return null;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m ${String(s).padStart(2, '0')}s`;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+
+  useEffect(() => {
+    const alreadyClaimed = localStorage.getItem('mint_gift_claimed');
+    const giftNotif = _homeNotifs.find(n => !n.read_at && n.payload?.action === 'gift_received');
+    if (giftNotif) {
+      const giftId = giftNotif.payload?.gift_id;
+      if (giftId && giftId === alreadyClaimed) {
+        // This specific gift was already claimed — hide and mark notification read
+        _markGiftNotifRead(giftNotif.id);
+        localStorage.removeItem('mint_pending_gift_id');
+        localStorage.removeItem('mint_pending_gift_expires');
+        setPendingGiftId(null);
+      } else if (giftId) {
+        // New unclaimed gift — show the banner
+        localStorage.setItem('mint_pending_gift_id', giftId);
+        setPendingGiftId(giftId);
+        _setPendingGiftNotifId(giftNotif.id);
+      }
+    } else if (!localStorage.getItem('mint_pending_gift_id')) {
+      setPendingGiftId(null);
+    }
+  }, [_homeNotifs]);
+
+  // Fetch expires_at for the pending gift and store in localStorage
+  useEffect(() => {
+    if (!pendingGiftId) { setPendingGiftExpiry(null); return; }
+    const stored = localStorage.getItem('mint_pending_gift_expires');
+    if (stored && localStorage.getItem('mint_gift_claimed') === pendingGiftId) { setPendingGiftExpiry(stored); return; }
+    if (stored) setPendingGiftExpiry(stored);
+    fetch(`/api/gift/by-id/${pendingGiftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+          setPendingGiftId(null);
+          setPendingGiftExpiry(null);
+          return;
+        }
+        if (['claimed', 'completed', 'expired', 'cancelled'].includes(data.status)) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+          if (data.status === 'claimed' || data.status === 'completed') {
+            localStorage.setItem('mint_gift_claimed', pendingGiftId);
+          }
+          setPendingGiftId(null);
+          setPendingGiftExpiry(null);
+          return;
+        }
+        if (data.expires_at) {
+          localStorage.setItem('mint_pending_gift_expires', data.expires_at);
+          setPendingGiftExpiry(data.expires_at);
+        }
+      })
+      .catch(() => {});
+  }, [pendingGiftId]);
+
+  // Countdown ticker
+  useEffect(() => {
+    if (!pendingGiftExpiry) return;
+    const tick = () => {
+      const label = _fmtGiftCountdown(pendingGiftExpiry);
+      if (!label) {
+        localStorage.removeItem('mint_pending_gift_id');
+        localStorage.removeItem('mint_pending_gift_expires');
+        setPendingGiftId(null);
+        setPendingGiftExpiry(null);
+        setGiftCountdown(null);
+      } else {
+        setGiftCountdown(label);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [pendingGiftExpiry]);
+
   const [localBestAssets, setLocalBestAssets] = useState(() => _cachedBestAssets);
   const [hasAnyHoldings, setHasAnyHoldings] = useState(() => _cachedHasAnyHoldings);
   const [loadingBestAssets, setLoadingBestAssets] = useState(() => _cachedBestAssets.length === 0);
@@ -602,7 +699,8 @@ const HomePage = ({
 
         const formatted = Array.from(rowsBySecurity.entries()).map(([secId, batches]) => {
           const sec = securitiesMap[secId];
-          const livePriceCents = sec.last_price != null ? Math.round(Number(sec.last_price) * 100) : 0;
+          // last_price in securities_c is stored in CENTS; live_price_cents from intraday is also cents.
+          const livePriceCents = sec.live_price_cents > 0 ? sec.live_price_cents : Number(sec.last_price || 0);
           const livePriceRands = livePriceCents / 100;
 
           // Aggregate across batches: filled-only quantity drives liveValue/PnL,
@@ -684,9 +782,10 @@ const HomePage = ({
               const qty = Number(h.quantity || 0);
               const avgFill = Number(h.avg_fill || 0);
               const costBasisPerShareRands = costBasisRandsPerShare(h);
-              const livePriceCents = sec.last_price != null
-                ? Math.round(Number(sec.last_price) * 100)
-                : Math.round(costBasisPerShareRands * 100);
+              // last_price in securities_c is in CENTS; use live_price_cents (intraday) first.
+              const livePriceCents = sec.live_price_cents > 0
+                ? sec.live_price_cents
+                : (sec.last_price != null ? Number(sec.last_price) : Math.round(costBasisPerShareRands * 100));
               const marketVal = (livePriceCents * qty) / 100;
               const costBasis = costBasisPerShareRands * qty;
               const pnlRands = marketVal - costBasis;
@@ -847,15 +946,16 @@ const HomePage = ({
   }, [showGoalsModal, profile?.id, fetchGoals]);
 
   useEffect(() => {
-    const fetchStrategies = async () => {
+    // isRefresh=true → silent update (no loading spinner, keeps existing data visible)
+    const fetchStrategies = async (isRefresh = false) => {
       try {
         if (!profile?.id) return;
-        setLoadingBestStrategies(true);
+        if (!isRefresh) setLoadingBestStrategies(true);
 
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) {
-          setBestStrategies([]);
+          if (!isRefresh) setBestStrategies([]);
           return;
         }
 
@@ -865,7 +965,7 @@ const HomePage = ({
 
         if (!res.ok) {
           console.error("[HomePage] Failed to fetch user strategies:", res.status);
-          setBestStrategies([]);
+          if (!isRefresh) setBestStrategies([]);
           return;
         }
 
@@ -877,6 +977,22 @@ const HomePage = ({
           return;
         }
 
+        // Fetch stored P&L from client_strategy_returns_c to match purple card values
+        const strategyIds = serverStrategies.map(s => s.id).filter(Boolean);
+        const { data: returnsRows } = strategyIds.length
+          ? await supabase
+              .from("client_strategy_returns_c")
+              .select("strategy_id, ytd_pnl, ytd_pct")
+              .eq("user_id", profile.id)
+              .is("family_member", null)
+              .in("strategy_id", strategyIds)
+              .order("as_of_date", { ascending: false })
+          : { data: [] };
+        const returnsByStrategy = {};
+        for (const row of (returnsRows || [])) {
+          if (!returnsByStrategy[row.strategy_id]) returnsByStrategy[row.strategy_id] = row;
+        }
+
         const formatted = serverStrategies
           .map((s) => {
           const invested = Number(s.investedAmount) || 0;
@@ -885,9 +1001,10 @@ const HomePage = ({
             ? Number(Number(rawCurrent).toFixed(2))
             : invested;
           const isPending = s.isPending === true || (invested === 0 && currentValue === 0);
-          const stratPnlRands = currentValue - invested;
-          const changePctVal = invested > 0 ? (stratPnlRands / invested) * 100 : 0;
-          const stratPnlPct = changePctVal;
+          const ret = returnsByStrategy[s.id];
+          const stratPnlRands = ret?.ytd_pnl != null ? Number(ret.ytd_pnl) / 100 : (currentValue - invested);
+          const stratPnlPct = ret?.ytd_pct != null ? Number(ret.ytd_pct) : (invested > 0 ? ((currentValue - invested) / invested) * 100 : 0);
+          const changePctVal = stratPnlPct;
           return {
             id: s.id,
             purchaseKey: s.purchaseKey || s.id,
@@ -906,25 +1023,58 @@ const HomePage = ({
             isPending,
             change_pct: changePctVal,
             pnlRands: stratPnlRands,
-            pnlPct: stratPnlPct,
+            pnlPct: changePctVal,
             strategy_metrics: s.metrics ? [s.metrics] : [],
           };
         });
 
-        const sorted = formatted
+        // Deduplicate by id — server can return multiple rows for the same
+        // strategy (e.g. a re-buy on top of filled holdings).  When one entry
+        // is pending and another is filled, merge them into a single
+        // hasPendingBatch entry so the pending section shows the new batch
+        // while the strategies carousel hides it until it's settled.
+        const stratMap = new Map();
+        for (const s of formatted) {
+          if (stratMap.has(s.id)) {
+            const existing = stratMap.get(s.id);
+            if (s.isPending && !existing.isPending) {
+              // existing is filled, s is the new pending batch → flag mixed
+              existing.hasPendingBatch = true;
+            } else if (!s.isPending && existing.isPending) {
+              // existing was marked pending but s has filled data → keep filled values
+              existing.isPending = false;
+              existing.hasPendingBatch = true;
+              existing.investedAmount = s.investedAmount || existing.investedAmount;
+              existing.currentValue = s.currentValue || existing.currentValue;
+              existing.change_pct = s.change_pct;
+              existing.pnlRands = s.pnlRands;
+              existing.pnlPct = s.pnlPct;
+            }
+            // Otherwise both are the same state — ignore the duplicate
+          } else {
+            stratMap.set(s.id, { ...s });
+          }
+        }
+        const deduped = [...stratMap.values()];
+
+        const sorted = deduped
           .sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0))
           .slice(0, 5);
         _cachedBestStrategies = sorted;
         setBestStrategies(sorted);
       } catch (error) {
         console.error("Failed to load strategies", error);
-        setBestStrategies((prev) => prev.length > 0 ? prev : []);
+        if (!isRefresh) setBestStrategies((prev) => prev.length > 0 ? prev : []);
       } finally {
-        setLoadingBestStrategies(false);
+        if (!isRefresh) setLoadingBestStrategies(false);
       }
     };
+
     fetchStrategies();
-  }, [profile?.id, pricesLastUpdated]);
+    // Poll every 15 seconds (in sync with intraday price updates) — silent refresh, no spinner
+    const pollInterval = setInterval(() => fetchStrategies(true), 15000);
+    return () => clearInterval(pollInterval);
+  }, [profile?.id]);
 
   const holdingsBySymbol = useMemo(() => buildHoldingsBySymbol(holdingsSecurities), [holdingsSecurities]);
 
@@ -1285,13 +1435,109 @@ const HomePage = ({
       </div>
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
+
+        {pendingGiftId && (
+          <>
+            <style>{`
+              @keyframes hgift-slide-up {
+                from { opacity: 0; transform: translateY(12px); }
+                to   { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes hgift-shimmer {
+                0%   { transform: translateX(-100%) skewX(-12deg); }
+                100% { transform: translateX(300%) skewX(-12deg); }
+              }
+              @keyframes hgift-glow-pulse {
+                0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0), 0 0 18px 2px rgba(139,92,246,0.15); }
+                50%      { box-shadow: 0 0 0 3px rgba(167,139,250,0.15), 0 0 28px 6px rgba(139,92,246,0.28); }
+              }
+              @keyframes hgift-float {
+                0%, 100% { transform: translateY(0); }
+                50%      { transform: translateY(-3px); }
+              }
+              @keyframes hgift-ping {
+                0%        { transform: scale(1); opacity: 1; }
+                75%, 100% { transform: scale(2.2); opacity: 0; }
+              }
+              .hgift-banner {
+                animation: hgift-slide-up 0.5s cubic-bezier(0.16,1,0.3,1) both,
+                           hgift-glow-pulse 2.8s ease-in-out 0.5s infinite;
+              }
+              .hgift-shimmer::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.09) 50%, transparent 70%);
+                animation: hgift-shimmer 2.6s ease-in-out 0.7s infinite;
+              }
+              .hgift-icon { animation: hgift-float 2.4s ease-in-out 0.4s infinite; }
+              .hgift-ping { animation: hgift-ping 1.4s cubic-bezier(0,0,0.2,1) 0.5s infinite; }
+            `}</style>
+
+            <button
+              type="button"
+              className="hgift-banner relative overflow-hidden w-full rounded-2xl px-4 py-4 flex items-center gap-3.5 text-left active:scale-[0.98] transition-transform"
+              style={{
+                background: 'linear-gradient(135deg, #1e0d3a 0%, #3b1a6b 45%, #2a1050 100%)',
+                border: '1px solid rgba(167,139,250,0.3)',
+              }}
+              onClick={() => {
+                if (onOpenGiftClaim) onOpenGiftClaim();
+                else if (onNavigate) onNavigate("giftClaim");
+              }}
+            >
+              <div className="hgift-shimmer absolute inset-0 rounded-2xl pointer-events-none" />
+
+              <span className="absolute top-3 right-3 flex h-2 w-2">
+                <span className="hgift-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-300" />
+              </span>
+
+              <span
+                className="hgift-icon shrink-0 flex h-10 w-10 items-center justify-center rounded-xl text-2xl"
+                style={{ background: 'rgba(255,255,255,0.07)', boxShadow: '0 0 14px 2px rgba(250,204,21,0.18)' }}
+              >
+                🎁
+              </span>
+
+              <div className="flex-1 min-w-0 pr-6">
+                <p className="text-sm font-semibold text-white leading-snug">You have an investment gift to claim</p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(196,181,253,0.85)' }}>Tap to claim your gift</p>
+              </div>
+
+              {giftCountdown && (
+                <p className="absolute bottom-2.5 right-10 text-[10px] font-medium tabular-nums" style={{ color: 'rgba(250,204,21,0.9)' }}>
+                  ⏱ {giftCountdown}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="absolute top-3 right-7 p-1 shrink-0"
+                style={{ color: 'rgba(196,181,253,0.6)' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  localStorage.removeItem('mint_pending_gift_id');
+                  localStorage.removeItem('mint_pending_gift_expires');
+                  setPendingGiftId(null);
+                  setPendingGiftExpiry(null);
+                  if (_pendingGiftNotifId) _markGiftNotifRead(_pendingGiftNotifId);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </button>
+          </>
+        )}
+
+
         <section className="flex flex-col gap-3">
           {/* Row 1 — primary actions */}
           <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
             {[
               { label: "Invest", icon: LayoutGrid, onClick: onOpenStrategies || onOpenInvest },
               { label: "Deposit", icon: ArrowDownToLine, onClick: onOpenDeposit },
-              { label: "Gifting", icon: Gift, onClick: null, comingSoon: true },
+              { label: "Gifting", icon: Gift, isNew: true, onClick: () => { if (!giftingIntroSeen) { setShowGiftingIntro(true); } else { onNavigate("giftStrategies"); } } },
               { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
             ].map((item, index) => {
               const Icon = item.icon;
@@ -1308,8 +1554,19 @@ const HomePage = ({
                       Soon
                     </span>
                   )}
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                  {item.isNew && (
+                    <span className="absolute -top-1.5 -right-1 whitespace-nowrap rounded-full bg-gradient-to-r from-violet-600 to-purple-500 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                      New
+                    </span>
+                  )}
+                  <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-700">
                     <Icon className="h-4 w-4" />
+                    {item.isNew && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
+                      </span>
+                    )}
                   </span>
                   <span className="text-center leading-tight">{item.label}</span>
                 </button>
@@ -1514,9 +1771,17 @@ const HomePage = ({
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
           const pendingAssets = safeAssets.filter(a => a && a.isPending);
-          // Strategies where ALL batches are pending — those with mixed state show up
-          // inside the filled-strategies carousel as a stack instead.
-          const pendingStrategies = safeStrategies.filter(s => s && s.isPending);
+          // A strategy goes in the pending section if:
+          //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
+          //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
+          // Using purchaseBatchesByStrategy is authoritative because it's computed
+          // client-side from real holdings data, independent of server response flags.
+          const pendingStrategies = safeStrategies.filter(s => {
+            if (!s) return false;
+            if (s.isPending) return true;
+            const batches = purchaseBatchesByStrategy[s.id] || [];
+            return batches.some(b => !b.filled);
+          });
 
           // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
           // Each transaction "Strategy Investment: X" = one purchase event.
@@ -1526,6 +1791,7 @@ const HomePage = ({
             let stratName = null;
             if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
             else if (name.startsWith("Purchased ")) stratName = name.replace("Purchased ", "").trim();
+            else if (name.startsWith("Gift Received — ")) stratName = name.replace("Gift Received — ", "").trim();
             if (!stratName) return;
             const strat = pendingStrategies.find(s =>
               (s.name || "").toLowerCase() === stratName.toLowerCase() ||
@@ -1541,6 +1807,16 @@ const HomePage = ({
           pendingStrategies.forEach(s => {
             const key = s.id || s.name;
             if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
+          });
+
+          // Sort all txs per group newest-first so "Purchase 1 of N" = most recent
+          Object.entries(stratTxMap).forEach(([, entry]) => {
+            if (entry.txs.length > 1) {
+              entry.txs.sort((a, b) =>
+                new Date(b?.transaction_date || b?.created_at || 0) -
+                new Date(a?.transaction_date || a?.created_at || 0)
+              );
+            }
           });
 
           // Groups: [{key, strat, txs}]
@@ -2009,7 +2285,11 @@ const HomePage = ({
             </div>
           ) : hasStrategies ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {bestStrategies.filter(s => !s.isPending).slice(0, 5).map((strategy) => {
+              {bestStrategies.filter(s => {
+                if (!s || s.isPending) return false;
+                const batches = purchaseBatchesByStrategy[s.id] || [];
+                return !batches.some(b => !b.filled);
+              }).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
 
@@ -2459,6 +2739,111 @@ const HomePage = ({
         data={expandedStockStack}
         onClose={() => setExpandedStockStack(null)}
       />
+    )}
+
+    {/* Gifting intro modal — shown only on first tap of Gifting */}
+    {showGiftingIntro && (
+      <div
+        className="fixed inset-0 z-[999] flex items-end justify-center"
+        style={{ background: 'rgba(10,6,20,0.55)', backdropFilter: 'blur(4px)' }}
+        onClick={(e) => { if (e.target === e.currentTarget) { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); } }}
+      >
+        <style>{`
+          @keyframes gift-intro-slide {
+            from { opacity: 0; transform: translateY(100%); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes gift-intro-float {
+            0%, 100% { transform: translateY(0) rotate(-3deg); }
+            50%       { transform: translateY(-8px) rotate(3deg); }
+          }
+          @keyframes gift-intro-step-in {
+            from { opacity: 0; transform: translateX(-12px); }
+            to   { opacity: 1; transform: translateX(0); }
+          }
+          .gift-intro-sheet {
+            animation: gift-intro-slide 0.45s cubic-bezier(0.16,1,0.3,1) both;
+          }
+          .gift-intro-emoji {
+            animation: gift-intro-float 3s ease-in-out infinite;
+            display: inline-block;
+          }
+          .gift-intro-step-1 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.25s both; }
+          .gift-intro-step-2 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.38s both; }
+          .gift-intro-step-3 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.51s both; }
+          .gift-intro-step-4 { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.64s both; }
+          .gift-intro-btn    { animation: gift-intro-step-in 0.4s cubic-bezier(0.16,1,0.3,1) 0.78s both; }
+        `}</style>
+
+        <div className="gift-intro-sheet w-full max-w-sm mx-4 mb-6 rounded-3xl overflow-hidden shadow-2xl"
+          style={{ background: 'linear-gradient(170deg, #1a0d2e 0%, #2d1554 40%, #1e0d3a 100%)', border: '1px solid rgba(167,139,250,0.25)' }}
+        >
+          {/* Header */}
+          <div className="relative px-6 pt-7 pb-5 text-center"
+            style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.35) 0%, rgba(124,58,237,0.15) 100%)' }}
+          >
+            <div className="text-5xl mb-3">
+              <span className="gift-intro-emoji">🎁</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-white tracking-tight">How Gifting Works</h2>
+            <p className="text-sm mt-1.5" style={{ color: 'rgba(196,181,253,0.8)' }}>Send real investments to anyone — it takes 30 seconds</p>
+
+            {/* Close pill */}
+            <button
+              onClick={() => { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); }}
+              className="absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: 'rgba(255,255,255,0.1)' }}
+            >
+              <X className="h-3.5 w-3.5 text-white/70" />
+            </button>
+          </div>
+
+          {/* Steps */}
+          <div className="px-6 py-5 space-y-4">
+            {[
+              { step: '1', emoji: '📈', title: 'Pick an investment', desc: 'Choose any stock, ETF or basket from the Mint catalogue', cls: 'gift-intro-step-1' },
+              { step: '2', emoji: '💸', title: 'Set the amount', desc: 'You decide how much to gift — starts from R100', cls: 'gift-intro-step-2' },
+              { step: '3', emoji: '📧', title: 'Send via email', desc: 'Enter the recipient\'s email address — we handle the rest', cls: 'gift-intro-step-3' },
+              { step: '4', emoji: '🎉', title: 'They claim & invest', desc: 'Your gift lands in their Mint portfolio once claimed', cls: 'gift-intro-step-4' },
+            ].map(({ step, emoji, title, desc, cls }) => (
+              <div key={step} className={`${cls} flex items-start gap-3.5`}>
+                <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-violet-200"
+                  style={{ background: 'rgba(139,92,246,0.25)', border: '1px solid rgba(139,92,246,0.35)' }}
+                >
+                  {step}
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <p className="text-sm font-semibold text-white leading-snug">{emoji} {title}</p>
+                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'rgba(196,181,253,0.7)' }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <div className="gift-intro-btn px-6 pb-7">
+            <button
+              onClick={() => {
+                setShowGiftingIntro(false);
+                localStorage.setItem('mint_gifting_intro_seen', '1');
+                setGiftingIntroSeen(true);
+                onNavigate('giftStrategies');
+              }}
+              className="w-full py-4 rounded-2xl font-bold text-sm text-white active:scale-[0.98] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', boxShadow: '0 4px 20px rgba(124,58,237,0.45)' }}
+            >
+              🎁 Send a Gift
+            </button>
+            <button
+              onClick={() => { setShowGiftingIntro(false); localStorage.setItem('mint_gifting_intro_seen','1'); setGiftingIntroSeen(true); }}
+              className="w-full mt-2.5 py-2.5 text-xs font-medium text-center"
+              style={{ color: 'rgba(196,181,253,0.65)' }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

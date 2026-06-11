@@ -143,7 +143,9 @@ const MorePage = ({ onNavigate, onBeforeLogout }) => {
     } catch (error) {
       console.error("Failed to sign out:", error);
     } finally {
-      onNavigate?.("welcome");
+      // Full reload wipes all in-memory React state so the next user
+      // never sees a previous user's data.
+      window.location.href = '/';
     }
   };
 
@@ -153,7 +155,7 @@ const MorePage = ({ onNavigate, onBeforeLogout }) => {
       { id: "family", label: "Family Dashboard", icon: Users, onClick: () => onNavigate?.("familyDashboard") },
       { id: "settings", label: "Settings", icon: Settings, onClick: () => onNavigate?.("settings") },
       { id: "statements", label: "Statements", icon: FileText, onClick: () => onNavigate?.("statements") },
-      { id: "sentGifts", label: "Sent Gifts", icon: Gift, onClick: () => onNavigate?.("sentGifts") },
+      { id: "sentGifts", label: "Gifts", icon: Gift, onClick: () => onNavigate?.("sentGifts") },
     ],
     [
       { id: "help", label: "Help & FAQs", icon: HelpCircle },

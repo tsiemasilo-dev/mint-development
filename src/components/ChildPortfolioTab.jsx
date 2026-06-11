@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
+import { supabase } from "../lib/supabase";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,17 +43,36 @@ const computePnlAxisConfig = (data) => {
   return { domain: [axisMin, axisMax], ticks: unique.length >= 2 ? unique : [0, 5, 10] };
 };
 
+// Returns the first data point of each calendar month from chart data.
+// Handles both daily labels ("13 Mar '26") and monthly labels ("Mar '26").
+const computeChildYtdTicks = (chartData) => {
+  const seen = new Set();
+  return chartData
+    .filter(pt => {
+      if (!pt.day) return false;
+      const parts = String(pt.day).split(' ');
+      // "Mar '26" → parts[0] is a month name (letter); "13 Mar '26" → parts[1]
+      const mon = isNaN(Number(parts[0])) ? parts[0] : parts[1];
+      if (!mon || seen.has(mon)) return false;
+      seen.add(mon);
+      return true;
+    })
+    .map(pt => pt.day);
+};
+
 const PIE_COLORS = ["#4C1D95","#5B21B6","#6D28D9","#7C3AED","#8B5CF6","#A78BFA","#C4B5FD","#DDD6FE","#EDE9FE","#F5F3FF"];
 
 // ─── ChildPortfolioTab ─────────────────────────────────────────────────────────
 
-const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
+const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap: livePriceMapProp = null }) => {
   const { profile } = useProfile();
   const familyMemberId = child?.id || null;
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
-  const [timeFilter, setTimeFilter] = useState("m");
+  const [timeFilter, setTimeFilter] = useState("ytd");
+  const [tabJustChanged, setTabJustChanged] = useState(false);
+  const tabJustChangedTimer = useRef(null);
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(
     selectedStrategy?.strategyId, timeFilter,
     selectedStrategy?.firstInvestedDate || null,
@@ -61,6 +81,62 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(
     profile?.id, selectedStrategy?.strategyId, timeFilter, familyMemberId
   );
+
+  // which time period tabs have enough data to show
+  const [availablePeriods, setAvailablePeriods] = useState({ D: true, "5d": false, m: false, ytd: false, all: true });
+  // raw snapshot rows used for period P&L derivation (basket_value in cents, ascending by date)
+  const [snapshotRows, setSnapshotRows] = useState([]);
+
+  useEffect(() => {
+    if (!familyMemberId || !selectedStrategy?.strategyId) return;
+    supabase
+      .from("client_strategy_returns_c")
+      .select("as_of_date, basket_value, ytd_pct")
+      .eq("family_member", familyMemberId)
+      .eq("strategy_id", selectedStrategy.strategyId)
+      .order("as_of_date", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setSnapshotRows(data);
+          const count = data.length;
+          const latestYtdPct = data[data.length - 1]?.ytd_pct;
+          setAvailablePeriods({
+            D: true,
+            "5d": count >= 5,
+            m: count >= 22,
+            ytd: latestYtdPct != null,
+            all: true,
+          });
+        }
+      });
+  }, [familyMemberId, selectedStrategy?.strategyId]);
+
+  // derive period P&L from basket snapshots when pre-calculated columns are null
+  const derivedPeriodReturn = useMemo(() => {
+    if (!snapshotRows.length) return { pnl: 0, pct: 0 };
+    const last = snapshotRows[snapshotRows.length - 1];
+    const latestCents = Number(last?.basket_value || 0);
+    if (!latestCents) return { pnl: 0, pct: 0 };
+
+    let startCents = 0;
+    if (timeFilter === "5d" && snapshotRows.length >= 5) {
+      startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+    } else if (timeFilter === "m" && snapshotRows.length >= 22) {
+      startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+    } else {
+      return { pnl: 0, pct: 0 };
+    }
+
+    if (!startCents) return { pnl: 0, pct: 0 };
+    const pnl = (latestCents - startCents) / 100;
+    const pct = ((latestCents - startCents) / startCents) * 100;
+    return { pnl, pct: parseFloat(pct.toFixed(4)) };
+  }, [snapshotRows, timeFilter]);
+
+
+  // Derive locked message directly from availablePeriods + current filter — always in sync
+  const _lockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year", all: null };
+  const lockedMessage = (!availablePeriods[timeFilter] && _lockedLabels[timeFilter]) ? _lockedLabels[timeFilter] : null;
 
   // sub-tab within the portfolio tab
   const [activeTab, setActiveTab] = useState("strategy");
@@ -84,14 +160,241 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
   const [failedLogos, setFailedLogos] = useState({});
   const [activePieIndex, setActivePieIndex] = useState(-1);
 
+  // intraday D chart
+  const [intradayChartData, setIntradayChartData] = useState(null);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+  const [intradayTick, setIntradayTick] = useState(0);
+
+  // Poll every 60 seconds while on D view
+  useEffect(() => {
+    if (timeFilter !== "D") return;
+    const id = setInterval(() => setIntradayTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [timeFilter]);
+
+  // ── live price map — polls every 15s directly from stock_intraday_c ──────
+  // Skipped when livePriceMapProp is provided from ChildDashboardPage (shared poll)
+  const [ownLivePriceMap, setOwnLivePriceMap] = useState({});
+  const livePriceMap = livePriceMapProp ?? ownLivePriceMap;
+
+  useEffect(() => {
+    if (livePriceMapProp) return; // shared poll from parent handles it
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId) return;
+
+    const securityIds = [...new Set(
+      (rawHoldings || [])
+        .filter(h => h.strategy_id === stratId && h.security_id)
+        .map(h => h.security_id)
+    )];
+    if (securityIds.length === 0) return;
+
+    const fetchPrices = async () => {
+      const { data } = await supabase
+        .from("stock_intraday_c")
+        .select("security_id, current_price, 1d_abs, 1d_pct")
+        .in("security_id", securityIds)
+        .order("timestamp", { ascending: false });
+      if (!data?.length) return;
+      const map = {};
+      for (const row of data) {
+        if (!map[row.security_id]) {
+          map[row.security_id] = {
+            priceCents: Number(row.current_price),
+            abs1dCents: row["1d_abs"] != null ? Number(row["1d_abs"]) : null,
+            pct1d: row["1d_pct"] != null ? Number(row["1d_pct"]) : null,
+          };
+        }
+      }
+      setOwnLivePriceMap(map);
+    };
+
+    fetchPrices();
+    const id = setInterval(fetchPrices, 15000);
+    return () => clearInterval(id);
+  }, [livePriceMapProp, selectedStrategy?.strategyId, rawHoldings]);
+
   // ── chart data ─────────────────────────────────────────────────────────────
   const currentStrategy = selectedStrategy || { name: strategiesLoading ? "Loading..." : "No Strategy", currentValue: 0, investedAmount: 0 };
+
+  // ── live strategy metrics — computed from holdings instead of saved snapshot ──
+  const liveStrategyMetrics = useMemo(() => {
+    const stratId = selectedStrategy?.strategyId;
+    const empty = { liveValue: 0, costBasis: 0, todayPnl: 0, todayPct: 0, isPending: true, hasPrices: false };
+    if (!stratId) return empty;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId &&
+      Number(h.avg_fill || 0) > 0 &&
+      !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return empty;
+
+    let liveValue = 0;
+    let costBasis = 0;
+    let todayPnl = 0;
+    let hasPrices = false;
+
+    for (const h of stratHoldings) {
+      const qty = Math.abs(Number(h.quantity || 0));
+
+      // Prefer live price from 15s poll, fall back to rawHoldings intraday, then last_price
+      const liveEntry = livePriceMap[h.security_id];
+      const liveCents = liveEntry?.priceCents;
+      const intraCents = Number(h.intraday_price_cents);
+      const lastCents = Number(h.last_price);
+      const priceCents = (liveCents > 0) ? liveCents : (Number.isFinite(intraCents) && intraCents > 0) ? intraCents : lastCents;
+      if (Number.isFinite(priceCents) && priceCents > 0) {
+        liveValue += (priceCents / 100) * qty;
+        hasPrices = true;
+      }
+
+      // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
+      const avgFillCents = Number(h.avg_fill || 0);
+      const avgFillRands = avgFillCents / 100;
+      const expectedRaw = Number(h.Expected_fill || 0);
+      const expectedRands = expectedRaw > 0
+        ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
+        : 0;
+      costBasis += Math.max(expectedRands, avgFillRands) * qty;
+
+      // Prefer live 1d_abs from poll, fall back to rawHoldings field
+      const abs1d = liveEntry?.abs1dCents ?? Number(h.intraday_1d_abs_cents);
+      if (Number.isFinite(abs1d)) {
+        todayPnl += (abs1d / 100) * qty;
+      }
+    }
+
+    const todayPct = costBasis > 0 ? (todayPnl / costBasis) * 100 : 0;
+    return { liveValue, costBasis, todayPnl, todayPct, isPending: false, hasPrices };
+  }, [rawHoldings, selectedStrategy?.strategyId, livePriceMap]);
+
+  // ── intraday D chart — fetches 5-min bucketed prices from stock_intraday_c ──
+  useEffect(() => {
+    if (timeFilter !== "D") { setIntradayChartData(null); return; }
+    const stratId = selectedStrategy?.strategyId;
+    if (!stratId || liveStrategyMetrics.isPending) return;
+
+    const stratHoldings = (rawHoldings || []).filter(h =>
+      h.strategy_id === stratId && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+    );
+    if (stratHoldings.length === 0) return;
+
+    const securityIds = [...new Set(stratHoldings.map(h => h.security_id).filter(Boolean))];
+    const qtyMap = {};
+    stratHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+
+    let cancelled = false;
+    setIntradayLoading(true);
+
+    (async () => {
+      try {
+        // Find the most recent trading day that has intraday data (handles weekends/holidays)
+        const { data: latestRow } = await supabase
+          .from("stock_intraday_c")
+          .select("timestamp")
+          .in("security_id", securityIds)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const tradingDay = latestRow.timestamp.slice(0, 10);
+
+        // That trading day's intraday rows — paginate in batches of 1000 to bypass Supabase's server-side row cap
+        const PAGE = 1000;
+        let intradayRows = [];
+        let page = 0;
+        while (true) {
+          const { data: batch } = await supabase
+            .from("stock_intraday_c")
+            .select("security_id, current_price, 1d_abs, timestamp")
+            .in("security_id", securityIds)
+            .gte("timestamp", `${tradingDay}T00:00:00Z`)
+            .lt("timestamp", `${tradingDay}T23:59:59Z`)
+            .order("timestamp", { ascending: true })
+            .range(page * PAGE, (page + 1) * PAGE - 1);
+          if (!batch?.length) break;
+          intradayRows = intradayRows.concat(batch);
+          if (batch.length < PAGE) break; // last page
+          page++;
+          if (cancelled) return;
+        }
+
+        if (cancelled) return;
+        if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+
+        // Derive yesterday's closing price per security from the latest 1d_abs value:
+        // yesterday_close = current_price - 1d_abs  (1d_abs = today's change vs yesterday's close)
+        const latestBySecId = {};
+        for (const row of intradayRows) {
+          latestBySecId[row.security_id] = row; // later rows overwrite earlier → we get the latest
+        }
+        const baselineRands = securityIds.reduce((sum, sid) => {
+          const row = latestBySecId[sid];
+          if (!row) return sum;
+          const yesterdayCloseCents = Number(row.current_price) - Number(row["1d_abs"] || 0);
+          return sum + (yesterdayCloseCents / 100) * (qtyMap[sid] || 0);
+        }, 0) || liveStrategyMetrics.costBasis;
+
+        // Group into 5-minute buckets
+        const bucketMap = new Map();
+        for (const row of intradayRows) {
+          const d = new Date(row.timestamp);
+          d.setSeconds(0, 0);
+          d.setMinutes(Math.floor(d.getMinutes() / 5) * 5);
+          const key = d.toISOString();
+          if (!bucketMap.has(key)) bucketMap.set(key, {});
+          bucketMap.get(key)[row.security_id] = Number(row.current_price);
+        }
+
+        const sorted = [...bucketMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const lastKnown = {};
+        const points = [{ day: null, value: 0, fullDate: null }];
+
+        for (const [isoKey, prices] of sorted) {
+          for (const sid of securityIds) {
+            if (prices[sid] != null) lastKnown[sid] = prices[sid];
+          }
+          if (Object.keys(lastKnown).length === 0) continue;
+
+          const portfolioRands = securityIds.reduce((sum, sid) => {
+            const price = lastKnown[sid];
+            return price != null ? sum + (price / 100) * (qtyMap[sid] || 0) : sum;
+          }, 0);
+
+          const pnl = Number((portfolioRands - baselineRands).toFixed(2));
+
+          // Convert UTC → SAST (+2h) for labels
+          const d = new Date(isoKey);
+          const sast = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+          const hh = String(sast.getUTCHours()).padStart(2, "0");
+          const mm = String(sast.getUTCMinutes()).padStart(2, "0");
+          const dd = sast.getUTCDate();
+          const mo = MONTH_NAMES[sast.getUTCMonth()];
+          const yr = sast.getUTCFullYear();
+
+          points.push({ day: `${hh}:${mm}`, value: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+        }
+
+        if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
+      } catch (e) {
+        console.error("[intraday-chart]", e);
+        if (!cancelled) setIntradayChartData([]);
+      } finally {
+        if (!cancelled) setIntradayLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [timeFilter, selectedStrategy?.strategyId, rawHoldings, familyMemberId, liveStrategyMetrics.costBasis, liveStrategyMetrics.isPending, intradayTick]);
 
   const currentChartData = useMemo(() => {
     if (realChartData && realChartData.length > 0) {
       if (realChartData[0]?.day === null && realChartData[0]?.value === 0) return realChartData;
-      const cv = currentStrategy.currentValue || 0;
-      const ia = currentStrategy.investedAmount || 0;
+      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
       if (cv > 0 && realChartData.length > 0) {
         const latestNav = realChartData[realChartData.length - 1].value;
         if (!latestNav || latestNav <= 0) return [];
@@ -102,13 +405,25 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       }
     }
     return [];
-  }, [realChartData, currentStrategy]);
+  }, [realChartData, currentStrategy, liveStrategyMetrics]);
 
-  const stratAxisConfig = computePnlAxisConfig(currentChartData);
-  const isLoadingData = strategiesLoading || chartLoading;
+  const isLoadingData = strategiesLoading || chartLoading || (timeFilter === "D" && intradayLoading);
+
+  // Use intraday buckets for D; return [] while loading so the skeleton shows instead of a flat line
+  const displayChartData = (() => {
+    if (isLoadingData) return [];
+    if (timeFilter === "D") return (intradayChartData && intradayChartData.length > 1 ? intradayChartData : []);
+    return currentChartData;
+  })();
+
+  const stratAxisConfig = computePnlAxisConfig(displayChartData);
 
   // ── holdings data (for Holdings tab) ──────────────────────────────────────
   const allStrategyHoldings = useMemo(() => {
+    // Build symbol→logo_url lookup from rawHoldings (always enriched from securities_c)
+    const logoBySymbol = {};
+    (rawHoldings || []).forEach(h => { if (h.symbol && h.logo_url) logoBySymbol[h.symbol] = h.logo_url; });
+
     const holdingsMap = new Map();
     const standalone = (rawHoldings || []).filter(h => !h.strategy_id);
     const totalStandaloneVal = standalone.reduce((s, h) => {
@@ -128,13 +443,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
       const sym = s.shortName || s.name || "Strategy";
       if (!holdingsMap.has(sym)) {
         const holdingsArr = s.holdings || [];
-        const topLogos = holdingsArr.sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, 5).map(h => h.logo_url || h.logo || null).filter(Boolean);
+        // Enrich each holding with logo from rawHoldings if strategies_c JSONB doesn't have it
+        const enrichedHoldings = holdingsArr.map(h => ({
+          ...h,
+          logo_url: h.logo_url || logoBySymbol[h.symbol] || logoBySymbol[h.ticker] || null,
+        }));
+        const topLogos = enrichedHoldings
+          .slice()
+          .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+          .slice(0, 5)
+          .map(h => h.logo_url)
+          .filter(Boolean);
         const sCv = s.currentValue || s.investedAmount || 0;
         const sIa = s.investedAmount || 0;
         const sPnlPct = sIa > 0 ? ((sCv - sIa) / sIa) * 100 : 0;
         const stratRaw = (rawHoldings || []).filter(h => h.strategy_id === (s.strategyId || s.id));
         const isPending = stratRaw.length > 0 && stratRaw.every(h => !h.avg_fill);
-        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: holdingsArr, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
+        holdingsMap.set(sym, { symbol: sym, name: s.name || "Strategy", strategyId: s.strategyId || s.id, weight: 0, logo: null, isStrategy: true, isPending, topLogos, strategyHoldings: enrichedHoldings, currentValue: sCv, investedAmount: sIa, change: sPnlPct, ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd });
       }
     });
 
@@ -257,43 +582,80 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                     </div>
 
                     <div className="flex gap-1">
-                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => setTimeFilter(f.id)}
-                          className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
-                            timeFilter === f.id
-                              ? "bg-slate-700 text-white shadow"
-                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
+                      {[{ id: "D", label: "D" }, { id: "5d", label: "5D" }, { id: "m", label: "M" }, { id: "ytd", label: "YTD" }].map((f) => {
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => {
+                              setTabJustChanged(true);
+                              setTimeFilter(f.id);
+                              clearTimeout(tabJustChangedTimer.current);
+                              tabJustChangedTimer.current = setTimeout(() => setTabJustChanged(false), 800);
+                            }}
+                            className={`px-3 h-8 rounded-full text-xs font-bold transition-all ${
+                              timeFilter === f.id
+                                ? "bg-slate-700 text-white shadow"
+                                : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
                   {/* Value + P&L */}
                   <div>
                     {(() => {
-                      const cv = currentStrategy.currentValue || 0;
-                      const ia = currentStrategy.investedAmount || 0;
-                      const isPending = cv === 0 && ia === 0;
-                      const pnl = periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : cv - ia;
-                      const pnlPct = periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (ia > 0 ? (pnl / ia) * 100 : 0);
+                      const cv = liveStrategyMetrics.hasPrices ? liveStrategyMetrics.liveValue : (currentStrategy.currentValue || 0);
+                      const ia = liveStrategyMetrics.costBasis || currentStrategy.investedAmount || 0;
+                      const isPending = liveStrategyMetrics.isPending;
+                      const livePnl = liveStrategyMetrics.liveValue - liveStrategyMetrics.costBasis;
+                      const livePct = ia > 0 ? (livePnl / ia) * 100 : 0;
+                      // True YTD: live value vs earliest snapshot of current year, not inception cost.
+                      // Only applies if the child had investments BEFORE this year — otherwise YTD = ALL.
+                      const currentYear = new Date().getFullYear();
+                      const hasPriorYearData = snapshotRows.some(r => r.as_of_date < `${currentYear}-01-01`);
+                      const yearStartRow = hasPriorYearData ? snapshotRows.find(r => r.as_of_date >= `${currentYear}-01-01`) : null;
+                      const yearStartRands = yearStartRow ? Number(yearStartRow.basket_value || 0) / 100 : null;
+                      const ytdPnl = yearStartRands ? liveStrategyMetrics.liveValue - yearStartRands : livePnl;
+                      const ytdPct = yearStartRands ? (ytdPnl / yearStartRands) * 100 : livePct;
+                      const pnl = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPnl
+                        : timeFilter === "ytd"
+                          ? ytdPnl
+                          : timeFilter === "all"
+                            ? livePnl
+                            : (periodReturnData?.pnl !== undefined && periodReturnData.pnl !== 0 ? periodReturnData.pnl : (derivedPeriodReturn.pnl !== 0 ? derivedPeriodReturn.pnl : livePnl));
+                      const pnlPct = timeFilter === "D"
+                        ? liveStrategyMetrics.todayPct
+                        : timeFilter === "ytd"
+                          ? ytdPct
+                          : timeFilter === "all"
+                            ? livePct
+                            : (periodReturnData?.pct !== undefined && periodReturnData.pct !== 0 ? periodReturnData.pct : (derivedPeriodReturn.pct !== 0 ? derivedPeriodReturn.pct : (ia > 0 ? (pnl / ia) * 100 : 0)));
                       const isPos = pnl >= 0;
                       if (isPending) return <p className="text-3xl font-bold text-slate-900">R0,00</p>;
                       return (
                         <>
                           <p className="text-3xl font-bold text-slate-900">{fmt(cv)}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
-                              {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
-                              {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
-                            </span>
-                          </div>
+                          {!lockedMessage && tabJustChanged && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="h-4 w-16 bg-slate-200 rounded-full animate-pulse" />
+                              <div className="h-4 w-10 bg-slate-200 rounded-full animate-pulse" />
+                            </div>
+                          )}
+                      {!lockedMessage && !tabJustChanged && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-sm font-semibold ${isPos ? "text-emerald-500" : "text-rose-500"}`}>
+                                {isPos ? "+" : "-"}{fmt(Math.abs(pnl))}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+                                {isPos ? "+" : ""}{pnlPct.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
                         </>
                       );
                     })()}
@@ -301,13 +663,45 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
 
                   {/* Equity curve chart */}
                   <div style={{ width: "100%", height: 200 }}>
-                    {currentChartData.length === 0 ? (
+                    {lockedMessage ? (
+                      <div className="h-full flex flex-col items-center justify-center gap-2">
+                        <span className="text-2xl">📈</span>
+                        <p className="text-slate-500 text-sm font-medium">{lockedMessage}</p>
+                        <p className="text-slate-400 text-xs">Check back once more data has been recorded</p>
+                      </div>
+                    ) : isLoadingData ? (
+                      <div className="h-full w-full px-1 pb-6 pt-2">
+                        <svg width="100%" height="100%" viewBox="0 0 300 160" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="skeletonFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#e2e8f0" stopOpacity="0.6" />
+                              <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.05" />
+                            </linearGradient>
+                          </defs>
+                          {/* filled area under the line */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55 L300 160 L0 160 Z"
+                            fill="url(#skeletonFill)"
+                            className="animate-pulse"
+                          />
+                          {/* the line itself */}
+                          <path
+                            d="M0 110 C30 100 50 80 80 70 S120 50 150 60 S200 90 230 75 S270 45 300 55"
+                            fill="none"
+                            stroke="#cbd5e1"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            className="animate-pulse"
+                          />
+                        </svg>
+                      </div>
+                    ) : displayChartData.length === 0 ? (
                       <div className="h-full flex items-center justify-center">
-                        <p className="text-slate-400 text-sm">{isLoadingData ? "Loading chart..." : "No data available"}</p>
+                        <p className="text-slate-400 text-sm">No data available</p>
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={currentChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
+                        <ComposedChart data={displayChartData} margin={{ top: 8, right: 12, left: 4, bottom: 24 }}>
                           <defs>
                             <linearGradient id="childGradient" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
@@ -319,8 +713,23 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                             axisLine={false}
                             tickLine={false}
                             tickMargin={8}
-                            interval={currentChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(currentChartData.length / 6) - 1)}
-                            tick={({ x, y, payload }) => payload.value ? <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{payload.value}</text> : null}
+                            ticks={timeFilter === 'ytd' ? computeChildYtdTicks(displayChartData) : undefined}
+                            interval={timeFilter === 'ytd' ? 0 : (displayChartData.length <= 8 ? 0 : Math.max(0, Math.ceil(displayChartData.length / 4) - 1))}
+                            tick={({ x, y, payload }) => {
+                              if (!payload.value) return null;
+                              const val = String(payload.value);
+                              let label;
+                              if (timeFilter === 'ytd') {
+                                const parts = val.split(' ');
+                                label = isNaN(Number(parts[0])) ? parts[0] : parts[1];
+                              } else if (timeFilter === 'm' || timeFilter === '5d') {
+                                const parts = val.split(' ');
+                                label = parts.length >= 3 ? parts.slice(0, 2).join(' ') : val;
+                              } else {
+                                label = val;
+                              }
+                              return <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10} fontWeight={500}>{label}</text>;
+                            }}
                           />
                           <YAxis domain={stratAxisConfig.domain} ticks={stratAxisConfig.ticks} tickFormatter={formatPnlAxis} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} width={50} />
                           <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth={1} />
@@ -358,26 +767,32 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                       <div className="space-y-3">
                         {allStrategyHoldings.map((h) => (
                           <div key={h.symbol} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden">
-                                {h.isStrategy && h.topLogos?.length > 0 ? (
-                                  <div className="flex -space-x-1.5 items-center justify-center">
-                                    {h.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-5 h-5 rounded-full object-cover border border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
-                                  </div>
-                                ) : failedLogos[h.symbol] || !h.logo ? (
-                                  <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
-                                ) : (
-                                  <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
-                                )}
+                            {h.isStrategy && h.topLogos?.length > 0 ? (
+                              <div className="flex-1 min-w-0">
+                                <div className="flex -space-x-2 mb-2">
+                                  {h.topLogos.slice(0, 5).map((logo, li) => (
+                                    <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                  ))}
+                                </div>
+                                <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{h.name}</p>
+                                <p className="text-xs text-slate-500">{(h.strategyHoldings || []).length > 0 ? `${h.strategyHoldings.length} assets` : h.symbol}</p>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
-                                <p className="text-xs text-slate-500">{h.name}</p>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                                  {failedLogos[h.symbol] || !h.logo ? (
+                                    <span className="text-xs font-bold text-slate-600">{h.symbol.slice(0, 3)}</span>
+                                  ) : (
+                                    <img src={h.logo} alt={h.name} className="h-8 w-8 object-contain" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setFailedLogos(prev => ({ ...prev, [h.symbol]: true }))} />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">{h.symbol}</p>
+                                  <p className="text-xs text-slate-500">{h.name}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
+                            )}
+                            <div className="text-right flex-shrink-0">
                               <p className={`text-sm font-semibold ${h.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                                 {h.change >= 0 ? "+" : ""}{h.change.toFixed(1)}%
                               </p>
@@ -526,43 +941,58 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest }) => {
                               className={`rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border transition-all duration-200 cursor-pointer active:scale-[0.98] ${stock.isStrategy ? "border-violet-100/60" : "border-slate-100/50"}`}
                               onClick={() => stock.isStrategy && setExpandedStrategyId(isExpanded ? null : stock.strategyId)}
                             >
-                              <div className="flex items-center gap-3">
-                                {stock.isStrategy && stock.topLogos?.length > 0 ? (
-                                  <div className="flex-shrink-0 flex -space-x-2">
-                                    {stock.topLogos.slice(0, 5).map((logo, li) => (
-                                      <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
-                                    ))}
+                              {stock.isStrategy && stock.topLogos?.length > 0 ? (
+                                <div className="w-full">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex -space-x-2">
+                                      {stock.topLogos.slice(0, 5).map((logo, li) => (
+                                        <img key={li} src={logo} className="w-7 h-7 rounded-full object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" crossOrigin="anonymous" />
+                                      ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-right flex-shrink-0">
+                                        <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
+                                        {stock.isPending ? (
+                                          <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                        ) : (
+                                          <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                            {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}% Total Return
+                                          </p>
+                                        )}
+                                        <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
+                                      </div>
+                                      <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                                    </div>
                                   </div>
-                                ) : (
+                                  <p className="text-sm font-bold tracking-[0.18em] uppercase text-slate-900">{stock.name}</p>
+                                  <p className="text-xs text-slate-500 font-medium mt-0.5">{(stock.strategyHoldings || []).length} assets</p>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3 w-full">
                                   <div className="h-11 w-11 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden flex-shrink-0">
                                     {!stock.logo || failedLogos[stock.symbol] ? (
-                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{stock.symbol.slice(0, 2)}</div>
+                                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-violet-100 to-purple-100 text-xs font-bold text-violet-700">{(stock.symbol || "").slice(0, 2)}</div>
                                     ) : (
                                       <img src={stock.logo} alt={stock.name} className="h-full w-full object-cover" onError={() => setFailedLogos(prev => ({ ...prev, [stock.symbol]: true }))} />
                                     )}
                                   </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
-                                  <p className="text-xs text-slate-500 font-medium">{stock.isStrategy ? `${(stock.strategyHoldings || []).length} assets` : stock.symbol}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 truncate">{stock.name}</p>
+                                    <p className="text-xs text-slate-500 font-medium">{stock.symbol}</p>
+                                  </div>
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                     {stock.isPending ? (
                                       <p className="text-xs text-amber-500 font-semibold">Pending</p>
                                     ) : (
                                       <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%{stock.isStrategy ? " Total Return" : ""}
+                                        {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%
                                       </p>
                                     )}
                                     <p className="text-[10px] text-slate-400">{pctValue.toFixed(1)}% of portfolio</p>
                                   </div>
-                                  {stock.isStrategy && (
-                                    <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
-                                  )}
                                 </div>
-                              </div>
+                              )}
                             </div>
                             {/* Expanded constituent stocks */}
                             {isExpanded && stock.strategyHoldings?.length > 0 && (

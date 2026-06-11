@@ -92,6 +92,14 @@ export default function GiftToggleV2({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+
+      // Block self-gifting before hitting the server
+      const senderEmail = sessionData?.session?.user?.email?.toLowerCase() || "";
+      if (senderEmail && recipientEmail.trim().toLowerCase() === senderEmail) {
+        setError("You cannot gift to yourself.");
+        setStep("confirming");
+        return;
+      }
       const res = await fetch("/api/gift/create-v2", {
         method: "POST",
         headers: {
@@ -145,23 +153,24 @@ export default function GiftToggleV2({
 
   return (
     <div className="mt-4">
-      <div className="w-full flex items-center justify-between rounded-2xl px-4 py-3.5 bg-white border border-slate-200 shadow-sm cursor-not-allowed">
+      <button
+        type="button"
+        onClick={() => handleToggle(!enabled)}
+        className="w-full flex items-center justify-between rounded-2xl px-4 py-3.5 bg-white border border-slate-200 shadow-sm active:scale-[0.99] transition-all"
+      >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100">
             <Gift size={16} className="text-violet-600" />
           </div>
           <div className="text-left">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-slate-800">Send as a gift</p>
-              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">Soon</span>
-            </div>
+            <p className="text-sm font-semibold text-slate-800">Send as a gift</p>
             <p className="text-[11px] text-slate-400">Recipient claims with their SA ID + code</p>
           </div>
         </div>
 
-        {/* disabled toggle */}
+        {/* toggle */}
         <div
-          className="relative w-[52px] h-[30px] rounded-full flex items-center bg-slate-200"
+          className={`relative w-[52px] h-[30px] rounded-full flex items-center transition-colors ${enabled ? "bg-violet-600" : "bg-slate-200"}`}
           style={{ padding: 3 }}
         >
           <motion.div
@@ -194,7 +203,7 @@ export default function GiftToggleV2({
             </AnimatePresence>
           </motion.div>
         </div>
-      </div>
+      </button>
 
       <AnimatePresence mode="wait">
       {enabled && step === "form" && (

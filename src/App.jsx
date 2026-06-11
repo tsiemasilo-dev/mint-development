@@ -11,6 +11,7 @@ import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ChildInvestModal from "./components/ChildInvestModal.jsx";
+import AdultInvestModal from "./components/AdultInvestModal.jsx";
 const CreditHome = lazy(() => import("./pages/credit/CreditHome"));
 const NewPortfolioPage = lazy(() => import("./pages/NewPortfolioPage.jsx"));
 const MarketsPage = lazy(() => import("./pages/MarketsPage.jsx"));
@@ -73,7 +74,6 @@ import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
 import HomeSkeleton from "./components/HomeSkeleton.jsx";
-import GiftReceivedPopup from "./components/GiftReceivedPopup.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -105,6 +105,25 @@ const isRecoveryMode = initialHash.includes('type=recovery');
 const initialGiftToken = (() => {
   const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
   return match ? match[1] : null;
+})();
+
+// Detect ?gift= query param and persist for post-login claim
+// Validates gift status before storing — expired/claimed/cancelled gifts are ignored
+(() => {
+  const giftId = new URLSearchParams(window.location.search).get('gift');
+  if (giftId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(giftId)) {
+    // Optimistically store, then immediately validate and clear if not claimable
+    localStorage.setItem('mint_pending_gift_id', giftId);
+    fetch(`/api/gift/by-id/${giftId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || ['claimed', 'completed', 'expired', 'cancelled'].includes(data.status)) {
+          localStorage.removeItem('mint_pending_gift_id');
+          localStorage.removeItem('mint_pending_gift_expires');
+        }
+      })
+      .catch(() => {});
+  }
 })();
 
 const getHashParams = (hash) => {
@@ -181,6 +200,7 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showChildPickerModal, setShowChildPickerModal] = useState(false);
   const [showChildInvestModal, setShowChildInvestModal] = useState(false);
+  const [showAdultInvestModal, setShowAdultInvestModal] = useState(false);
   const [selectedChildForInvest, setSelectedChildForInvest] = useState(null);
   const [marketsChildFilter, setMarketsChildFilter] = useState(null);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
@@ -210,9 +230,8 @@ const App = () => {
   useInactivityTimeout({
     enabled: isAuthenticated,
     onLogout: () => {
+      intentionalLogoutRef.current = true;
       if (supabase) supabase.auth.signOut({ scope: 'local' });
-      sessionStorage.removeItem('mint_pin_unlocked');
-      setShowPinLock(false);
       setCurrentPage("welcome");
     },
   });
@@ -280,12 +299,17 @@ const App = () => {
         const hiddenAt = localStorage.getItem('mint_app_hidden_at');
         if (hiddenAt) {
           const elapsed = Date.now() - parseInt(hiddenAt, 10);
-          const FOUR_MINUTES = 4 * 60 * 1000;
-          if (elapsed >= FOUR_MINUTES && isAuthenticated && !isCheckingAuth) {
+          const FIFTEEN_MINUTES = 15 * 60 * 1000;
+          if (elapsed >= FIFTEEN_MINUTES && isAuthenticated && !isCheckingAuth) {
             if (isPinEnabled()) {
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(true);
             } else {
+              // Mark as intentional so the SIGNED_OUT handler does not
+              // simultaneously show the session-expired overlay while we
+              // are already navigating to welcome — that conflict was the
+              // root cause of the infinite-refresh loop.
+              intentionalLogoutRef.current = true;
               if (supabase) supabase.auth.signOut({ scope: 'local' });
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(false);
@@ -615,10 +639,20 @@ const App = () => {
       }
       if (event === 'SIGNED_IN' && session) {
         setCachedSession(session);
-        // If a different user just logged in, nuke all stale caches immediately
-        // so they never see the previous user's data
         const incomingId = session.user?.id;
         if (incomingId && incomingId !== lastAuthUserIdRef.current) {
+          // A DIFFERENT user signed in.
+          if (lastAuthUserIdRef.current !== null) {
+            // There was already a user in this tab — this is a cross-tab sign-in
+            // (another browser tab logged in as someone else and Supabase synced
+            // the session here via localStorage).  Force a full page reload so
+            // React state from the previous user is completely wiped and we never
+            // show a mix of two users' data.
+            window.location.reload();
+            return;
+          }
+          // lastAuthUserIdRef is null → fresh page load, normal first login in
+          // this tab.  Just clear stale caches and proceed normally.
           clearAllUserCaches();
         }
         lastAuthUserIdRef.current = incomingId || null;
@@ -1240,7 +1274,7 @@ const App = () => {
       <Suspense fallback={<HomeSkeleton />}>
         <>
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
-          <GiftReceivedPopup onClaim={() => navigateTo("giftCodeEntry")} />
+
           {/* Home tab – mount on first visit */}
           <div style={{ display: currentPage === 'home' ? 'block' : 'none' }}>
             {mountedTabs.has('home') && (
@@ -1258,6 +1292,7 @@ const App = () => {
                   onOpenActivity={() => navigateTo("activity")}
                   onOpenActions={() => navigateTo("actions")}
                   onOpenInvestments={(tab) => { if (tab) setPortfolioDeepLink({ tab }); handleTabChange("investments"); }}
+                  onOpenStrategyInPortfolio={(strategyId) => { setPortfolioDeepLink({ tab: "strategy", strategyId }); handleTabChange("investments"); }}
                   onOpenCredit={() => handleTabChange("credit")}
                   onOpenCreditApply={() => navigateTo("creditApply")}
                   onOpenCreditRepay={() => navigateTo("creditRepay")}
@@ -1273,6 +1308,7 @@ const App = () => {
                   onOpenFamily={() => navigateTo("familyDashboard")}
                   onSelectMember={(child) => { setSelectedFamilyChild(child); navigateTo("childDashboard"); }}
                   onOpenInsure={() => navigateTo("funeralCover")}
+                  onOpenGiftClaim={() => navigateTo("giftClaim")}
                   onNavigate={navigateTo}
                 />
               </AppLayout>
@@ -1319,6 +1355,7 @@ const App = () => {
                   onOpenStockDetail={(security) => { setSelectedChildForInvest(null); setMarketsChildFilter(null); setSelectedSecurity(security); navigateTo("stockDetail"); }}
                   onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                   onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
+                  onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
                   childFilter={marketsChildFilter}
                 />
               </AppLayout>
@@ -1384,6 +1421,38 @@ const App = () => {
               </AppLayout>
             )}
           </div>
+          <AdultInvestModal
+            isOpen={showAdultInvestModal && !marketsChildFilter}
+            onClose={() => setShowAdultInvestModal(false)}
+            strategy={selectedStrategy}
+            paymentMethod={pendingPaymentMethod}
+            onContinue={(amount, baseAmount, shareCount, fees) => {
+              setInvestmentAmount(amount);
+              setBaseInvestmentAmount(baseAmount || amount);
+              setInvestmentFees(fees);
+              setPendingGoalFlow({
+                type: "strategy",
+                amount,
+                baseAmount: baseAmount || amount,
+                assetName: selectedStrategy?.name || "Strategy",
+                strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+                fees,
+              });
+              setShowAdultInvestModal(false);
+              if (selectedStrategy?.is_kid_strategy) {
+                if (selectedChildForInvest?.id) {
+                  setShowGoalModal(true);
+                } else {
+                  setShowChildPickerModal(true);
+                }
+              } else {
+                setSelectedChildForInvest(null);
+                setShowGoalModal(true);
+              }
+              navigateTo("investAmount");
+            }}
+            onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+          />
         </>
       </Suspense>
     );
@@ -1843,7 +1912,7 @@ const App = () => {
               if (marketsChildFilter) {
                 setShowChildInvestModal(true);
               } else {
-                navigateTo("investAmount");
+                setShowAdultInvestModal(true);
               }
             }}
             onNavigateToOnboarding={() => navigateTo("identityCheck")}
@@ -1857,6 +1926,38 @@ const App = () => {
             onClose={() => setShowChildInvestModal(false)}
           />
         )}
+        <AdultInvestModal
+          isOpen={showAdultInvestModal && !marketsChildFilter}
+          onClose={() => setShowAdultInvestModal(false)}
+          strategy={selectedStrategy}
+          paymentMethod={pendingPaymentMethod}
+          onContinue={(amount, baseAmount, shareCount, fees) => {
+            setInvestmentAmount(amount);
+            setBaseInvestmentAmount(baseAmount || amount);
+            setInvestmentFees(fees);
+            setPendingGoalFlow({
+              type: "strategy",
+              amount,
+              baseAmount: baseAmount || amount,
+              assetName: selectedStrategy?.name || "Strategy",
+              strategyId: selectedStrategy?.id || selectedStrategy?.strategyId || null,
+              fees,
+            });
+            setShowAdultInvestModal(false);
+            if (selectedStrategy?.is_kid_strategy) {
+              if (selectedChildForInvest?.id) {
+                setShowGoalModal(true);
+              } else {
+                setShowChildPickerModal(true);
+              }
+            } else {
+              setSelectedChildForInvest(null);
+              setShowGoalModal(true);
+            }
+            navigateTo("investAmount");
+          }}
+          onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+        />
       </>
     );
   }
@@ -2215,6 +2316,7 @@ const App = () => {
         <NotificationsPage
           onBack={goBack}
           onOpenSettings={() => navigateTo("notificationSettings")}
+          onNavigate={navigateTo}
         />
       </SwipeBackWrapper>
     );
@@ -2439,7 +2541,7 @@ const App = () => {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-[#f8f6fa]" />}>
-          <SentGiftsPageV2 onBack={goBack} />
+          <SentGiftsPageV2 onBack={goBack} onNavigate={navigateTo} />
         </Suspense>
       </SwipeBackWrapper>
     );

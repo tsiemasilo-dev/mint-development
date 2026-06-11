@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react';
 
-const TIMEOUT_MINUTES = 5;
+const TIMEOUT_MINUTES = 15;
 const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'mint_last_activity';
 
@@ -40,6 +40,7 @@ export const useInactivityTimeout = ({ onLogout, enabled = true } = {}) => {
     }
 
     if (hasInactivityExpired()) {
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
       onLogoutRef.current?.();
       return;
     }
@@ -50,9 +51,11 @@ export const useInactivityTimeout = ({ onLogout, enabled = true } = {}) => {
       const remaining = TIMEOUT_MS - elapsed;
       if (remaining > 0) {
         timerRef.current = setTimeout(() => {
+          localStorage.removeItem(LAST_ACTIVITY_KEY);
           onLogoutRef.current?.();
         }, remaining);
       } else {
+        localStorage.removeItem(LAST_ACTIVITY_KEY);
         onLogoutRef.current?.();
         return;
       }

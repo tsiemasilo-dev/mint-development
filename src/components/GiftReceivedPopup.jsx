@@ -7,9 +7,16 @@ export default function GiftReceivedPopup({ onClaim }) {
   const [visible, setVisible] = useState(null);
 
   useEffect(() => {
-    if (visible) return;
+    // If the popup is already showing, check if it's been marked as read
+    // (e.g. the user claimed via GiftCodeEntryPage and the notification was
+    // marked read server-side). If so, dismiss without re-appearing.
+    if (visible) {
+      const stillUnread = notifications.find(n => n.id === visible.id && !n.read_at);
+      if (!stillUnread) setVisible(null);
+      return;
+    }
     const gift = notifications.find(
-      n => !n.read_at && n.type === "investment" && n.payload?.action === "gift_received"
+      n => !n.read_at && n.payload?.action === "gift_received"
     );
     if (gift) setVisible(gift);
   }, [notifications, visible]);
