@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3 } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "./PdfViewer";
+import OcrScanModal from "./OcrScanModal";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
 import { useDiscretionType } from "../lib/useDiscretionType";
@@ -43,6 +44,10 @@ export default function AdultInvestModal({
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
+  // ID-document scan gate (secondary-strategy purchase only): null = unknown/not
+  // applicable, true = this user still owes an ID document, false = already on file.
+  const [ocrRequired, setOcrRequired] = useState(false);
+  const [showOcrModal, setShowOcrModal] = useState(false);
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -51,6 +56,8 @@ export default function AdultInvestModal({
     setFeeExpanded(false);
     setAgreementChecked(false);
     setShowMandateModal(false);
+    setShowOcrModal(false);
+    setOcrRequired(false);
 
     // Fetch wallet balance
     (async () => {
@@ -65,6 +72,23 @@ export default function AdultInvestModal({
         if (data) setWalletBalance(data.balance ?? 0);
       } catch { /* ignore */ }
     })();
+
+    // For a secondary (additional) strategy, find out up front whether this user
+    // still owes an ID-document scan, so the Continue handler can gate on it
+    // without adding latency at tap time. Fails open (no gate) on any error.
+    if (isAdditionalStrategy) {
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return;
+          const res = await fetch("/api/experian/ocr-required", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          const data = await res.json();
+          setOcrRequired(Boolean(data?.required));
+        } catch { /* fail open — never block a purchase on this check */ }
+      })();
+    }
 
     // Resolve minimum investment
     const preCalc = strategy?.calculatedMinInvestment || strategy?.min_investment;
@@ -108,12 +132,22 @@ export default function AdultInvestModal({
   const totalCostCents = Math.round(fees.totalCost * 100);
   const insufficient = walletBalance !== null && fees.totalCost > walletBalance;
 
-  const handleConfirm = () => {
-    if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
+  const proceed = () => {
     const sharePrice = strategy?.price_per_share || strategy?.pricePerShare || null;
     const shareCount = sharePrice && sharePrice > 0 ? Math.floor(baseAmount / sharePrice) : null;
     onContinue?.(fees.totalCost, baseAmount, shareCount, fees);
   };
+
+  const handleConfirm = () => {
+    if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
+    // Secondary-strategy buyers who don't have an ID document on file get a quick,
+    // skippable in-frame ID scan before continuing. Never blocks: skip → proceed.
+    if (isAdditionalStrategy && ocrRequired) { setShowOcrModal(true); return; }
+    proceed();
+  };
+
+  // Scan done (or skipped) → close it and continue to the normal purchase flow.
+  const finishOcr = () => { setShowOcrModal(false); setOcrRequired(false); proceed(); };
 
   const portalTarget = document.getElementById("modal-root") || document.body;
 
@@ -432,6 +466,13 @@ export default function AdultInvestModal({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Secondary-strategy ID-document scan (skippable, non-blocking) */}
+          <OcrScanModal
+            isOpen={showOcrModal}
+            onVerified={finishOcr}
+            onSkip={finishOcr}
+          />
 
           {/* Limited-discretion block */}
           <AnimatePresence>

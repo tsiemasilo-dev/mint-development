@@ -69,7 +69,7 @@ const STAGE = {
   ERROR: "error",
 };
 
-const ExperianVerification = ({ onVerified }) => {
+const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
   const [stage, setStage] = useState(STAGE.INITIALIZING);
   const [verificationUrl, setVerificationUrl] = useState(null);
   const [isMockMode, setIsMockMode] = useState(false);
@@ -93,8 +93,11 @@ const ExperianVerification = ({ onVerified }) => {
   // intact so that flow can reuse it; onboarding runs liveness only.
   // Re-enable for onboarding by flipping this (or setting VITE_EXPERIAN_OCR).
   const OCR_ENABLED = import.meta.env?.VITE_EXPERIAN_OCR === "true";
-  const [phase, setPhase] = useState("liveness");
-  const phaseRef = useRef("liveness");
+  // standaloneOcr = run the OCR document workflow (wf8) on its own, outside
+  // onboarding (e.g. at a secondary-strategy purchase). We start directly in the
+  // 'ocr' phase — there's no liveness step to precede it.
+  const [phase, setPhase] = useState(standaloneOcr ? "ocr" : "liveness");
+  const phaseRef = useRef(standaloneOcr ? "ocr" : "liveness");
 
   const AUTO_POLL_INTERVAL_MS = 5000;
   const AUTO_POLL_MAX_ATTEMPTS = 180; // ~15 min, then fall back to manual check
@@ -414,7 +417,9 @@ const ExperianVerification = ({ onVerified }) => {
   }, [getAuthHeader]);
 
   const ocrPhase = phase === "ocr";
-  const stepBadge = ocrPhase ? "Step 2 of 2 · ID document" : "Step 1 of 2 · Liveness";
+  const stepBadge = standaloneOcr
+    ? "Verify your ID document"
+    : ocrPhase ? "Step 2 of 2 · ID document" : "Step 1 of 2 · Liveness";
 
   if (stage === STAGE.INITIALIZING) {
     return (
