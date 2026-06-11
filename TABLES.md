@@ -225,19 +225,6 @@ Historical return series for each strategy — powers the performance charts.
 
 ---
 
-### `strategy_metrics`
-Pre-computed performance statistics per strategy, shown on strategy detail pages.
-
-| Column | Type | Description |
-|---|---|---|
-| `strategy_id` | UUID | FK → `strategies_c` |
-| `as_of_date` | date | Calculation date |
-| `last_close` | numeric | Last close price |
-| `r_ytd` | numeric | YTD return % |
-| `r_1m` | numeric | 1-month return % |
-
----
-
 ### `client_strategy_returns_c`
 Per-user, per-strategy P&L snapshots. Drives the **home page balance card** and equity curve charts.
 
