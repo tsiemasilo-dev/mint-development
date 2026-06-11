@@ -65,6 +65,7 @@ const PinSetupPage = lazy(() => import("./pages/PinSetupPage.jsx"));
 const FamilyDashboardPage = lazy(() => import("./pages/FamilyDashboardPage.jsx"));
 const ChildDashboardPage = lazy(() => import("./pages/ChildDashboardPage.jsx"));
 const FuneralCoverPage = lazy(() => import("./pages/FuneralCoverPage.jsx"));
+const DeleteAccountPage = lazy(() => import("./pages/DeleteAccountPage.jsx"));
 import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
@@ -2234,6 +2235,23 @@ const App = () => {
         >
           <SettingsPage onNavigate={navigateTo} onBack={goBack} />
         </AppLayout>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "deleteAccount") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <DeleteAccountPage
+          onBack={goBack}
+          onNavigate={navigateTo}
+          onLogout={() => {
+            intentionalLogoutRef.current = true;
+            clearUserStorage();
+            clearAllUserCaches();
+            setCurrentPage("welcome");
+          }}
+        />
       </SwipeBackWrapper>
     );
   }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Lock, Fingerprint, Bell, KeyRound, Smartphone } from "lucide-react";
+import { ArrowLeft, Lock, Fingerprint, Bell, KeyRound, Smartphone, Trash2 } from "lucide-react";
 import {
   authenticateWithBiometrics,
   disableBiometrics,
@@ -206,6 +206,21 @@ const SettingsPage = ({ onNavigate, onBack }) => {
           </div>
         </button>
 
+        <p className="text-xs font-bold uppercase text-slate-400 px-1 pt-2">Danger Zone</p>
+
+        <button
+          type="button"
+          onClick={() => onNavigate?.("deleteAccount")}
+          className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm transition active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-500">
+            <Trash2 className="h-5 w-5" />
+          </span>
+          <div className="flex-1">
+            <h2 className="text-base font-semibold text-red-600">Close Account</h2>
+            <p className="text-sm text-slate-500">Permanently close your Mint account</p>
+          </div>
+        </button>
 
       </div>
     </div>
