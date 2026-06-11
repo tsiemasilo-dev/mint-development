@@ -3,8 +3,6 @@ import { buildOrderConfirmationHtml } from "./_lib/order-email-templates.js";
 import { computeFees } from "./_lib/fees.js";
 import { Resend } from "resend";
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-
 // Fetch the latest stock_intraday_c.current_price for each given security_id.
 // Used to stamp Expected_fill on holdings at buy time — the price the client
 // saw when they tapped Buy — so PnL is computed against that, not avg_fill
@@ -32,23 +30,6 @@ async function fetchLatestIntradayPrices(db, securityIds) {
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
   return new Resend(process.env.RESEND_API_KEY);
-}
-
-async function verifyPaystackPayment(reference) {
-  if (!PAYSTACK_SECRET_KEY) {
-    return { verified: false, error: "Paystack secret key not configured" };
-  }
-  const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-    },
-  });
-  const result = await response.json();
-  if (!result.status || result.data?.status !== "success") {
-    return { verified: false, error: "Payment not successful", data: result.data };
-  }
-  return { verified: true, data: result.data };
 }
 
 async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate, paymentMethod }) {
@@ -181,16 +162,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
     }
 
-    let payData = { amount: Math.round(amount * 100) };
-    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
-
-    if (!skipVerification) {
-      const { verified, error: payError, data: vPayData } = await verifyPaystackPayment(paymentReference);
-      if (!verified) {
-        return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
-      }
-      payData = vPayData;
-    }
+    const payData = { amount: Math.round(amount * 100) };
 
     // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
     let newWalletBalance = null;

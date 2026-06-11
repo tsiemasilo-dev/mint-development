@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import SumsubVerification from "../components/SumsubVerification";
+import ExperianVerification from "../components/ExperianVerification";
 import MandateViewer from "../components/MandateViewer";
 import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
@@ -133,9 +133,9 @@ const accountTypeOptions = [
   { value: "other", label: "Other" },
 ];
 
-const OnboardingProcessPage = ({ onBack, onComplete }) => {
+const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   const { profile, loading: profileLoading } = useProfile();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(editMandate ? 5 : 0);
   const [isFading, setIsFading] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState("");
   const [employerName, setEmployerName] = useState("");
@@ -196,6 +196,13 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
   const [address, setAddress] = useState("");
   const [addressDone, setAddressDone] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
+  // Experian KYC V2 address lookup (bureau addresses for the dropdown on step 3)
+  const [experianAddresses, setExperianAddresses] = useState(null); // null = not fetched, [] = none found
+  const [experianAddrLoading, setExperianAddrLoading] = useState(false);
+  const [experianPhones, setExperianPhones] = useState([]); // bureau contact numbers (for multi-number dropdown)
+  const [selectedPhone, setSelectedPhone] = useState("");
+  const [bureauPostalCode, setBureauPostalCode] = useState(""); // postal code from the chosen/known bureau address
+  const experianAddrFetchedRef = useRef(false);
   const [termsDone, setTermsDone] = useState(false);
   const [agreementSignedDone, setAgreementSignedDone] = useState(false);
   const [authStatus, setAuthStatus] = useState({
@@ -646,7 +653,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) return;
-        const res = await fetch("/api/sumsub/status", {
+        const res = await fetch("/api/experian/status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
@@ -691,6 +698,76 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       }
     };
     checkKycStatus();
+  }, [step]);
+
+  // On the address step, fetch the user's bureau addresses from Experian KYC V2
+  // once, so they can pick from a dropdown instead of typing it. Falls back to
+  // manual entry if none are returned. Fetched once (it's a billable lookup).
+  useEffect(() => {
+    if (step !== 3 || experianAddrFetchedRef.current) return;
+    experianAddrFetchedRef.current = true;
+    (async () => {
+      try {
+        if (!supabase) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        setExperianAddrLoading(true);
+        console.log("[Onboarding] Fetching Experian bureau addresses…");
+        const res = await fetch("/api/experian/kyc-addresses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        const list = data?.success && Array.isArray(data.addresses) ? data.addresses : [];
+        console.log(
+          `[Onboarding] Experian address lookup → HTTP ${res.status}, ${list.length} address(es)` +
+            (data?.note ? `, note: "${data.note}"` : "") +
+            (data?.personFound != null ? `, personFound: ${data.personFound}` : ""),
+          data
+        );
+        if (list.length === 0) {
+          console.log("[Onboarding] No bureau addresses → showing manual entry fallback.");
+        }
+        setExperianAddresses(list);
+
+        // Default the postal code to the first bureau address that has one.
+        const firstPostal = list.find((a) => a.postalCode)?.postalCode;
+        if (firstPostal) {
+          setBureauPostalCode(firstPostal);
+          console.log("[Onboarding] Bureau postal code:", firstPostal);
+        }
+
+        // Bureau contact numbers. One number → save it silently (if the profile
+        // has none). Multiple → expose them so the user can pick in a dropdown.
+        const rawPhones = Array.isArray(data?.contact?.phones) ? data.contact.phones.filter((p) => p?.value) : [];
+        const uniqPhones = [...new Map(rawPhones.map((p) => [p.value, p])).values()];
+        setExperianPhones(uniqPhones);
+        console.log(`[Onboarding] Experian contact → ${uniqPhones.length} number(s)`);
+        if (uniqPhones.length === 1) {
+          const cell = uniqPhones[0].value;
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const { data: prow } = await supabase.from("profiles").select("phone_number").eq("id", user.id).maybeSingle();
+              if (!prow?.phone_number?.trim()) {
+                await supabase.from("profiles").update({ phone_number: cell }).eq("id", user.id);
+                setSelectedPhone(cell);
+                window.dispatchEvent(new Event("profile-updated"));
+                console.log("[Onboarding] Saved bureau cell number to profile:", cell);
+              }
+            }
+          } catch (e) {
+            console.warn("[Onboarding] Could not save bureau contact number:", e);
+          }
+        }
+      } catch (err) {
+        console.warn("[Onboarding] Experian address lookup failed:", err);
+        setExperianAddresses([]);
+      } finally {
+        setExperianAddrLoading(false);
+      }
+    })();
   }, [step]);
 
   const showEmployedSection =
@@ -778,7 +855,7 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
       const token = session?.access_token;
       if (token) {
         if (mandateDataRef.current) {
-          const savePayload = { ...mandateDataRef.current, agreedMandate };
+          const savePayload = { ...mandateDataRef.current };
           try {
             const mandateRes = await fetch("/api/onboarding/save-mandate", {
               method: "POST",
@@ -994,14 +1071,14 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                   </div>
                 </>
               ) : (
-                <SumsubVerification onVerified={() => {
+                <ExperianVerification onVerified={() => {
                   setKycVerificationDone(true);
                   goToStep(getNextIncompleteStep(2));
                 }} />
               )}
             </div>
           ) : step === 2 ? (
-            <SumsubVerification onVerified={() => {
+            <ExperianVerification onVerified={() => {
               setKycVerificationDone(true);
               goToStep(getNextIncompleteStep(2));
             }} />
@@ -1023,8 +1100,43 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
               </div>
 
               <div className="space-y-6">
+                {/* Experian KYC V2 — pick a known address from the bureau */}
+                {experianAddrLoading ? (
+                  <div className="animate-fade-in delay-2 text-sm" style={{ color: "hsl(270 20% 50%)" }}>
+                    Looking up your addresses…
+                  </div>
+                ) : (experianAddresses && experianAddresses.length > 0) ? (
+                  <div className="animate-fade-in delay-2">
+                    <label htmlFor="experian-address">Select your address</label>
+                    <div className="glass-field">
+                      <select
+                        id="experian-address"
+                        className="w-full"
+                        value={experianAddresses.findIndex((a) => a.formatted === address)}
+                        onChange={(e) => {
+                          const idx = Number(e.target.value);
+                          if (idx >= 0 && experianAddresses[idx]) {
+                            setAddress(experianAddresses[idx].formatted);
+                            if (experianAddresses[idx].postalCode) setBureauPostalCode(experianAddresses[idx].postalCode);
+                          }
+                        }}
+                      >
+                        <option value={-1}>Choose an address…</option>
+                        {experianAddresses.map((a, i) => (
+                          <option key={i} value={i}>
+                            {a.typeLabel ? `${a.typeLabel} — ` : ""}{a.formatted}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                      These are the addresses Experian has on record for you. Pick one, or enter a different one below.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="animate-fade-in delay-2">
-                  <label htmlFor="residential-address">Street Address</label>
+                  <label htmlFor="residential-address">{experianAddresses && experianAddresses.length > 0 ? "Or enter your address" : "Street Address"}</label>
                   <div className="glass-field">
                     <AddressAutocomplete
                       value={address}
@@ -1038,6 +1150,45 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                     Your address is required for regulatory compliance and credit assessment.
                   </p>
                 </div>
+
+                {/* Experian KYC V2 — pick a contact number when several are on record */}
+                {experianPhones && experianPhones.length > 1 && (
+                  <div className="animate-fade-in delay-2">
+                    <label htmlFor="experian-phone">Select your contact number</label>
+                    <div className="glass-field">
+                      <select
+                        id="experian-phone"
+                        className="w-full"
+                        value={selectedPhone}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setSelectedPhone(val);
+                          if (!val) return;
+                          try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (user) {
+                              await supabase.from("profiles").update({ phone_number: val }).eq("id", user.id);
+                              window.dispatchEvent(new Event("profile-updated"));
+                              console.log("[Onboarding] Saved selected bureau number to profile:", val);
+                            }
+                          } catch (err) {
+                            console.warn("[Onboarding] Could not save selected number:", err);
+                          }
+                        }}
+                      >
+                        <option value="">Choose a number…</option>
+                        {experianPhones.map((p, i) => (
+                          <option key={i} value={p.value}>
+                            {p.value}{p.type && p.type !== "other" ? ` (${p.type})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                      These are the contact numbers Experian has on record for you.
+                    </p>
+                  </div>
+                )}
 
                 <div className="pt-4 text-center animate-fade-in delay-3">
                   <button
@@ -1497,39 +1648,40 @@ const OnboardingProcessPage = ({ onBack, onComplete }) => {
                 );
               })()}
               <div className="animate-fade-in delay-2" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 4px 20px rgba(100, 60, 140, 0.08)', background: 'white' }}>
-                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} />
+                <MandateViewer profile={profile} onValidChange={setMandateValid} onDataChange={(data) => { mandateDataRef.current = data; }} requestTab={mandateRequestTab} bureauPostalCode={bureauPostalCode} />
               </div>
-              <div className="checkbox-container animate-fade-in delay-3" style={{ display: 'block' }}>
-                <label className="checkbox-item">
-                  <input type="checkbox" checked={agreedMandate} onChange={(e) => setAgreedMandate(e.target.checked)} />
-                  <span className="checkbox-label">I have read and agree to the Discretionary FSP Mandate and authorise ALGOHIVE to manage my investments as described</span>
-                </label>
-              </div>
-              {!mandateValid && agreedMandate && (
+              {!mandateValid && (
                 <div className="animate-fade-in" style={{ marginTop: "10px" }}>
-                  {(() => {
-                    const missing = [
-                      !(profile?.firstName?.trim() || profile?.first_name?.trim()) && "First Name",
-                      !(profile?.lastName?.trim() || profile?.last_name?.trim()) && "Surname",
-                      !profile?.idNumber?.trim() && "ID Number",
-                      !profile?.address?.trim() && "Address",
-                      !profile?.phoneNumber?.trim() && "Cell Number",
-                      !profile?.email?.trim() && "Email Address",
-                    ].filter(Boolean);
-                    if (missing.length > 0) {
-                      return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Cannot continue — the following required fields are still empty in the mandate: <strong>{missing.join(", ")}</strong>. <button type="button" onClick={() => { setMandateRequestTab(null); setTimeout(() => setMandateRequestTab(0), 0); }} style={{ color: "#ef4444", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: "600", padding: 0 }}>Go to Tab 1 to fill them in.</button></p>;
-                    }
-                    return <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Please enter your initials and complete all checkbox selections on the Schedules tab before continuing.</p>;
-                  })()}
+                  <p style={{ color: "#ef4444", fontSize: "12px", textAlign: "center" }}>Select your discretion type, complete the Schedules selections, then finish the Sign Off below before continuing.</p>
                 </div>
               )}
               {submitError && <p className="text-center animate-fade-in" style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px" }}>{submitError}</p>}
               <div className="text-center mt-8 animate-fade-in delay-4">
                 <button
                   type="button"
-                  className={`continue-button agreement-continue ${agreedMandate && mandateValid ? "enabled" : ""}`}
-                  disabled={!agreedMandate || !mandateValid}
-                  onClick={async () => { await saveProgressFlag("mandate_accepted"); setMandateDone(true); goToStep(getNextIncompleteStep(5, 5)); }}
+                  className={`continue-button agreement-continue ${mandateValid ? "enabled" : ""}`}
+                  disabled={!mandateValid}
+                  onClick={async () => {
+                    await saveProgressFlag("mandate_accepted");
+                    setMandateDone(true);
+                    if (editMandate) {
+                      // Updating discretionary only: persist the mandate and return.
+                      try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const token = session?.access_token;
+                        if (token && mandateDataRef.current) {
+                          await fetch("/api/onboarding/save-mandate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ mandate_data: { ...mandateDataRef.current }, existing_onboarding_id: existingOnboardingId || null }),
+                          });
+                        }
+                      } catch (e) { console.error("Mandate update save error:", e); }
+                      if (onComplete) onComplete();
+                      return;
+                    }
+                    goToStep(getNextIncompleteStep(5, 5));
+                  }}
                 >
                   Continue
                 </button>
