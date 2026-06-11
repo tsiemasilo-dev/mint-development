@@ -44,10 +44,12 @@ export default function AdultInvestModal({
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
-  // ID-document scan gate (secondary-strategy purchase only): null = unknown/not
-  // applicable, true = this user still owes an ID document, false = already on file.
-  const [ocrRequired, setOcrRequired] = useState(false);
-  const [showOcrModal, setShowOcrModal] = useState(false);
+  // Gate for secondary-strategy buys that may need an ID-document scan first:
+  //   'checking' = waiting on the ocr-required check (invest sheet held back)
+  //   'scan'     = showing the in-frame ID scan (invest sheet still held back)
+  //   'open'     = the invest sheet (agreement/fees/payment) is visible
+  // Non-additional buys start — and stay — at 'open'.
+  const [gate, setGate] = useState("open");
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -56,8 +58,9 @@ export default function AdultInvestModal({
     setFeeExpanded(false);
     setAgreementChecked(false);
     setShowMandateModal(false);
-    setShowOcrModal(false);
-    setOcrRequired(false);
+    // Additional strategies start gated (sheet hidden) until the ID-doc check
+    // resolves; everything else opens straight to the invest sheet.
+    setGate(isAdditionalStrategy ? "checking" : "open");
 
     // Fetch wallet balance
     (async () => {
@@ -73,20 +76,20 @@ export default function AdultInvestModal({
       } catch { /* ignore */ }
     })();
 
-    // For a secondary (additional) strategy, find out up front whether this user
-    // still owes an ID-document scan, so the Continue handler can gate on it
-    // without adding latency at tap time. Fails open (no gate) on any error.
+    // For a secondary (additional) strategy, check up front whether this user
+    // still owes an ID-document scan. If so, show the scan before the invest
+    // sheet; otherwise reveal the sheet immediately. Fails open on any error.
     if (isAdditionalStrategy) {
       (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) return;
+          if (!session?.access_token) { setGate("open"); return; }
           const res = await fetch("/api/experian/ocr-required", {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
           const data = await res.json();
-          setOcrRequired(Boolean(data?.required));
-        } catch { /* fail open — never block a purchase on this check */ }
+          setGate(data?.required ? "scan" : "open");
+        } catch { setGate("open"); /* never block a purchase on this check */ }
       })();
     }
 
@@ -140,14 +143,11 @@ export default function AdultInvestModal({
 
   const handleConfirm = () => {
     if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
-    // Secondary-strategy buyers who don't have an ID document on file get a quick,
-    // skippable in-frame ID scan before continuing. Never blocks: skip → proceed.
-    if (isAdditionalStrategy && ocrRequired) { setShowOcrModal(true); return; }
     proceed();
   };
 
-  // Scan done (or skipped) → close it and continue to the normal purchase flow.
-  const finishOcr = () => { setShowOcrModal(false); setOcrRequired(false); proceed(); };
+  // Scan done (or skipped) → reveal the invest sheet so the user can continue.
+  const finishOcr = () => { setGate("open"); };
 
   const portalTarget = document.getElementById("modal-root") || document.body;
 
@@ -167,7 +167,22 @@ export default function AdultInvestModal({
             onClick={onClose}
           />
 
-          {/* Sheet */}
+          {/* While the secondary-buy ID check runs (or the scan is showing), keep
+              the invest sheet hidden so the user lands on the scan first. */}
+          {gate !== "open" ? (
+            <motion.div
+              key="adult-invest-loading"
+              className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col items-center justify-center rounded-t-[28px] bg-white shadow-2xl"
+              style={{ zIndex: 9999, height: 220, paddingBottom: "env(safe-area-inset-bottom)" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            >
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-violet-500 border-r-transparent mb-3" />
+              <p className="text-sm text-slate-500">Preparing your investment…</p>
+            </motion.div>
+          ) : (
           <motion.div
             key="adult-invest-sheet"
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
@@ -430,6 +445,7 @@ export default function AdultInvestModal({
               </button>
             </div>
           </motion.div>
+          )}
 
           {/* Strategy Mandate PDF — full-screen overlay above the sheet */}
           <AnimatePresence>
@@ -469,7 +485,7 @@ export default function AdultInvestModal({
 
           {/* Secondary-strategy ID-document scan (skippable, non-blocking) */}
           <OcrScanModal
-            isOpen={showOcrModal}
+            isOpen={gate === "scan"}
             onVerified={finishOcr}
             onSkip={finishOcr}
           />
