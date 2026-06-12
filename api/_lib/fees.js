@@ -1,10 +1,11 @@
 // Single source of truth for purchase fee math. The frontend mirrors these
 // values for DISPLAY only — the server recomputes and is authoritative.
 //
-// Fee values are now CTO-tunable via the `platform_fee_config` table (one row,
-// id=1). getFeeConfig() reads it (cached, service-role) and falls back to the
-// hardcoded defaults below if the row/table is missing — so nothing breaks
-// before the table exists.
+// Fee values are now CTO-tunable via the `app_settings` table — the row keyed
+// 'fees' holds a JSONB value with all fee fields (one settings table for the
+// whole app; future settings are new keys/rows). getFeeConfig() reads it
+// (cached, service-role) and falls back to the hardcoded defaults below if the
+// row/table is missing — so nothing breaks before the table exists.
 //
 // "Execution Reserve" is the user-facing name for the 8% slippage buffer.
 // All breakdown values are returned in cents to match the transactions schema.
@@ -22,18 +23,19 @@ export const FEE_CONSTANTS = {
   REB_CUSTODY_FEE:        69,     // CRM rebalance custody (per ISIN, per client)
 };
 
-// Map a `platform_fee_config` DB row → the FEE_CONSTANTS shape.
-function rowToConstants(row) {
-  if (!row) return null;
+// Map the `app_settings('fees').value` JSONB → the FEE_CONSTANTS shape. JSONB
+// keys are camelCase; values aren't DB-type-checked, so coerce + fall back here.
+function feesJsonToConstants(j) {
+  if (!j || typeof j !== "object") return null;
   const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
   return {
-    EXECUTION_RESERVE_RATE: num(row.execution_reserve_rate, FEE_CONSTANTS.EXECUTION_RESERVE_RATE),
-    BROKER_FEE_RATE:        num(row.broker_fee_rate,        FEE_CONSTANTS.BROKER_FEE_RATE),
-    ISIN_FEE_PER_ASSET:     num(row.isin_fee_per_asset,     FEE_CONSTANTS.ISIN_FEE_PER_ASSET),
-    TRANSACTION_FEE_RATE:   num(row.transaction_fee_rate,   FEE_CONSTANTS.TRANSACTION_FEE_RATE),
-    MONTHLY_STRATEGY_FEE:   num(row.monthly_strategy_fee,   FEE_CONSTANTS.MONTHLY_STRATEGY_FEE),
-    REB_BROKERAGE_RATE:     num(row.reb_brokerage_rate,     FEE_CONSTANTS.REB_BROKERAGE_RATE),
-    REB_CUSTODY_FEE:        num(row.reb_custody_fee,        FEE_CONSTANTS.REB_CUSTODY_FEE),
+    EXECUTION_RESERVE_RATE: num(j.executionReserveRate, FEE_CONSTANTS.EXECUTION_RESERVE_RATE),
+    BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS.BROKER_FEE_RATE),
+    ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS.ISIN_FEE_PER_ASSET),
+    TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS.TRANSACTION_FEE_RATE),
+    MONTHLY_STRATEGY_FEE:   num(j.monthlyStrategyFee,   FEE_CONSTANTS.MONTHLY_STRATEGY_FEE),
+    REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS.REB_BROKERAGE_RATE),
+    REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS.REB_CUSTODY_FEE),
   };
 }
 
@@ -41,14 +43,15 @@ let _cfgCache = null;
 let _cfgCacheAt = 0;
 const CFG_TTL_MS = 60_000; // 1 min — fee changes propagate within a minute
 
-// Read the current platform fee config (cached). `db` is a Supabase client
-// (service-role preferred). Never throws — returns defaults on any problem.
+// Read the current platform fee config from app_settings('fees') (cached).
+// `db` is a Supabase client (service-role preferred). Never throws — returns
+// defaults on any problem (incl. before the table/row exists).
 export async function getFeeConfig(db) {
   const now = Date.now();
   if (_cfgCache && now - _cfgCacheAt < CFG_TTL_MS) return _cfgCache;
   try {
-    const { data } = await db.from("platform_fee_config").select("*").eq("id", 1).maybeSingle();
-    const mapped = rowToConstants(data);
+    const { data } = await db.from("app_settings").select("value").eq("key", "fees").maybeSingle();
+    const mapped = feesJsonToConstants(data?.value);
     if (mapped) { _cfgCache = mapped; _cfgCacheAt = now; return mapped; }
   } catch { /* fall through to defaults */ }
   return { ...FEE_CONSTANTS };
