@@ -30,11 +30,21 @@ export const EXPERIAN_IDMN_WORKFLOW_ID =
   process.env.EXPERIAN_ENV === "production" ? 6 : 10;
 
 // OCR Liveness Verification (liveness + ID-document OCR + selfie↔document match).
-// UAT 12 / PROD 8. Runs as a SECOND workflow right after Alternative Liveness to
-// capture the ID document image + OCR-extracted fields. Override via env.
+// UAT 12 / PROD 8 (per Experian spec). Runs as a SECOND workflow to capture the
+// ID document image + OCR fields.
+//
+// ⚠️ If Experian's hosted OCR page errors ("An error occurred while processing
+// your request") + CollectWorkflowResults returns IMN_205 in PRODUCTION, the
+// production OCR workflow number is likely different from 8 / not enabled for the
+// account. Once Experian confirms the correct PROD number, set it here and
+// redeploy — no Vercel env access needed. null = use env/spec default below.
+const OCR_WORKFLOW_PROD_OVERRIDE = null; // e.g. 8
+
 export const EXPERIAN_OCR_WORKFLOW_ID =
   Number(process.env.EXPERIAN_OCR_WORKFLOW_ID) ||
-  (process.env.EXPERIAN_ENV === "production" ? 8 : 12);
+  (process.env.EXPERIAN_ENV === "production"
+    ? (OCR_WORKFLOW_PROD_OVERRIDE || 8)
+    : 12);
 
 export const EXPERIAN_IDMN_HOSTED_BASE =
   process.env.EXPERIAN_ENV === "production"
