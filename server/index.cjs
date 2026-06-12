@@ -3212,7 +3212,10 @@ app.get("/api/account/delete-child", async (req, res) => {
       });
     }
 
+    const canDeleteImmediately = !pendingBlocker && !hasBalance && !hasHoldings;
+
     return res.json({
+      canDeleteImmediately,
       hasBalance,
       hasHoldings,
       balance: childRow.available_balance || 0,
@@ -3262,7 +3265,7 @@ app.post("/api/account/delete-child", async (req, res) => {
     if (childErr) throw childErr;
     if (!childRow) return res.status(404).json({ error: "Child account not found or not owned by you." });
 
-    // Re-check blockers
+    // Re-check all blockers
     const { data: pendingTxns } = await db
       .from("transactions")
       .select("id")
@@ -3272,96 +3275,154 @@ app.post("/api/account/delete-child", async (req, res) => {
       return res.status(400).json({ error: "There are pending transactions on this account. Please wait for them to settle." });
     }
 
+    const currentBalance = Number(childRow.available_balance || 0);
+    const { data: currentHoldings } = await db
+      .from("stock_holdings_c")
+      .select("id, strategy_id, quantity, avg_fill")
+      .eq("family_member_id", childId)
+      .eq("Status", "active");
+    const holdingsCount = currentHoldings?.length || 0;
+    const hasAssets = currentBalance > 0 || holdingsCount > 0;
+
+    // Enforce: if assets exist, a valid receiving account is required
+    if (hasAssets && !receivingAccountId) {
+      return res.status(400).json({
+        error: `${childRow.first_name || "This child"}'s account has assets that must be transferred before closing. Please select a receiving account.`,
+      });
+    }
+
+    // Validate receiving account ownership before we do anything destructive
+    let receiverRow = null;
+    if (receivingAccountId) {
+      if (receivingAccountType === "parent") {
+        // Must be the authenticated user's own account
+        if (receivingAccountId !== user.id) {
+          return res.status(403).json({ error: "Invalid receiving account." });
+        }
+      } else {
+        // Must be a family member owned by this parent (not the child being closed)
+        const { data: fm } = await db
+          .from("family_members")
+          .select("id, first_name, last_name, relationship, available_balance, primary_user_id")
+          .eq("id", receivingAccountId)
+          .eq("primary_user_id", user.id)
+          .neq("id", childId)
+          .in("relationship", ["spouse", "child"])
+          .maybeSingle();
+        if (!fm) {
+          return res.status(403).json({ error: "Invalid receiving account — not owned by you." });
+        }
+        receiverRow = fm;
+      }
+    }
+
     if (verifyOnly) return res.json({ success: true, verified: true });
 
-    const childBalance = Number(childRow.available_balance || 0);
     const childFirst = childRow.first_name || "Child";
+    const childName = [childRow.first_name, childRow.last_name].filter(Boolean).join(" ") || "Child";
+    const transferTimestamp = new Date().toISOString();
 
-    // Transfer assets if a receiving account was chosen
-    if (receivingAccountId) {
-      // Transfer cash balance
-      if (childBalance > 0) {
-        if (receivingAccountType === "parent") {
-          // Parent's wallet is in Rands; child balance is in cents
-          const { data: parentWallet } = await db.from("wallets").select("balance, id").eq("user_id", receivingAccountId).maybeSingle();
-          if (parentWallet) {
-            const newBal = Number(parentWallet.balance || 0) + childBalance / 100;
-            await db.from("wallets").update({ balance: newBal }).eq("user_id", receivingAccountId);
-          }
-        } else {
-          // Another family member — balance is in cents
-          const { data: fm } = await db.from("family_members").select("available_balance").eq("id", receivingAccountId).maybeSingle();
-          if (fm) {
-            const newBal = Number(fm.available_balance || 0) + childBalance;
-            await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
-          }
+    // ── Transfer cash balance ─────────────────────────────────────────────────
+    let transferredRands = 0;
+    let receiverName = "";
+    if (receivingAccountId && currentBalance > 0) {
+      if (receivingAccountType === "parent") {
+        const { data: parentWallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+        if (parentWallet) {
+          const newBal = Number(parentWallet.balance || 0) + currentBalance / 100;
+          await db.from("wallets").update({ balance: newBal }).eq("user_id", user.id);
+          transferredRands = currentBalance / 100;
         }
+        const { data: parentProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
+        receiverName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "main account";
+      } else {
+        const fmCurrent = receiverRow;
+        const newBal = Number(fmCurrent.available_balance || 0) + currentBalance;
+        await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
+        transferredRands = currentBalance / 100;
+        receiverName = [fmCurrent.first_name, fmCurrent.last_name].filter(Boolean).join(" ") || "family member";
       }
+    }
 
-      // Transfer holdings — reassign family_member_id
-      const { data: holdings } = await db
+    // ── Transfer holdings ─────────────────────────────────────────────────────
+    let transferredHoldingsCount = 0;
+    if (receivingAccountId && holdingsCount > 0) {
+      const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+      const { error: holdingsErr } = await db
         .from("stock_holdings_c")
-        .select("id")
+        .update({ family_member_id: newFamilyMemberId, user_id: user.id })
         .eq("family_member_id", childId)
         .eq("Status", "active");
+      if (!holdingsErr) transferredHoldingsCount = holdingsCount;
+    }
 
-      if (holdings?.length > 0) {
-        const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
-        const newUserId = receivingAccountType === "parent" ? receivingAccountId : user.id;
-        await db
-          .from("stock_holdings_c")
-          .update({ family_member_id: newFamilyMemberId, user_id: newUserId })
-          .eq("family_member_id", childId)
-          .eq("Status", "active");
-      }
-
-      // Log a transfer transaction
+    // ── Dual-sided transfer transaction records ───────────────────────────────
+    if (receivingAccountId && (transferredRands > 0 || transferredHoldingsCount > 0)) {
+      const txBase = {
+        user_id: user.id,
+        direction: "credit",
+        amount: transferredRands,
+        status: "completed",
+        currency: "ZAR",
+        transaction_date: transferTimestamp,
+      };
+      // Source side (child account record)
       try {
-        const transferNote = `Child account closure — assets transferred from ${childFirst}`;
         await db.from("transactions").insert({
-          user_id: user.id,
+          ...txBase,
           family_member_id: childId,
-          name: "Child Account Closure Transfer",
-          direction: "credit",
-          amount: childBalance / 100,
-          description: transferNote,
-          status: "completed",
-          currency: "ZAR",
-          transaction_date: new Date().toISOString(),
+          name: "Child Account Closure — Transfer Out",
+          description: `Assets transferred to ${receiverName} on account closure`,
+        });
+      } catch (_) {}
+      // Receiving side (parent or sibling)
+      try {
+        const receiverFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+        await db.from("transactions").insert({
+          ...txBase,
+          family_member_id: receiverFamilyMemberId,
+          name: "Child Account Closure — Transfer In",
+          description: `Assets received from ${childName} on account closure (R${transferredRands.toFixed(2)}${transferredHoldingsCount > 0 ? ` + ${transferredHoldingsCount} holding${transferredHoldingsCount !== 1 ? "s" : ""}` : ""})`,
         });
       } catch (_) {}
     }
 
-    // Zero out the child balance so it can be deleted cleanly
-    await db.from("family_members").update({ available_balance: 0 }).eq("id", childId);
-
-    // Remove related data
+    // ── Archive remaining pending transactions ────────────────────────────────
     await db.from("transactions").update({ status: "closure_archived" }).eq("family_member_id", childId).in("status", ["pending", "processing"]);
 
-    // Delete the child record
+    // ── Delete the child record ───────────────────────────────────────────────
+    await db.from("family_members").update({ available_balance: 0 }).eq("id", childId);
     const { error: delErr } = await db.from("family_members").delete().eq("id", childId);
     if (delErr) throw delErr;
 
-    // Send notification email to parent
+    // ── Send detailed confirmation email to parent ────────────────────────────
     try {
       const resend = getResendClient();
       if (resend && user.email) {
+        const transferDetail = receivingAccountId
+          ? `<ul style="padding:0 0 0 20px;margin:8px 0;">
+               ${transferredRands > 0 ? `<li>Cash balance: <strong>R${transferredRands.toFixed(2)}</strong> transferred to <strong>${receiverName}</strong></li>` : ""}
+               ${transferredHoldingsCount > 0 ? `<li>${transferredHoldingsCount} active investment${transferredHoldingsCount !== 1 ? "s" : ""} transferred to <strong>${receiverName}</strong></li>` : ""}
+             </ul>`
+          : "<p>No assets were transferred (account had no balance or investments).</p>";
+
         await resend.emails.send({
           from: "Mint <noreply@getmint.co.za>",
           to: [user.email],
           subject: `${childFirst}'s Mint account has been closed`,
-          html: `<p>Hi,</p><p>We're confirming that <strong>${childFirst}</strong>'s Mint account has been permanently closed.</p>${receivingAccountId ? `<p>Their assets have been transferred as requested.</p>` : ""}<p>If you have any questions, please contact Mint support.</p><p>The Mint Team</p>`,
+          html: `<p>Hi,</p>
+<p>We're confirming that <strong>${childName}</strong>'s Mint account has been permanently closed.</p>
+${transferDetail}
+<p>Transaction records are retained for 5 years in accordance with FICA requirements.</p>
+<p>If you have any questions, please contact Mint support.</p>
+<p>The Mint Team</p>`,
         });
       }
     } catch (emailErr) {
       console.warn("[account/delete-child] Email notification failed:", emailErr.message);
     }
 
-    const closureNote = reason === "other" && reason_other
-      ? `Child account closure — Other: ${String(reason_other).slice(0, 200)}`
-      : `Child account closure — Reason: ${reason}`;
-    console.log(`[account/delete-child] Closed child ${childId} (${childFirst}) for parent ${user.id}. Reason: ${reason}. Transfer to: ${receivingAccountId || "none"}`);
-
+    console.log(`[account/delete-child] Closed child ${childId} (${childFirst}) for parent ${user.id}. Reason: ${reason}. Transferred R${transferredRands} + ${transferredHoldingsCount} holdings to: ${receivingAccountId || "none"}`);
     return res.json({ success: true });
   } catch (e) {
     console.error("[account/delete-child] POST error:", e.message);
