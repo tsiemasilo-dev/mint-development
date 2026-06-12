@@ -4,6 +4,7 @@ import { parseOnboardingFlags } from "./checkOnboardingComplete";
 
 const singleton = {
   channel: null,
+  authSub: null,
   listeners: new Set(),
   isComplete: false,
   isLoading: true,
@@ -73,22 +74,41 @@ async function fetchOnboardingStatus() {
 }
 
 function setupSingletonChannel() {
-  if (!supabase || singleton.channel) return;
+  if (!supabase) return;
 
-  singleton.channel = supabase
-    .channel("onboarding_status_singleton")
-    .on("postgres_changes", {
-      event: "*",
-      schema: "public",
-      table: "user_onboarding",
-    }, () => fetchOnboardingStatus())
-    .subscribe();
+  if (!singleton.channel) {
+    singleton.channel = supabase
+      .channel("onboarding_status_singleton")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "user_onboarding",
+      }, () => fetchOnboardingStatus())
+      .subscribe();
+  }
+
+  // Re-fetch whenever the auth session becomes available or refreshes. Without
+  // this, an initial fetch that ran before the session was restored would latch
+  // isComplete=false forever (no session → early return), wrongly bouncing a
+  // fully-onboarded user into the onboarding/identity flow.
+  if (!singleton.authSub) {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) fetchOnboardingStatus();
+    });
+    singleton.authSub = data?.subscription || null;
+  }
 }
 
 function teardownSingletonChannel() {
-  if (!supabase || !singleton.channel) return;
-  supabase.removeChannel(singleton.channel);
-  singleton.channel = null;
+  if (!supabase) return;
+  if (singleton.channel) {
+    supabase.removeChannel(singleton.channel);
+    singleton.channel = null;
+  }
+  if (singleton.authSub) {
+    singleton.authSub.unsubscribe();
+    singleton.authSub = null;
+  }
 }
 
 export function markOnboardingComplete() {

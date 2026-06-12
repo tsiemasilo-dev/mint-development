@@ -1255,9 +1255,14 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.user) { setInvestChecking(false); return; }
 
-              // Use the cached status from the hook instead of fresh fetch to avoid race conditions
-              if (onboardingLoading) return;
-              const isOnboarded = onboardingComplete;
+              if (onboardingLoading) { setInvestChecking(false); return; }
+              // Prefer the cached hook value, but never bounce a user to onboarding
+              // on a stale `false` — confirm authoritatively first. (The hook can
+              // latch false if it first ran before the session was ready.)
+              let isOnboarded = onboardingComplete;
+              if (!isOnboarded) {
+                isOnboarded = await checkOnboardingComplete();
+              }
               if (!isOnboarded) {
                 setShowOnboardingModal(true);
                 setInvestChecking(false);
