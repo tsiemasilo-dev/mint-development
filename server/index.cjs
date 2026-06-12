@@ -3127,6 +3127,248 @@ app.post("/api/account/delete", async (req, res) => {
   }
 });
 
+// ── GET /api/account/delete-child — blocker check before child account closure ──
+app.get("/api/account/delete-child", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const childId = String(req.query.id || "").trim();
+    if (!childId) return res.status(400).json({ error: "id required" });
+
+    // Verify this child belongs to the authenticated parent
+    const { data: childRow, error: childErr } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, relationship, primary_user_id, available_balance, status")
+      .eq("id", childId)
+      .eq("primary_user_id", user.id)
+      .eq("relationship", "child")
+      .maybeSingle();
+    if (childErr) throw childErr;
+    if (!childRow) return res.status(404).json({ error: "Child account not found or not owned by you." });
+
+    // Check active holdings
+    const { data: holdings } = await db
+      .from("stock_holdings_c")
+      .select("id")
+      .eq("family_member_id", childId)
+      .eq("Status", "active");
+
+    // Check pending transactions
+    const { data: pendingTxns } = await db
+      .from("transactions")
+      .select("id")
+      .eq("family_member_id", childId)
+      .in("status", ["pending", "processing"]);
+
+    const hasBalance = Number(childRow.available_balance || 0) > 0;
+    const hasHoldings = (holdings?.length || 0) > 0;
+    const pendingBlocker = (pendingTxns?.length || 0) > 0;
+
+    // Build list of accounts that can receive the child's assets
+    const receivingAccounts = [];
+
+    // Parent's own wallet
+    const { data: parentWallet } = await db
+      .from("wallets")
+      .select("balance")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const { data: parentProfile } = await db
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const parentName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "My Account";
+    receivingAccounts.push({
+      id: user.id,
+      type: "parent",
+      name: parentName,
+      label: "Main account",
+      balance: parentWallet?.balance ?? null,
+    });
+
+    // Other family members (spouse and siblings, excluding this child)
+    const { data: familyMembers } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, relationship, available_balance")
+      .eq("primary_user_id", user.id)
+      .neq("id", childId)
+      .in("status", ["active", "pending_code"]);
+
+    for (const m of familyMembers || []) {
+      const mName = [m.first_name, m.last_name].filter(Boolean).join(" ") || "Family member";
+      receivingAccounts.push({
+        id: m.id,
+        type: m.relationship,
+        name: mName,
+        label: m.relationship === "spouse" ? "Spouse account" : "Child account",
+        balance: m.available_balance ?? null,
+      });
+    }
+
+    return res.json({
+      hasBalance,
+      hasHoldings,
+      balance: childRow.available_balance || 0,
+      holdingsCount: holdings?.length || 0,
+      pendingBlocker,
+      receivingAccounts,
+    });
+  } catch (e) {
+    console.error("[account/delete-child] GET error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/account/delete-child — execute child account closure ──
+app.post("/api/account/delete-child", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const { childId, receivingAccountId, receivingAccountType, password, reason, reason_other, verifyOnly } = req.body || {};
+    if (!childId) return res.status(400).json({ error: "childId required" });
+    if (!reason) return res.status(400).json({ error: "reason required" });
+    if (!password) return res.status(400).json({ error: "password required" });
+
+    // Verify parent password via anon client
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: String(password),
+    });
+    if (signInError || !signInData?.user) {
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
+    }
+
+    // Verify ownership
+    const { data: childRow, error: childErr } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, available_balance, primary_user_id")
+      .eq("id", childId)
+      .eq("primary_user_id", user.id)
+      .eq("relationship", "child")
+      .maybeSingle();
+    if (childErr) throw childErr;
+    if (!childRow) return res.status(404).json({ error: "Child account not found or not owned by you." });
+
+    // Re-check blockers
+    const { data: pendingTxns } = await db
+      .from("transactions")
+      .select("id")
+      .eq("family_member_id", childId)
+      .in("status", ["pending", "processing"]);
+    if ((pendingTxns?.length || 0) > 0) {
+      return res.status(400).json({ error: "There are pending transactions on this account. Please wait for them to settle." });
+    }
+
+    if (verifyOnly) return res.json({ success: true, verified: true });
+
+    const childBalance = Number(childRow.available_balance || 0);
+    const childFirst = childRow.first_name || "Child";
+
+    // Transfer assets if a receiving account was chosen
+    if (receivingAccountId) {
+      // Transfer cash balance
+      if (childBalance > 0) {
+        if (receivingAccountType === "parent") {
+          // Parent's wallet is in Rands; child balance is in cents
+          const { data: parentWallet } = await db.from("wallets").select("balance, id").eq("user_id", receivingAccountId).maybeSingle();
+          if (parentWallet) {
+            const newBal = Number(parentWallet.balance || 0) + childBalance / 100;
+            await db.from("wallets").update({ balance: newBal }).eq("user_id", receivingAccountId);
+          }
+        } else {
+          // Another family member — balance is in cents
+          const { data: fm } = await db.from("family_members").select("available_balance").eq("id", receivingAccountId).maybeSingle();
+          if (fm) {
+            const newBal = Number(fm.available_balance || 0) + childBalance;
+            await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
+          }
+        }
+      }
+
+      // Transfer holdings — reassign family_member_id
+      const { data: holdings } = await db
+        .from("stock_holdings_c")
+        .select("id")
+        .eq("family_member_id", childId)
+        .eq("Status", "active");
+
+      if (holdings?.length > 0) {
+        const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+        const newUserId = receivingAccountType === "parent" ? receivingAccountId : user.id;
+        await db
+          .from("stock_holdings_c")
+          .update({ family_member_id: newFamilyMemberId, user_id: newUserId })
+          .eq("family_member_id", childId)
+          .eq("Status", "active");
+      }
+
+      // Log a transfer transaction
+      try {
+        const transferNote = `Child account closure — assets transferred from ${childFirst}`;
+        await db.from("transactions").insert({
+          user_id: user.id,
+          family_member_id: childId,
+          name: "Child Account Closure Transfer",
+          direction: "credit",
+          amount: childBalance / 100,
+          description: transferNote,
+          status: "completed",
+          currency: "ZAR",
+          transaction_date: new Date().toISOString(),
+        });
+      } catch (_) {}
+    }
+
+    // Zero out the child balance so it can be deleted cleanly
+    await db.from("family_members").update({ available_balance: 0 }).eq("id", childId);
+
+    // Remove related data
+    await db.from("transactions").update({ status: "closure_archived" }).eq("family_member_id", childId).in("status", ["pending", "processing"]);
+
+    // Delete the child record
+    const { error: delErr } = await db.from("family_members").delete().eq("id", childId);
+    if (delErr) throw delErr;
+
+    // Send notification email to parent
+    try {
+      const resend = getResendClient();
+      if (resend && user.email) {
+        await resend.emails.send({
+          from: "Mint <noreply@getmint.co.za>",
+          to: [user.email],
+          subject: `${childFirst}'s Mint account has been closed`,
+          html: `<p>Hi,</p><p>We're confirming that <strong>${childFirst}</strong>'s Mint account has been permanently closed.</p>${receivingAccountId ? `<p>Their assets have been transferred as requested.</p>` : ""}<p>If you have any questions, please contact Mint support.</p><p>The Mint Team</p>`,
+        });
+      }
+    } catch (emailErr) {
+      console.warn("[account/delete-child] Email notification failed:", emailErr.message);
+    }
+
+    const closureNote = reason === "other" && reason_other
+      ? `Child account closure — Other: ${String(reason_other).slice(0, 200)}`
+      : `Child account closure — Reason: ${reason}`;
+    console.log(`[account/delete-child] Closed child ${childId} (${childFirst}) for parent ${user.id}. Reason: ${reason}. Transfer to: ${receivingAccountId || "none"}`);
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("[account/delete-child] POST error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 function extractLatestStatus(statuses) {
   if (!Array.isArray(statuses) || !statuses.length) return null;
   const sorted = [...statuses].sort((a, b) => {

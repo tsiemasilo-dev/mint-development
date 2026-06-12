@@ -1462,28 +1462,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                     {memberBalances[spouse.id] !== undefined && (
                       <p className="text-[14px] font-bold text-slate-800 tabular-nums flex-shrink-0 mr-1">{fmt(memberBalances[spouse.id])}</p>
                     )}
-                    <button
-                      onClick={() => {
-                        setConfirmRemove(confirmRemove?.id === spouse.id ? null : spouse);
-                        setRemovePassword("");
-                        setRemoveError("");
-                      }}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-red-50 hover:text-red-400 transition flex-shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
-                  <AnimatePresence>
-                    {confirmRemove?.id === spouse.id && (
-                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden border-t border-red-100 bg-red-50">
-                        <div className="flex items-center justify-between px-5 py-3 gap-3">
-                          <p className="text-[12px] font-semibold text-red-700 flex-1">Remove {spouse.first_name} as spouse?</p>
-                          <button onClick={() => { setConfirmRemove(null); setRemovePassword(""); setRemoveError(""); }} className="text-[12px] font-semibold text-slate-500 px-3 py-1.5 rounded-xl hover:bg-white transition">Cancel</button>
-                          <button onClick={() => removeMember(spouse)} disabled={removingId === spouse.id} className="text-[12px] font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-xl transition disabled:opacity-60">{removingId === spouse.id ? "Removing…" : "Remove"}</button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </motion.div>
               ) : (
                 <motion.button
@@ -1573,40 +1552,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                             <Settings className="h-4 w-4" />
                           </button>
                         )}
-                        {isOwner && (
-                          <button onClick={() => {
-                            setConfirmRemove(confirmRemove?.id === child.id ? null : child);
-                            setRemovePassword("");
-                            setRemoveError("");
-                          }} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-red-50 hover:text-red-400 transition flex-shrink-0">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
                       </div>
-                      <AnimatePresence>
-                        {confirmRemove?.id === child.id && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden border-t border-red-100 bg-red-50">
-                            <div className="px-5 py-3 space-y-2.5">
-                              <p className="text-[12px] font-semibold text-red-700">Remove {child.first_name}'s account?</p>
-                              <p className="text-[11px] text-slate-600">Enter your password to confirm this action.</p>
-                              <input
-                                type="password"
-                                value={removePassword}
-                                onChange={(e) => { setRemovePassword(e.target.value); setRemoveError(""); }}
-                                placeholder="Your password"
-                                className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-[12px] text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-100"
-                              />
-                              {removeError && (
-                                <p className="text-[11px] font-medium text-red-600">{removeError}</p>
-                              )}
-                              <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => { setConfirmRemove(null); setRemovePassword(""); setRemoveError(""); }} className="text-[12px] font-semibold text-slate-500 px-3 py-1.5 rounded-xl hover:bg-white transition">Cancel</button>
-                                <button onClick={() => removeMember(child, removePassword)} disabled={removingId === child.id || !removePassword.trim()} className="text-[12px] font-bold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-xl transition disabled:opacity-60">{removingId === child.id ? "Removing…" : "Remove"}</button>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
                     </motion.div>
                   );
                 })}
