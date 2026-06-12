@@ -61,9 +61,11 @@ export default function AdultInvestModal({
     setAgreementChecked(false);
     setShowMandateModal(false);
     setIsGift(false);
-    // Additional strategies start gated (sheet hidden) until the ID-doc check
-    // resolves; everything else opens straight to the invest sheet.
-    setGate(isAdditionalStrategy ? "checking" : "open");
+    // Gate the sheet until we know whether to show the ID-document scan. The scan
+    // fires on a SECONDARY strategy purchase — detected here (not just from the
+    // isAdditionalStrategy prop) so it works from EVERY buy entry point, not only
+    // the FactsheetPage upgrade modal. Fails open (no gate) on any error.
+    setGate("checking");
 
     // Fetch wallet balance
     (async () => {
@@ -79,22 +81,31 @@ export default function AdultInvestModal({
       } catch { /* ignore */ }
     })();
 
-    // For a secondary (additional) strategy, check up front whether this user
-    // still owes an ID-document scan. If so, show the scan before the invest
-    // sheet; otherwise reveal the sheet immediately. Fails open on any error.
-    if (isAdditionalStrategy) {
-      (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.access_token) { setGate("open"); return; }
-          const res = await fetch("/api/experian/ocr-required", {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-          const data = await res.json();
-          setGate(data?.required ? "scan" : "open");
-        } catch { setGate("open"); /* never block a purchase on this check */ }
-      })();
-    }
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { setGate("open"); return; }
+        // Secondary strategy buy? Either the caller flagged it, or the user
+        // already holds an active strategy other than the one being bought.
+        let additional = isAdditionalStrategy;
+        if (!additional) {
+          const curId = strategy?.id || strategy?.strategyId || null;
+          const { data: hs } = await supabase
+            .from("stock_holdings_c")
+            .select("strategy_id")
+            .eq("user_id", session.user.id)
+            .eq("is_active", true)
+            .is("family_member_id", null);
+          additional = (hs || []).some((h) => h.strategy_id && h.strategy_id !== curId);
+        }
+        if (!additional) { setGate("open"); return; } // first strategy → no scan
+        const res = await fetch("/api/experian/ocr-required", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await res.json();
+        setGate(data?.required ? "scan" : "open");
+      } catch { setGate("open"); /* never block a purchase on this check */ }
+    })();
 
     // Resolve minimum investment
     const preCalc = strategy?.calculatedMinInvestment || strategy?.min_investment;
