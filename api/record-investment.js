@@ -132,6 +132,9 @@ export default async function handler(req, res) {
     rollbackUserId = userId;
     const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId, childFamilyMemberId } = req.body;
     rollbackPaymentMethod = paymentMethod;
+    // Wallet / direct EFT / Ozow are settled in-app, so there's no external paid
+    // amount to reconcile — skip the amount-mismatch verification for them.
+    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
