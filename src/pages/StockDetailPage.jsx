@@ -6,17 +6,15 @@ import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import GoalLinkModal from "../components/GoalLinkModal.jsx";
+import { useFees } from "../lib/useFees";
 
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
 const MIN_INVESTMENT = 1000;
 
 const fmt = (val, cur = "R") => `${cur} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding, onProceedToPayment }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const { profile } = useProfile();
   const [selectedPeriod, setSelectedPeriod] = useState("YTD");
   const [security, setSecurity] = useState(initialSecurity);
@@ -258,7 +256,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     const isin = ISIN_FEE_PER_ASSET * (validBuyShares > 0 ? 1 : 0);
     const txn = buffered * TRANSACTION_FEE_RATE;
     return { broker, isin, txn, total: buffered + broker + isin + txn };
-  }, [buyTotalAmount, validBuyShares]);
+  }, [buyTotalAmount, validBuyShares, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const handleOpenBuySheet = () => {
     if (onboardingLoading) return;

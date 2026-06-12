@@ -9,12 +9,7 @@ import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
 import GiftToggleV2 from "./GiftToggleV2";
 import { useDiscretionType } from "../lib/useDiscretionType";
-
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
-const MONTHLY_STRATEGY_FEE = 29;
+import { useFees } from "../lib/useFees";
 
 function firstBillingDate() {
   const d = new Date();
@@ -36,6 +31,7 @@ export default function AdultInvestModal({
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE, MONTHLY_STRATEGY_FEE } = useFees();
   const [showDiscretionModal, setShowDiscretionModal] = useState(false);
 
   const [minimum, setMinimum] = useState(null);
@@ -144,7 +140,7 @@ export default function AdultInvestModal({
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [baseAmount, numAssets]);
+  }, [baseAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const totalCostCents = Math.round(fees.totalCost * 100);
   const insufficient = walletBalance !== null && fees.totalCost > walletBalance;
