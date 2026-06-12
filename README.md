@@ -1,4 +1,4 @@
-# Mint — Investment & Wealth Platform
+# Mint — Investment & Wealth Platform..
 
 <p align="center">
   <img src="public/mint-logo.png" alt="Mint Logo" width="80" />
