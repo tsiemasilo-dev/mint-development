@@ -3322,10 +3322,29 @@ app.post("/api/account/delete-child", async (req, res) => {
     const childName = [childRow.first_name, childRow.last_name].filter(Boolean).join(" ") || "Child";
     const transferTimestamp = new Date().toISOString();
 
-    // ── Transfer cash balance (fail-closed: abort before delete if this fails) ─
+    // ── TRANSFER LOCK: atomically zero child balance using compare-and-swap ─────
+    // Only zeroes if available_balance still equals currentBalance.
+    // This is the idempotency guard: if retried after a partial failure, the
+    // balance will already be 0 so this returns 0 rows → credit is skipped,
+    // preventing double-payment. Holdings reassignment is also retry-safe
+    // because the WHERE family_member_id=childId will find 0 rows if already moved.
+    let balanceCreditApplied = false;
     let transferredRands = 0;
     let receiverName = "";
-    if (receivingAccountId && currentBalance > 0) {
+    if (currentBalance > 0) {
+      const { data: locked, error: lockErr } = await db
+        .from("family_members")
+        .update({ available_balance: 0 })
+        .eq("id", childId)
+        .eq("available_balance", currentBalance)
+        .select("id")
+        .maybeSingle();
+      if (lockErr) throw new Error(`Failed to lock balance for transfer: ${lockErr.message}`);
+      balanceCreditApplied = !!locked; // null = 0 rows matched (balance already zeroed or changed — skip credit)
+    }
+
+    // ── Transfer cash balance to receiver (only if lock succeeded) ────────────
+    if (balanceCreditApplied && receivingAccountId) {
       if (receivingAccountType === "parent") {
         const { data: parentWallet, error: walletFetchErr } = await db
           .from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
@@ -3333,7 +3352,7 @@ app.post("/api/account/delete-child", async (req, res) => {
         if (!parentWallet) throw new Error("Parent wallet not found — cannot transfer balance.");
         const newBal = Number(parentWallet.balance || 0) + currentBalance / 100;
         const { error: walletUpdateErr } = await db.from("wallets").update({ balance: newBal }).eq("user_id", user.id);
-        if (walletUpdateErr) throw new Error(`Failed to transfer balance to parent wallet: ${walletUpdateErr.message}`);
+        if (walletUpdateErr) throw new Error(`Failed to credit parent wallet: ${walletUpdateErr.message}`);
         transferredRands = currentBalance / 100;
         const { data: parentProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
         receiverName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "main account";
@@ -3341,13 +3360,14 @@ app.post("/api/account/delete-child", async (req, res) => {
         const fmCurrent = receiverRow;
         const newBal = Number(fmCurrent.available_balance || 0) + currentBalance;
         const { error: fmUpdateErr } = await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
-        if (fmUpdateErr) throw new Error(`Failed to transfer balance to family member: ${fmUpdateErr.message}`);
+        if (fmUpdateErr) throw new Error(`Failed to credit family member balance: ${fmUpdateErr.message}`);
         transferredRands = currentBalance / 100;
         receiverName = [fmCurrent.first_name, fmCurrent.last_name].filter(Boolean).join(" ") || "family member";
       }
     }
 
-    // ── Transfer holdings (fail-closed: abort before delete if this fails) ────
+    // ── Transfer holdings (fail-closed; retry-safe: no-op if already moved) ──
+    // If family_member_id was already changed, eq("family_member_id", childId) finds 0 rows.
     let transferredHoldingsCount = 0;
     if (receivingAccountId && holdingsCount > 0) {
       const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
@@ -3360,7 +3380,7 @@ app.post("/api/account/delete-child", async (req, res) => {
       transferredHoldingsCount = holdingsCount;
     }
 
-    // All transfers successful — safe to proceed with audit records and deletion
+    // All required transfers completed — safe to proceed with audit records and deletion
 
     // ── Dual-sided transfer transaction records (best-effort, non-blocking) ───
     if (receivingAccountId && (transferredRands > 0 || transferredHoldingsCount > 0)) {
