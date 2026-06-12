@@ -381,9 +381,16 @@ const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
     setErrorCode(null);
     setVerificationUrl(null);
     setIsMockMode(false);
+    // On desktop, default a retry back to the QR/phone flow — the embedded webcam
+    // path is the one that tends to fail (3rd-party iframe), so don't trap the
+    // user in it. They can re-pick the webcam from the start screen.
+    setUseEmbedOnDesktop(false);
     initRef.current = false;
     startWorkflow();
   };
+
+  // Explicit "switch to phone" escape used on the error screens.
+  const retryOnPhone = () => { setUseEmbedOnDesktop(false); handleRetry(); };
 
   // "Redo" — discard the current Experian transaction and request a brand-new
   // one (restart:true), then drop straight back into the embedded flow.
@@ -642,6 +649,15 @@ const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
           >
             Try Again
           </button>
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={retryOnPhone}
+              className="px-6 py-2.5 rounded-xl font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
+            >
+              Use my phone instead
+            </button>
+          )}
           <button
             type="button"
             onClick={() => window.open("mailto:support@mintinvest.co.za", "_blank")}
@@ -680,6 +696,15 @@ const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
           >
             Try Again
           </button>
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={retryOnPhone}
+              className="px-6 py-2.5 rounded-xl font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 transition-colors"
+            >
+              Use my phone instead
+            </button>
+          )}
           {ocrPhase && (
             <button
               type="button"
