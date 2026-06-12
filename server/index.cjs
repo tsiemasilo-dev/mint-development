@@ -3322,29 +3322,32 @@ app.post("/api/account/delete-child", async (req, res) => {
     const childName = [childRow.first_name, childRow.last_name].filter(Boolean).join(" ") || "Child";
     const transferTimestamp = new Date().toISOString();
 
-    // ── Transfer cash balance ─────────────────────────────────────────────────
+    // ── Transfer cash balance (fail-closed: abort before delete if this fails) ─
     let transferredRands = 0;
     let receiverName = "";
     if (receivingAccountId && currentBalance > 0) {
       if (receivingAccountType === "parent") {
-        const { data: parentWallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
-        if (parentWallet) {
-          const newBal = Number(parentWallet.balance || 0) + currentBalance / 100;
-          await db.from("wallets").update({ balance: newBal }).eq("user_id", user.id);
-          transferredRands = currentBalance / 100;
-        }
+        const { data: parentWallet, error: walletFetchErr } = await db
+          .from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+        if (walletFetchErr) throw new Error(`Failed to fetch parent wallet: ${walletFetchErr.message}`);
+        if (!parentWallet) throw new Error("Parent wallet not found — cannot transfer balance.");
+        const newBal = Number(parentWallet.balance || 0) + currentBalance / 100;
+        const { error: walletUpdateErr } = await db.from("wallets").update({ balance: newBal }).eq("user_id", user.id);
+        if (walletUpdateErr) throw new Error(`Failed to transfer balance to parent wallet: ${walletUpdateErr.message}`);
+        transferredRands = currentBalance / 100;
         const { data: parentProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
         receiverName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "main account";
       } else {
         const fmCurrent = receiverRow;
         const newBal = Number(fmCurrent.available_balance || 0) + currentBalance;
-        await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
+        const { error: fmUpdateErr } = await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
+        if (fmUpdateErr) throw new Error(`Failed to transfer balance to family member: ${fmUpdateErr.message}`);
         transferredRands = currentBalance / 100;
         receiverName = [fmCurrent.first_name, fmCurrent.last_name].filter(Boolean).join(" ") || "family member";
       }
     }
 
-    // ── Transfer holdings ─────────────────────────────────────────────────────
+    // ── Transfer holdings (fail-closed: abort before delete if this fails) ────
     let transferredHoldingsCount = 0;
     if (receivingAccountId && holdingsCount > 0) {
       const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
@@ -3353,42 +3356,45 @@ app.post("/api/account/delete-child", async (req, res) => {
         .update({ family_member_id: newFamilyMemberId, user_id: user.id })
         .eq("family_member_id", childId)
         .eq("Status", "active");
-      if (!holdingsErr) transferredHoldingsCount = holdingsCount;
+      if (holdingsErr) throw new Error(`Failed to transfer investments: ${holdingsErr.message}`);
+      transferredHoldingsCount = holdingsCount;
     }
 
-    // ── Dual-sided transfer transaction records ───────────────────────────────
+    // All transfers successful — safe to proceed with audit records and deletion
+
+    // ── Dual-sided transfer transaction records (best-effort, non-blocking) ───
     if (receivingAccountId && (transferredRands > 0 || transferredHoldingsCount > 0)) {
-      const txBase = {
+      const txBaseOut = {
         user_id: user.id,
+        family_member_id: childId,
+        direction: "debit",
+        amount: transferredRands,
+        status: "completed",
+        currency: "ZAR",
+        transaction_date: transferTimestamp,
+        name: "Child Account Closure — Transfer Out",
+        description: `Assets transferred to ${receiverName} on account closure`,
+      };
+      const receiverFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+      const txBaseIn = {
+        user_id: user.id,
+        family_member_id: receiverFamilyMemberId,
         direction: "credit",
         amount: transferredRands,
         status: "completed",
         currency: "ZAR",
         transaction_date: transferTimestamp,
+        name: "Child Account Closure — Transfer In",
+        description: `Assets received from ${childName} on account closure (R${transferredRands.toFixed(2)}${transferredHoldingsCount > 0 ? ` + ${transferredHoldingsCount} holding${transferredHoldingsCount !== 1 ? "s" : ""}` : ""})`,
       };
-      // Source side (child account record)
-      try {
-        await db.from("transactions").insert({
-          ...txBase,
-          family_member_id: childId,
-          name: "Child Account Closure — Transfer Out",
-          description: `Assets transferred to ${receiverName} on account closure`,
-        });
-      } catch (_) {}
-      // Receiving side (parent or sibling)
-      try {
-        const receiverFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
-        await db.from("transactions").insert({
-          ...txBase,
-          family_member_id: receiverFamilyMemberId,
-          name: "Child Account Closure — Transfer In",
-          description: `Assets received from ${childName} on account closure (R${transferredRands.toFixed(2)}${transferredHoldingsCount > 0 ? ` + ${transferredHoldingsCount} holding${transferredHoldingsCount !== 1 ? "s" : ""}` : ""})`,
-        });
-      } catch (_) {}
+      try { await db.from("transactions").insert(txBaseOut); } catch (_) {}
+      try { await db.from("transactions").insert(txBaseIn); } catch (_) {}
     }
 
-    // ── Archive remaining pending transactions ────────────────────────────────
-    await db.from("transactions").update({ status: "closure_archived" }).eq("family_member_id", childId).in("status", ["pending", "processing"]);
+    // ── Archive any remaining pending transactions (best-effort) ─────────────
+    try {
+      await db.from("transactions").update({ status: "closure_archived" }).eq("family_member_id", childId).in("status", ["pending", "processing"]);
+    } catch (_) {}
 
     // ── Delete the child record ───────────────────────────────────────────────
     await db.from("family_members").update({ available_balance: 0 }).eq("id", childId);

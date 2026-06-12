@@ -120,7 +120,7 @@ const ChildDeleteAccountPage = ({ child, onBack, onDone }) => {
   };
 
   const handleFinalClose = async () => {
-    if (confirmText.trim().toLowerCase() !== childFirst.trim().toLowerCase()) return;
+    if (confirmText !== "DELETE") return;
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -395,13 +395,13 @@ const ChildDeleteAccountPage = ({ child, onBack, onDone }) => {
             <p className="text-xs font-bold uppercase text-slate-400 px-1 mb-3">Final confirmation</p>
             <div className="rounded-2xl bg-white p-4 shadow-sm space-y-3">
               <p className="text-sm text-slate-600 leading-relaxed">
-                Type <span className="font-bold text-slate-900">{childFirst}</span> below to permanently close this account.
+                Type <span className="font-bold text-slate-900">DELETE</span> below to permanently close {childFirst}'s account.
               </p>
               <input
                 type="text"
                 value={confirmText}
                 onChange={(e) => { setConfirmText(e.target.value); setSubmitError(""); }}
-                placeholder={`Type "${childFirst}" here`}
+                placeholder='Type "DELETE" here'
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-300 font-mono tracking-widest"
               />
               {submitError && <p className="text-xs text-red-500">{submitError}</p>}
@@ -410,7 +410,7 @@ const ChildDeleteAccountPage = ({ child, onBack, onDone }) => {
 
           <button
             onClick={handleFinalClose}
-            disabled={submitting || confirmText.trim().toLowerCase() !== childFirst.trim().toLowerCase()}
+            disabled={submitting || confirmText !== "DELETE"}
             className="w-full rounded-2xl bg-red-500 py-4 text-sm font-semibold text-white disabled:opacity-40 transition active:scale-[0.99] flex items-center justify-center gap-2"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
