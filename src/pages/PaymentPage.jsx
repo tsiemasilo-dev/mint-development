@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import PaymentMethodModal from "../components/PaymentMethodModal";
 import PaymentPendingPage from "./PaymentPendingPage.jsx";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
+import { useFees } from "../lib/useFees";
 
 const PaymentPage = ({
   onBack,
@@ -589,10 +590,7 @@ const WalletConfirmModal = ({
   onConfirm,
   onNavigateToDeposit,
 }) => {
-  const CASH_BUFFER_RATE = 0.08;
-  const BROKER_FEE_RATE = 0.0025;
-  const ISIN_FEE_PER_ASSET = 69;
-  const TRANSACTION_FEE_RATE = 0.038;
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
 
   const bufferedBase = (baseAmount || 0) * (1 + CASH_BUFFER_RATE);
   const brokerFee = bufferedBase * BROKER_FEE_RATE;

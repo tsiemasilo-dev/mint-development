@@ -1,6 +1,6 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 import { buildOrderConfirmationHtml } from "./_lib/order-email-templates.js";
-import { computeFees } from "./_lib/fees.js";
+import { computeFees, getFeeConfig } from "./_lib/fees.js";
 import { Resend } from "resend";
 
 // Fetch the latest stock_intraday_c.current_price for each given security_id.
@@ -300,7 +300,8 @@ export default async function handler(req, res) {
     // sums (within a few cents of rounding) to transactions.amount.
     const baseRandsForFees = (baseAmount && baseAmount > 0) ? baseAmount : amount;
     const numAssetsForFees = isStrategyInvestment ? preFetchedStrategyHoldings.length : 1;
-    const fees = computeFees(baseRandsForFees, numAssetsForFees);
+    const feeConfig = await getFeeConfig(db);
+    const fees = computeFees(baseRandsForFees, numAssetsForFees, feeConfig);
 
     const { data: txData, error: txError } = await db
       .from("transactions")

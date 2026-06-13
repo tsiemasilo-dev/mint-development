@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useDiscretionType } from "../lib/useDiscretionType";
+import { useFees } from "../lib/useFees";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
 import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import {
@@ -30,6 +31,7 @@ const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding, onUpdateMandate }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
+  const feeRates = useFees();
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -1086,8 +1088,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
             <li>• Performance fee: 20% of profits</li>
-            <li>• Brokerage fee: 0.25% of investment amount</li>
-            <li>• Custody fee (ISIN): R69.00 per asset</li>
+            <li>• Brokerage fee: {(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}% of investment amount</li>
+            <li>• Custody fee (ISIN): R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
