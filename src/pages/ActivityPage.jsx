@@ -158,7 +158,7 @@ const ActivityPage = ({ onBack }) => {
       });
       if (isinC > 0) lines.push({
         ...baseLine, id: `${item.id}-isin`, feeType: "isin",
-        feeLabel: "ISIN fee", amountCents: isinC,
+        feeLabel: "Custody fee", amountCents: isinC,
       });
       if (txFeeC > 0) lines.push({
         ...baseLine, id: `${item.id}-txfee`, feeType: "txfee",

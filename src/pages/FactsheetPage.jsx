@@ -1089,7 +1089,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
             <li>• Performance fee: 20% of profits</li>
             <li>• Brokerage fee: {(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}% of investment amount</li>
-            <li>• Custody fee (ISIN): R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
+            <li>• Custody fee: R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>

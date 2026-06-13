@@ -17,7 +17,7 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "../lib/supabase";
-import { fetchStrategyCashCents } from "../lib/strategyValuation";
+import { fetchStrategyCashCents, fetchRealizedCentsByStrategy } from "../lib/strategyValuation";
 import { getStrategyPriceHistory, getClientStrategyReturns } from "../lib/strategyData";
 import { logDebug, CAT } from "../lib/debugLog.js";
 import { getCachedSession } from "../lib/sessionCache.js";
@@ -562,9 +562,11 @@ const SwipeableBalanceCard = ({
 
         let bufferCentsByStrategy = {};
         let residualCentsByStrategy = {};
+        let realizedCentsByStrategy = {};
         if (stratIds.length > 0) {
-          // Shared single-source-of-truth cash (buffer + residual), see strategyValuation.js
+          // Shared single-source-of-truth cash (buffer + residual) + realised P&L.
           ({ bufferCentsByStrategy, residualCentsByStrategy } = await fetchStrategyCashCents({ userId, familyMemberId, strategyIds: stratIds }));
+          realizedCentsByStrategy = await fetchRealizedCentsByStrategy({ userId, familyMemberId, strategyIds: stratIds });
 
           const { data: stratMeta } = await supabase.from("strategies_c").select("id, name, short_name, icon_url").in("id", stratIds);
           const stratMap = {}; (stratMeta || []).forEach(s => { stratMap[s.id] = s; });
@@ -577,7 +579,9 @@ const SwipeableBalanceCard = ({
               symbol: meta.short_name || meta.name || "Strategy",
               name: meta.name || "Strategy",
               market_value: agg.market_value + bufC + resC,   // positions + cash (buffer + residual)
-              invested_amount: agg.invested_amount + bufC,     // cost basis + buffer (pass-through)
+              // invested derived so this strategy's P&L = unrealised (positions −
+              // open cost) + realised (locked-in rebalance gains), stable across rebalances.
+              invested_amount: agg.invested_amount + bufC + resC - (realizedCentsByStrategy[sid] || 0),
               avg_fill: 0, Expected_fill: 0, quantity: 1,
               logo_url: meta.icon_url || null,
               security_id: null, strategy_id: sid,
@@ -599,19 +603,27 @@ const SwipeableBalanceCard = ({
           .reduce((acc, h) => acc + Number(h.market_value || 0) / 100, 0);
         mValue += (totalBufferCents + totalResidualCents) / 100;
 
-        // Total cost basis (rands): higher-of stock cost basis + buffer (pass-through).
-        const totalCostBasis = enrichedHoldings
+        // Total P&L = unrealised (live positions − cost of OPEN positions) +
+        // realised (locked-in from rebalance sells). Stays stable across rebalances
+        // — a rebalance just converts unrealised → realised. invested is then
+        // DERIVED from that total so the % return never drifts after a rebalance.
+        const totalRealizedCents = Object.values(realizedCentsByStrategy).reduce((s, v) => s + v, 0);
+        const unrealizedRands = enrichedHoldings
           .filter(h => !h.isStrategy)
-          .reduce((acc, h) => acc + Number(h.invested_amount || 0) / 100, 0) + totalBufferCents / 100;
+          .reduce((acc, h) => acc + (Number(h.market_value || 0) - Number(h.invested_amount || 0)) / 100, 0);
+        const totalPnlRands = unrealizedRands + totalRealizedCents / 100;
+        const totalCostBasis = Number((mValue - totalPnlRands).toFixed(2));
 
         // maxOfCostBasis per item (used when an item is selected). Totals only sum
         // individual stocks (+ buffer) to avoid double-counting strategy items.
         enrichedHoldings.forEach(h => {
           h.maxOfCostBasis = Number(h.invested_amount || 0) / 100;
         });
-        const totalMaxOfCostBasis = enrichedHoldings
-          .filter(h => !h.isStrategy)
-          .reduce((acc, h) => acc + Number(h.maxOfCostBasis || 0), 0) + totalBufferCents / 100;
+        // The headline all-time P&L is (totalMarketValue − totalMaxOfCostBasis),
+        // so this must be the SAME derived invested — otherwise realised gains from
+        // rebalances would be dropped from the headline. (Per-item maxOfCostBasis
+        // above still drives the per-asset selected view.)
+        const totalMaxOfCostBasis = totalCostBasis;
 
         console.log("[SwipeableBalanceCard] Loaded holdings:", {
           count: enrichedHoldings.length,
