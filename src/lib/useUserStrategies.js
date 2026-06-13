@@ -229,18 +229,21 @@ export const useUserStrategies = (familyMemberId = null) => {
         const investedBase = Number((costBasisByStrategy[strategyId] || 0).toFixed(2));
         /* Portfolio value = live positions + cash element (residual + buffer). */
         const currentVal = Number((positionsVal + cashElement).toFixed(2));
-        /* invested = cost basis + the buffer the user also paid. The buffer is a
-           PASS-THROUGH: it adds to both invested AND current value, so it never
-           shows as profit/loss. */
-        const invested = Number((investedBase + bufferVal).toFixed(2));
-        const totalPnl = Number((currentVal - invested).toFixed(2));
-        const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
-
-        /* Split total P&L into realised (locked in from sells) and unrealised
-           (paper gains on open positions). Realised comes from closed positions;
-           unrealised is the remainder, so the two always sum to the headline. */
+        /* P&L = realised (locked in from rebalance sells) + unrealised (paper
+           gain on the CURRENT open positions). A rebalance just converts
+           unrealised → realised, so the TOTAL stays stable across rebalances —
+           the gain never "disappears" when sold shares leave the cost basis.
+             realised   = Σ(avg_exit − avg_fill)×qty over closed positions
+             unrealised = live positions − cost basis of open positions
+           invested is then DERIVED from the total so the % return is a stable
+           "money in → money out" base that doesn't drift after a rebalance.
+           (For a fresh buy with no closed lots this equals cost basis + buffer,
+           exactly as before — backward compatible.) */
         const realizedPnl = Number((realizedRandsByStrategy[strategyId] || 0).toFixed(2));
-        const unrealizedPnl = Number((totalPnl - realizedPnl).toFixed(2));
+        const unrealizedPnl = Number((positionsVal - investedBase).toFixed(2));
+        const totalPnl = Number((unrealizedPnl + realizedPnl).toFixed(2));
+        const invested = Number((currentVal - totalPnl).toFixed(2));
+        const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
         // strategies_c.holdings as base (weight/logo_url); augment with per-asset

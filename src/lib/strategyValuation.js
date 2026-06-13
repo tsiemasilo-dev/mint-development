@@ -25,6 +25,36 @@ export const higherOfCostPerShareRands = (h) => {
 export const txnBufferRemainingCents = (t) =>
   Number(t?.buffer_cents || 0) - Number(t?.buffer_consumed_cents || 0);
 
+// Realised P&L per strategy in CENTS, from CLOSED positions (rebalance sells /
+// replacements): Σ (avg_exit − avg_fill) × qty over is_active=false holdings.
+// avg_fill & avg_exit are in cents, so (exit − fill) is cents/share → × qty = cents.
+// This is the gain that's been "locked in" by selling, and must stay in the
+// headline P&L so the % return doesn't drift down after a rebalance.
+// scope: { userId, familyMemberId?, strategyIds? }
+export async function fetchRealizedCentsByStrategy({ userId, familyMemberId = null, strategyIds = null }) {
+  const realizedCentsByStrategy = {};
+  try {
+    let q = supabase
+      .from("stock_holdings_c")
+      .select("strategy_id, quantity, avg_fill, avg_exit")
+      .eq("is_active", false);
+    q = familyMemberId ? q.eq("family_member_id", familyMemberId) : q.eq("user_id", userId).is("family_member_id", null);
+    if (Array.isArray(strategyIds) && strategyIds.length) q = q.in("strategy_id", strategyIds);
+    const { data } = await q;
+    (data || []).forEach((r) => {
+      if (!r?.strategy_id) return;
+      const fill = Number(r.avg_fill || 0);
+      const exit = Number(r.avg_exit || 0);
+      const qty = Number(r.quantity || 0);
+      if (!fill || !exit || !qty) return; // only fully-priced closed lots
+      realizedCentsByStrategy[r.strategy_id] = (realizedCentsByStrategy[r.strategy_id] || 0) + (exit - fill) * qty;
+    });
+  } catch (e) {
+    console.warn("[strategyValuation] realized fetch failed:", e?.message || e);
+  }
+  return realizedCentsByStrategy;
+}
+
 // Per-strategy CASH in CENTS: held 8% buffer + rebalance residual.
 //   buffer  = sum over the strategy's funding transactions of (buffer_cents −
 //             buffer_consumed_cents), each transaction counted once. Transactions
