@@ -105,7 +105,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
     <div className="min-h-screen bg-[#f8f6fa] flex items-center justify-center px-6 py-10">
       <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-sm">
         <div className="text-center mb-6">
-          <div className="text-3xl font-extrabold text-[#1e1b4b]">mint</div>
+          <div className="text-3xl font-extrabold text-[#1e1b4b]">MINT</div>
           <div className="text-slate-400 text-xs mt-1">Investment Gift</div>
         </div>
 

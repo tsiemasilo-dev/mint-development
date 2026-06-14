@@ -140,7 +140,7 @@ function footerBar(policyNo, fullName, pageNum, totalPages) {
   return `
   <div style="background:${C.purpleDark};display:flex;justify-content:space-between;
               align-items:center;padding:7px 18px;font-size:9.5px;color:rgba(255,255,255,0.7);">
-    <span style="color:${C.white};font-weight:700;font-size:11px;letter-spacing:1px;">mint</span>
+    <span style="color:${C.white};font-weight:700;font-size:11px;letter-spacing:1px;">MINT</span>
     <span>Policy Schedule – ${fullName} | ${policyNo} | Page ${pageNum} of ${totalPages}</span>
     <span>support@mymint.co.za</span>
   </div>

@@ -449,7 +449,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("mint", 14, 12);
+      doc.text("MINT", 14, 12);
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
       doc.text("financial services", 14, 17);
