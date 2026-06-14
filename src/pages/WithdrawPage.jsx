@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { getCachedSession } from "../lib/sessionCache.js";
+import { fetchRealizedCentsByStrategy } from "../lib/strategyValuation.js";
 
 /* Sell / withdraw flow — reached by tapping the balance card on Home.
    Cosmic deep-purple particle header fading to white, real holdings as cards,
@@ -128,9 +129,18 @@ export default function WithdrawPage({ onBack }) {
             }
           });
         }
+        // Subtract locked-in realized gains per strategy so cost basis matches
+        // the balance card (which uses the same single source of truth).
+        let realizedCentsByStrategy = {};
+        if (stratIds.length && uid) {
+          realizedCentsByStrategy = await fetchRealizedCentsByStrategy({ userId: uid, strategyIds: stratIds });
+        }
+
         const stratItems = stratIds.map((sid) => {
           const s = stratMap[sid];
-          const pnl = s.value - s.cost;
+          const realizedRands = (realizedCentsByStrategy[sid] || 0) / 100;
+          const adjustedCost = Math.max(0, s.cost - realizedRands);
+          const pnl = s.value - adjustedCost;
           return {
             id: `strat:${sid}`,
             kind: "strategy",
@@ -139,8 +149,8 @@ export default function WithdrawPage({ onBack }) {
             name: `${s.count} asset${s.count === 1 ? "" : "s"}`,
             logo: s.logo,
             value: s.value,
-            cost: s.cost,
-            change: s.cost > 0 ? (pnl / s.cost) * 100 : 0,
+            cost: adjustedCost,
+            change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
             up: pnl >= 0,
           };
         });
