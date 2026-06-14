@@ -51,10 +51,12 @@ const INSURE_ENABLED = import.meta.env.VITE_ENABLE_INSURE === "true";
 
 const CARD_VISIBILITY_KEY = "mintBalanceVisible";
 
-// Cost basis per share in Rands. Prefers Expected_fill (the price the client
-// saw at click time, in rands) over avg_fill (broker fill, in cents — captures
-// the company spread which should not leak into client PnL).
+// Cost basis per share in Rands. Prefers invested_amount from DB (actual rands
+// deducted from wallet) divided by qty. Falls back to Expected_fill then avg_fill/100.
 const costBasisRandsPerShare = (holding) => {
+  const qty = Number(holding?.quantity || 0);
+  const investedCents = Number(holding?.invested_amount || 0);
+  if (investedCents > 0 && qty > 0) return investedCents / 100 / qty;
   const expected = Number(holding?.Expected_fill || 0);
   if (expected > 0) return expected;
   const avgFillCents = Number(holding?.avg_fill || 0);
@@ -979,7 +981,10 @@ const HomePage = ({
 
         const formatted = serverStrategies
           .map((s) => {
-          const invested = Number(s.investedAmount) || 0;
+          const holdingsInvested = (s.holdings || [])
+            .filter(h => Number(h.avg_fill || 0) > 0)
+            .reduce((sum, h) => sum + Number(h.invested_amount || 0) / 100, 0);
+          const invested = holdingsInvested > 0 ? holdingsInvested : (Number(s.investedAmount) || 0);
           const rawCurrent = s.currentMarketValue;
           const currentValue = rawCurrent != null && Number.isFinite(Number(rawCurrent))
             ? Number(Number(rawCurrent).toFixed(2))

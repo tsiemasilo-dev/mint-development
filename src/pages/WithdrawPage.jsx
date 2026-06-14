@@ -70,14 +70,17 @@ export default function WithdrawPage({ onBack }) {
         // Only filled holdings (avg_fill > 0) are sellable.
         const holdings = (json.holdings || []).filter((h) => Number(h.avg_fill || 0) > 0);
 
-        // Per-holding value + cost basis (max(Expected_fill, avg_fill/100) × qty).
+        // Per-holding value + cost basis.
+        // Prefer invested_amount from DB (actual rands deducted from wallet) over
+        // a recalculation from fill prices, which can differ by spread/rounding.
         const enrich = (h) => {
           const qty = Number(h.quantity || 0);
           const value = Number(h.market_value || 0) / 100;
+          const investedCents = Number(h.invested_amount || 0);
           const avgFillR = Number(h.avg_fill || 0) / 100;
           const expRaw = Number(h.Expected_fill || 0);
           const expR = expRaw > 0 ? (avgFillR > 0 && expRaw > avgFillR * 5 ? expRaw / 100 : expRaw) : 0;
-          const cost = Math.max(expR, avgFillR) * qty;
+          const cost = investedCents > 0 ? investedCents / 100 : Math.max(expR, avgFillR) * qty;
           const pnl = value - cost;
           return { qty, value, cost, change: cost > 0 ? (pnl / cost) * 100 : 0, up: pnl >= 0 };
         };
