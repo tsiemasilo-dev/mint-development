@@ -533,20 +533,17 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   // ── snapshot rows (period chart + available period locks) ─────────────────
   useEffect(() => {
     if (!userSelectedStrategy?.strategyId || !profile?.id) return;
-    // Cap to last weekday so weekend EOD rows don't skew the chart anchor.
-    const _now = new Date();
-    const _dow = _now.getUTCDay();
-    const _offset = _dow === 6 ? 1 : _dow === 0 ? 2 : 0;
-    const _d = new Date(_now);
-    _d.setUTCDate(_now.getUTCDate() - _offset);
-    const lastWeekdayStr = _d.toISOString().split("T")[0];
+    // Use today's date — stored P&L rows are computed daily with correct calendar
+    // lookback. Capping to the last weekday on a Sunday shifts the 22-row anchor
+    // 2 days too early (May 12 instead of May 14), skewing the chart baseline.
+    const todayStr = new Date().toISOString().split("T")[0];
     supabase
       .from("client_strategy_returns_c")
       .select("as_of_date, basket_value, ytd_pct, ytd_pnl")
       .eq("user_id", profile.id)
       .is("family_member", null)
       .eq("strategy_id", userSelectedStrategy.strategyId)
-      .lte("as_of_date", lastWeekdayStr)
+      .lte("as_of_date", todayStr)
       .order("as_of_date", { ascending: true })
       .then(({ data }) => {
         if (data && data.length > 0) {
