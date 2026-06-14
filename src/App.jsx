@@ -56,6 +56,7 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage.jsx"));
 const LegalDocumentationPage = lazy(() => import("./pages/LegalDocumentationPage.jsx"));
 const StatementsPage = lazy(() => import("./pages/StatementsPage.jsx"));
 const DepositPage = lazy(() => import("./pages/DepositPage.jsx"));
+const WithdrawPage = lazy(() => import("./pages/WithdrawPage.jsx"));
 const IdentityCheckPage = lazy(() => import("./pages/IdentityCheckPage.jsx"));
 const BankLinkPage = lazy(() => import("./pages/BankLinkPage.jsx"));
 const MintBankPage = lazy(() => import("./pages/MintBankPage.jsx"));
@@ -1596,6 +1597,21 @@ const App = () => {
         onCloseModal={() => { }}
       >
         <DepositPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "withdraw") {
+    return (
+      <AppLayout
+        activeTab="withdraw"
+        onTabChange={handleTabChange}
+        onWithdraw={() => { }}
+        onShowComingSoon={() => { }}
+        modal={null}
+        onCloseModal={() => { }}
+      >
+        <WithdrawPage userId={userId} onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
       </AppLayout>
     );
   }

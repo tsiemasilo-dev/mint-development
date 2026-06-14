@@ -1402,7 +1402,16 @@ const HomePage = ({
           {homeTab === "balance" || homeTab === "invest" ? (
             <div className="relative select-none -mx-2 md:mx-0">
               <div className="relative w-full touch-pan-y h-auto">
-                <div className="relative h-auto rounded-[28px] border border-white/10">
+                <div
+                  className="relative h-auto rounded-[28px] border border-white/10 cursor-pointer"
+                  role="button"
+                  onClick={(e) => {
+                    // Tap (not swipe) on the card body → open the sell/holdings page.
+                    // Ignore taps on interactive controls inside the card.
+                    if (e.target.closest('button, a, input, select, svg, [role="button"]')) return;
+                    window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "withdraw" } }));
+                  }}
+                >
                   <SwipeableBalanceCard
                     userId={userId}
                     isBackFacing
