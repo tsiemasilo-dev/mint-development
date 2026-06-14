@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { getCachedSession } from "../lib/sessionCache.js";
-import { fetchRealizedCentsByStrategy } from "../lib/strategyValuation.js";
+import { fetchRealizedCentsByStrategy, fetchStrategyCashCents } from "../lib/strategyValuation.js";
 
 /* Sell / withdraw flow — reached by tapping the balance card on Home.
    Cosmic deep-purple particle header fading to white, real holdings as cards,
@@ -72,16 +72,20 @@ export default function WithdrawPage({ onBack }) {
         const holdings = (json.holdings || []).filter((h) => Number(h.avg_fill || 0) > 0);
 
         // Per-holding value + cost basis.
-        // Prefer invested_amount from DB (actual rands deducted from wallet) over
-        // a recalculation from fill prices, which can differ by spread/rounding.
+        // Mirror SwipeableBalanceCard lines 522-527 exactly:
+        //   costBasisPerShare = max(Expected_fill_rands, avg_fill/100) when Expected_fill > 0
+        //   invested = Math.round(costBasisPerShare * 100 * qty)
+        // Using DB invested_amount would differ when Expected_fill > avg_fill/100, causing
+        // a mismatch vs the balance card.
         const enrich = (h) => {
           const qty = Number(h.quantity || 0);
           const value = Number(h.market_value || 0) / 100;
-          const investedCents = Number(h.invested_amount || 0);
-          const avgFillR = Number(h.avg_fill || 0) / 100;
-          const expRaw = Number(h.Expected_fill || 0);
-          const expR = expRaw > 0 ? (avgFillR > 0 && expRaw > avgFillR * 5 ? expRaw / 100 : expRaw) : 0;
-          const cost = investedCents > 0 ? investedCents / 100 : Math.max(expR, avgFillR) * qty;
+          const avgFillRands = Number(h.avg_fill || 0) / 100;
+          const expectedFillRands = Number(h.Expected_fill || 0); // already in rands from API
+          const costBasisPerShare = expectedFillRands > 0
+            ? Math.max(expectedFillRands, avgFillRands)
+            : avgFillRands;
+          const cost = Math.round(costBasisPerShare * 100 * qty) / 100;
           const pnl = value - cost;
           return { qty, value, cost, change: cost > 0 ? (pnl / cost) * 100 : 0, up: pnl >= 0 };
         };
@@ -129,18 +133,25 @@ export default function WithdrawPage({ onBack }) {
             }
           });
         }
-        // Subtract locked-in realized gains per strategy so cost basis matches
-        // the balance card (which uses the same single source of truth).
+        // Match balance card cost formula exactly:
+        //   cost = Σ(invested_amount/100) + bufferCash + residualCash − realizedCents/100
         let realizedCentsByStrategy = {};
+        let bufferCentsByStrategy = {};
+        let residualCentsByStrategy = {};
         if (stratIds.length && uid) {
-          realizedCentsByStrategy = await fetchRealizedCentsByStrategy({ userId: uid, strategyIds: stratIds });
+          [realizedCentsByStrategy, { bufferCentsByStrategy, residualCentsByStrategy }] = await Promise.all([
+            fetchRealizedCentsByStrategy({ userId: uid, strategyIds: stratIds }),
+            fetchStrategyCashCents({ userId: uid, strategyIds: stratIds }),
+          ]);
         }
 
         const stratItems = stratIds.map((sid) => {
           const s = stratMap[sid];
+          const bufResRands = ((bufferCentsByStrategy[sid] || 0) + (residualCentsByStrategy[sid] || 0)) / 100;
           const realizedRands = (realizedCentsByStrategy[sid] || 0) / 100;
-          const adjustedCost = Math.max(0, s.cost - realizedRands);
-          const pnl = s.value - adjustedCost;
+          const adjustedCost = Math.max(0, s.cost + bufResRands - realizedRands);
+          const adjustedValue = s.value + bufResRands;
+          const pnl = adjustedValue - adjustedCost;
           return {
             id: `strat:${sid}`,
             kind: "strategy",
@@ -148,7 +159,7 @@ export default function WithdrawPage({ onBack }) {
             symbol: s.name || "Strategy",
             name: `${s.count} asset${s.count === 1 ? "" : "s"}`,
             logo: s.logo,
-            value: s.value,
+            value: adjustedValue,
             cost: adjustedCost,
             change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
             up: pnl >= 0,
