@@ -195,23 +195,6 @@ const ChildMorePage = ({ child, onCloseAccount, onBackToParent }) => {
         </div>
 
         <div>
-          <p className="text-xs font-bold uppercase text-slate-400 px-1 mb-3">Account</p>
-          <button
-            onClick={onBackToParent}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white border border-slate-100 px-4 py-3.5 shadow-sm text-left transition active:scale-[0.99]"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
-              <LogOut className="h-4 w-4 text-slate-500" />
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">Back to Main Account</p>
-              <p className="text-xs text-slate-400 mt-0.5">Return to {parentName}'s account</p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
-          </button>
-        </div>
-
-        <div>
           <p className="text-xs font-bold uppercase text-slate-400 px-1 mb-3">Danger Zone</p>
           <button
             onClick={onCloseAccount}
