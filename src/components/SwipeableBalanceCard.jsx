@@ -545,22 +545,6 @@ const SwipeableBalanceCard = ({
 
           // Strategy grouping + per-strategy cash is built in the shared block
           // below — driven by holdings so fresh buys appear without a returns row.
-
-          // Dedup guard: if a rebalance created new rows (is_active=true) without
-          // deactivating the old ones (is_active=null), both rows exist in the DB
-          // with Status='active'. For any (security_id, strategy_id) pair that has
-          // at least one is_active=true row, drop all is_active=null rows — they are
-          // stale pre-rebalance positions. When all rows for a position are null
-          // (normal single-purchase case), keep them all.
-          const posKey = (h) => `${h.security_id || ''}__${h.strategy_id || 'direct'}`;
-          const activeTrueKeys = new Set(
-            enrichedHoldings.filter(h => h.is_active === true).map(posKey)
-          );
-          if (activeTrueKeys.size > 0) {
-            enrichedHoldings = enrichedHoldings.filter(
-              h => !activeTrueKeys.has(posKey(h)) || h.is_active === true
-            );
-          }
         }
 
         /* ── Strategy grouping + per-strategy CASH (residual + 8% buffer) ──────────

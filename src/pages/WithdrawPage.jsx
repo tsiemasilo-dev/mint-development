@@ -82,7 +82,7 @@ export default function WithdrawPage({ onBack }) {
           return { qty, value, cost, change: cost > 0 ? (pnl / cost) * 100 : 0, up: pnl >= 0 };
         };
 
-        const singleAssets = holdings.map((h) => {
+        const singleAssets = holdings.filter((h) => !h.strategy_id).map((h) => {
           const e = enrich(h);
           return {
             id: `sec:${h.id}`,
@@ -143,7 +143,7 @@ export default function WithdrawPage({ onBack }) {
         });
 
         // Totals + journey start.
-        const totalCost = [...singleAssets].reduce((a, x) => a + x.cost, 0);
+        const totalCost = [...singleAssets, ...stratItems].reduce((a, x) => a + x.cost, 0);
         let earliest = null;
         holdings.forEach((h) => {
           const t = h.created_at ? new Date(h.created_at) : null;
