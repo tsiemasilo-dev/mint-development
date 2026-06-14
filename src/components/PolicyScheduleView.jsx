@@ -178,7 +178,7 @@ export default function PolicyScheduleView({
         style={{ background: PURPLE_DARK }}
       >
         <div className="flex items-center gap-3">
-          <img src={mintLogo} alt="Mint" className="h-6 w-auto" />
+          <img src={mintLogo} alt="MINT" className="h-6 w-auto" />
           <div>
             <p className="text-[10px] text-white/60 uppercase tracking-widest leading-none">
               Wills &amp; Funeral Specialists
@@ -200,7 +200,7 @@ export default function PolicyScheduleView({
         <div className="w-full h-48 overflow-hidden">
           <img
             src={heroImg}
-            alt="Mint Funeral Cover"
+            alt="MINT Funeral Cover"
             className="w-full h-full object-cover object-center"
           />
         </div>
@@ -211,7 +211,7 @@ export default function PolicyScheduleView({
           {/* Flutter: Text('MINT') + Text('WILLS & FUNERAL SPECIALISTS') + Divider */}
           <div>
             <p className="text-2xl font-extrabold uppercase" style={{ color: PURPLE }}>
-              Mint
+              MINT
             </p>
             <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: "#888" }}>
               Wills &amp; Funeral Specialists
@@ -231,7 +231,7 @@ export default function PolicyScheduleView({
               Dear {fullName},
             </p>
             <p className="text-sm leading-relaxed" style={{ color: "#555" }}>
-              Thank you for choosing the Mint Funeral Plan. We are honoured to be your
+              Thank you for choosing the MINT Funeral Plan. We are honoured to be your
               trusted financial partner and committed to ensuring your loved ones are cared
               for at their most vulnerable time.
             </p>
@@ -334,7 +334,7 @@ export default function PolicyScheduleView({
           {/* Legal notice */}
           <p className="text-[10px] leading-relaxed pb-2" style={{ color: "#aaa" }}>
             A 6-month waiting period applies from the policy start date. Underwritten by
-            GuardRisk Life Ltd — FSP 76. Mint Financial Services (Pty) Ltd — FSP No. 55118.
+            GuardRisk Life Ltd — FSP 76. MINT Financial Services (Pty) Ltd — FSP No. 55118.
           </p>
         </div>
       </div>

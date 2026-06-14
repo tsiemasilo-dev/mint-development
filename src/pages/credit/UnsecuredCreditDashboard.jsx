@@ -449,7 +449,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("mint", 14, 12);
+      doc.text("MINT", 14, 12);
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
       doc.text("financial services", 14, 17);
@@ -481,7 +481,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
         "This credit agreement is governed by the National Credit Act 34 of 2005 (NCA) and all regulations",
         "promulgated thereunder. The credit provider is registered with the National Credit Regulator (NCR).",
         "",
-        "NCR REGISTRATION: Mint Financial Services is a registered credit provider as required under s40 of the NCA.",
+        "NCR REGISTRATION: MINT Financial Services is a registered credit provider as required under s40 of the NCA.",
         "Cost of credit is disclosed in full below as required by s92 of the NCA. The consumer has a right to receive",
         "a pre-agreement statement and quotation before concluding any credit agreement (NCA s92 & s93).",
         "",
@@ -661,7 +661,7 @@ const UnsecuredCreditDashboard = ({ profile, onTabChange, onOpenNotifications })
         doc.setTextColor(180, 180, 185);
         doc.setFont("helvetica", "normal");
         doc.text(
-          "This document is computer-generated and does not require a signature. Mint Financial Services · NCR Registered · NCA Compliant",
+          "This document is computer-generated and does not require a signature. MINT Financial Services · NCR Registered · NCA Compliant",
           W / 2, doc.internal.pageSize.getHeight() - 8, { align: "center" }
         );
         doc.text(`Page ${i} of ${pageCount}`, W - 10, doc.internal.pageSize.getHeight() - 8, { align: "right" });

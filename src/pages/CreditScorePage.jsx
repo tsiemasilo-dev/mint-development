@@ -222,7 +222,7 @@ const CreditScorePage = ({ onBack }) => {
 
           <div className="w-full">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>{hasExperian ? "Experian" : "Mint Engine"}</span>
+              <span>{hasExperian ? "Experian" : "MINT Engine"}</span>
               <span>{updatedLabel}</span>
             </div>
             <div className="relative mt-3 h-3 w-full rounded-full bg-gradient-to-r from-purple-500 via-indigo-400 to-emerald-300">
@@ -251,7 +251,7 @@ const CreditScorePage = ({ onBack }) => {
           {hasExperian && hasScore && (
             <div className="w-full mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2">
               <span className="text-[10px] uppercase font-bold text-slate-400">
-                Mint Engine Score
+                MINT Engine Score
               </span>
               <span className="text-sm font-black text-slate-800">
                 {Math.round(scoreSnapshot.score)}%
@@ -348,7 +348,7 @@ const CreditScorePage = ({ onBack }) => {
                 ? "Hide history"
                 : hasScore
                   ? "Score history"
-                  : "Check Mint score standing"}
+                  : "Check MINT score standing"}
             </button>
           </div>
           {showScoreHistory && (
@@ -378,7 +378,7 @@ const CreditScorePage = ({ onBack }) => {
                 ))
               ) : (
                 <p className="text-sm text-slate-500">
-                  No score activity to show yet. Run your Mint score check to
+                  No score activity to show yet. Run your MINT score check to
                   unlock insights.
                 </p>
               )}

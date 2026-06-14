@@ -58,7 +58,7 @@ const MintBalancePage = ({
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold">Mint Balance</h1>
+            <h1 className="text-lg font-semibold">MINT Balance</h1>
           </header>
 
           <MintBalanceCard
@@ -73,7 +73,7 @@ const MintBalancePage = ({
 
       <div className="mx-auto -mt-10 flex w-full max-w-sm flex-col gap-6 px-4 pb-10 md:max-w-md md:px-8">
         <section className="rounded-3xl bg-white px-5 py-5 shadow-sm ring-1 ring-slate-100">
-          <h2 className="text-sm font-semibold text-slate-900">What makes up your Mint Balance</h2>
+          <h2 className="text-sm font-semibold text-slate-900">What makes up your MINT Balance</h2>
           
           {hasBalance ? (
             <div className="mt-4 flex flex-col gap-4">
@@ -112,7 +112,7 @@ const MintBalancePage = ({
                 <TrendingUp className="h-8 w-8" />
               </div>
               <p className="text-sm font-semibold text-slate-900 mb-1">Your balance is R0</p>
-              <p className="text-xs text-slate-500 mb-4">Start investing or apply for credit to grow your Mint Balance</p>
+              <p className="text-xs text-slate-500 mb-4">Start investing or apply for credit to grow your MINT Balance</p>
               <div className="flex items-center justify-center gap-3">
                 <button
                   type="button"

@@ -1836,7 +1836,7 @@ const SwipeableBalanceCard = ({
                   </div>
                   <span className="text-[9px] font-medium text-slate-700 truncate">{item.symbol}</span>
                   {(() => {
-                    if (item.isStrategy && Number(item.avg_fill || 0) === 0) return <SettlementBadge status="pending" size="xs" />;
+                    if (!item.isStrategy && Number(item.avg_fill || 0) === 0) return <SettlementBadge status="pending" size="xs" />;
                     if (item.settlement_status && item.settlement_status !== "confirmed") return <SettlementBadge status={item.settlement_status} size="xs" />;
                     const isSettlementActive = settlementCfg.brokerEnabled || settlementCfg.fullyIntegrated;
                     if (!isSettlementActive) return null;

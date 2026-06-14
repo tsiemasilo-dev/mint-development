@@ -52,7 +52,7 @@ export default function BiometricsDebugPage({ onNavigate, onBack }) {
       }
 
       addLog("Prompting biometrics...");
-      await authenticateWithBiometrics("Sign in to Mint");
+      await authenticateWithBiometrics("Sign in to MINT");
       addLog("Authentication successful.");
     } catch (error) {
       addLog("Authentication failed.");

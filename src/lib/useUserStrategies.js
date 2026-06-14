@@ -587,20 +587,11 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", fa
 
         const columns = columnMap[activeTab];
 
-        // Cap to the most recent weekday so weekend EOD rows don't pollute the badge.
-        const _now = new Date();
-        const _dow = _now.getUTCDay(); // 0=Sun, 6=Sat
-        const _offset = _dow === 6 ? 1 : _dow === 0 ? 2 : 0;
-        const _lastWeekday = new Date(_now);
-        _lastWeekday.setUTCDate(_now.getUTCDate() - _offset);
-        const lastWeekdayStr = _lastWeekday.toISOString().split("T")[0];
-
         let query = supabase
           .from("client_strategy_returns_c")
           .select("*")
           .eq("user_id", userId)
-          .eq("strategy_id", strategyId)
-          .lte("as_of_date", lastWeekdayStr);
+          .eq("strategy_id", strategyId);
         query = familyMemberId
           ? query.eq("family_member", familyMemberId)
           : query.is("family_member", null);

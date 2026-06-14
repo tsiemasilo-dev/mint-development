@@ -2787,10 +2787,10 @@ const HomePage = ({
           {/* Steps */}
           <div className="px-6 py-5 space-y-4">
             {[
-              { step: '1', emoji: '📈', title: 'Pick an investment', desc: 'Choose any stock, ETF or basket from the Mint catalogue', cls: 'gift-intro-step-1' },
+              { step: '1', emoji: '📈', title: 'Pick an investment', desc: 'Choose any stock, ETF or basket from the MINT catalogue', cls: 'gift-intro-step-1' },
               { step: '2', emoji: '💸', title: 'Set the amount', desc: 'You decide how much to gift — starts from R100', cls: 'gift-intro-step-2' },
               { step: '3', emoji: '📧', title: 'Send via email', desc: 'Enter the recipient\'s email address — we handle the rest', cls: 'gift-intro-step-3' },
-              { step: '4', emoji: '🎉', title: 'They claim & invest', desc: 'Your gift lands in their Mint portfolio once claimed', cls: 'gift-intro-step-4' },
+              { step: '4', emoji: '🎉', title: 'They claim & invest', desc: 'Your gift lands in their MINT portfolio once claimed', cls: 'gift-intro-step-4' },
             ].map(({ step, emoji, title, desc, cls }) => (
               <div key={step} className={`${cls} flex items-start gap-3.5`}>
                 <div className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-violet-200"

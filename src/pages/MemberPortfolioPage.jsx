@@ -257,7 +257,7 @@ export default function MemberPortfolioPage({ member, onBack }) {
             <div className="divide-y divide-slate-50">
               {[
                 { label: "Account Type", value: isSpouse ? "Spouse" : "Child", icon: isSpouse ? <Heart className="h-4 w-4" style={{ color: "#e11d48" }} /> : <Baby className="h-4 w-4 text-indigo-400" /> },
-                { label: "Mint Number", value: member.mint_number || "—", icon: <ShieldCheck className="h-4 w-4 text-emerald-400" /> },
+                { label: "MINT Number", value: member.mint_number || "—", icon: <ShieldCheck className="h-4 w-4 text-emerald-400" /> },
                 ...(age !== null ? [{ label: "Age", value: `${age} years old`, icon: <Clock className="h-4 w-4 text-slate-400" /> }] : []),
               ].map(({ label, value, icon }) => (
                 <div key={label} className="flex items-center gap-3 px-4 py-3.5">

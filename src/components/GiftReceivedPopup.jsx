@@ -59,7 +59,7 @@ export default function GiftReceivedPopup({ onClaim }) {
 
         <div className="bg-white px-6 py-5 space-y-4">
           <p className="text-slate-500 text-sm text-center leading-relaxed">
-            {visible.body || "Someone gifted you an investment on Mint. Claim it before it expires!"}
+            {visible.body || "Someone gifted you an investment on MINT. Claim it before it expires!"}
           </p>
 
           <button

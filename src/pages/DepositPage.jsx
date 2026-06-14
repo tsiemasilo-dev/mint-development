@@ -67,7 +67,7 @@ const DepositPage = ({ onBack }) => {
         </div>
         <h1 className="text-2xl font-bold text-white">Deposit Funds</h1>
         <p className="mt-1 text-sm text-white/65">
-          Use the details below to make an EFT into your Mint account
+          Use the details below to make an EFT into your MINT account
         </p>
       </div>
 
@@ -146,21 +146,21 @@ const DepositPage = ({ onBack }) => {
           </div>
         </div>
 
-        {/* Reference / Mint Number */}
+        {/* Reference / MINT Number */}
         <div className="rounded-2xl bg-white shadow-sm border border-[#31005e]/20 overflow-hidden">
           <div className="px-5 py-4">
             <p className="text-[10px] uppercase tracking-widest text-[#31005e]/60 font-semibold mb-3">Payment Reference</p>
             <div className="flex items-center justify-between rounded-xl bg-violet-50 px-3.5 py-3">
               <div>
-                <p className="text-[10px] text-violet-500 mb-0.5">Your Mint Number</p>
+                <p className="text-[10px] text-violet-500 mb-0.5">Your MINT Number</p>
                 <p className="text-sm font-bold text-violet-900 tracking-widest">
                   {mintNumber ?? "Loading..."}
                 </p>
               </div>
-              {mintNumber && <CopyButton value={mintNumber} label="Mint Number" />}
+              {mintNumber && <CopyButton value={mintNumber} label="MINT Number" />}
             </div>
             <p className="mt-2.5 text-[11px] text-slate-500 leading-relaxed">
-              Always use your Mint number as the payment reference so we can allocate your deposit correctly.
+              Always use your MINT number as the payment reference so we can allocate your deposit correctly.
             </p>
           </div>
         </div>

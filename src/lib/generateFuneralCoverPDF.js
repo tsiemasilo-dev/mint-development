@@ -140,13 +140,13 @@ function footerBar(policyNo, fullName, pageNum, totalPages) {
   return `
   <div style="background:${C.purpleDark};display:flex;justify-content:space-between;
               align-items:center;padding:7px 18px;font-size:9.5px;color:rgba(255,255,255,0.7);">
-    <span style="color:${C.white};font-weight:700;font-size:11px;letter-spacing:1px;">mint</span>
+    <span style="color:${C.white};font-weight:700;font-size:11px;letter-spacing:1px;">MINT</span>
     <span>Policy Schedule – ${fullName} | ${policyNo} | Page ${pageNum} of ${totalPages}</span>
     <span>support@mymint.co.za</span>
   </div>
   <div style="background:${C.purple};text-align:center;padding:4px 18px;
               font-size:8.5px;color:rgba(255,255,255,0.55);">
-    Mint Financial Services (Pty) Ltd | FSP No. ${FSP_NUMBER} | Underwritten by GuardRisk Life Ltd — FSP 76
+    MINT Financial Services (Pty) Ltd | FSP No. ${FSP_NUMBER} | Underwritten by GuardRisk Life Ltd — FSP 76
   </div>`;
 }
 
@@ -254,7 +254,7 @@ export async function generateFuneralCoverPDF({
         Dear ${fullName},
       </h1>
       <p style="font-size:13px;color:${C.textMid};line-height:1.7;margin-bottom:12px;">
-        Thank you for choosing the Mint Funeral Plan. We are honoured to be your trusted financial
+        Thank you for choosing the MINT Funeral Plan. We are honoured to be your trusted financial
         services partner and committed to ensuring your loved ones are cared for at their most
         vulnerable time.
       </p>
@@ -281,7 +281,7 @@ export async function generateFuneralCoverPDF({
                style="height:40px;display:block;margin:0 auto 4px;object-fit:contain;">
           <div style="font-weight:700;font-size:12px;color:${C.text};">Lonwabo</div>
           <div style="font-size:10px;color:#777;">Chief Executive Officer</div>
-          <div style="font-size:10px;color:${C.purple};font-weight:500;">Mint Financial Services (Pty) Ltd</div>
+          <div style="font-size:10px;color:${C.purple};font-weight:500;">MINT Financial Services (Pty) Ltd</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:9px;color:#777;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">
@@ -414,9 +414,9 @@ export async function generateFuneralCoverPDF({
         No benefits are payable for natural causes of death during this period. The Accidental
         Death benefit (where selected) is not subject to the waiting period.`)}
       ${tcBlock("📈", "Premium Changes",
-        "Your monthly premium may increase in line with inflation or adverse claims experience. Mint will give you thirty-one (31) days' written notice of any change.")}
+        "Your monthly premium may increase in line with inflation or adverse claims experience. MINT will give you thirty-one (31) days' written notice of any change.")}
       ${tcBlock("📋", "Claim Submission",
-        "All claims must be submitted within six (6) months of the insured event. Required: certified death certificate, ID documents, completed Mint claim form, and any additional documents requested.")}
+        "All claims must be submitted within six (6) months of the insured event. Required: certified death certificate, ID documents, completed MINT claim form, and any additional documents requested.")}
       ${tcBlock("⚠️", "Non-Disclosure",
         "Failure to disclose any material information — including pre-existing health conditions — may result in a claim being repudiated. All information must be accurate and truthful.")}
       ${tcBlock("🔄", "Lapse & Reinstatement",
@@ -444,7 +444,7 @@ export async function generateFuneralCoverPDF({
       </p>
 
       ${infoBlock("🏢", "The Administrator / Binder Holder", `
-        <p><strong>Name:</strong> Mint Financial Services (Pty) Ltd &nbsp;|&nbsp;
+        <p><strong>Name:</strong> MINT Financial Services (Pty) Ltd &nbsp;|&nbsp;
            <strong>FSP:</strong> ${FSP_NUMBER}</p>
         <p><strong>Address:</strong> Sandton, Johannesburg, 2196 &nbsp;|&nbsp;
            <strong>Email:</strong> support@mymint.co.za &nbsp;|&nbsp;
@@ -452,7 +452,7 @@ export async function generateFuneralCoverPDF({
         <p><strong>Category:</strong> Long-term Insurance: A, B1, B1-A, B2, B2-A, C</p>`)}
 
       ${infoBlock("💼", "Financial Services Provider", `
-        <p><strong>Name:</strong> Mint Financial Services (Pty) Ltd &nbsp;|&nbsp;
+        <p><strong>Name:</strong> MINT Financial Services (Pty) Ltd &nbsp;|&nbsp;
            <strong>FSP Licence:</strong> ${FSP_NUMBER}</p>
         <p>An Authorised Financial Services Provider under the FAIS Act and Long-term Insurance Act.</p>`)}
 
@@ -505,7 +505,7 @@ export async function generateFuneralCoverPDF({
           <p><strong>Postal:</strong> PO Box 35655, Menlo Park, 0102</p>
           <p><strong>Tel:</strong> +27 12 428 8000 &nbsp;|&nbsp;
              <strong>Email:</strong> info@fsca.co.za</p>`)}
-        ${regCard("✉️", "Mint Client Support", `
+        ${regCard("✉️", "MINT Client Support", `
           <p><strong>Email:</strong> support@mymint.co.za</p>
           <p><strong>Web:</strong> www.mymint.co.za</p>
           <p><strong>FSP No:</strong> ${FSP_NUMBER} &nbsp;|&nbsp;
@@ -537,7 +537,7 @@ export async function generateFuneralCoverPDF({
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Mint Policy Schedule — ${policyNo}</title>
+<title>MINT Policy Schedule — ${policyNo}</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page { size: A4; margin: 0; }

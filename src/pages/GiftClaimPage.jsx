@@ -105,7 +105,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
     <div className="min-h-screen bg-[#f8f6fa] flex items-center justify-center px-6 py-10">
       <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-sm">
         <div className="text-center mb-6">
-          <div className="text-3xl font-extrabold text-[#1e1b4b]">mint</div>
+          <div className="text-3xl font-extrabold text-[#1e1b4b]">MINT</div>
           <div className="text-slate-400 text-xs mt-1">Investment Gift</div>
         </div>
 
@@ -149,7 +149,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
         {mintRequired && (
           <div className="bg-amber-50 rounded-2xl p-5 mb-4">
             <p className="text-amber-800 font-semibold text-sm mb-1">Account setup required</p>
-            <p className="text-amber-700 text-xs leading-relaxed mb-4">You need to finish setting up your Mint account before claiming this gift.</p>
+            <p className="text-amber-700 text-xs leading-relaxed mb-4">You need to finish setting up your MINT account before claiming this gift.</p>
             <button onClick={() => onNavigate?.("userOnboarding")} className="w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Complete Setup</button>
           </div>
         )}
@@ -168,15 +168,15 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
         {isRegistrationRequired && (
           <div className="bg-amber-50 rounded-2xl p-5 mb-4">
             <p className="text-amber-800 font-semibold text-sm mb-1">Account required</p>
-            <p className="text-amber-700 text-xs leading-relaxed">To receive this gift, create a Mint account and complete your FICA verification. Once verified, your gift will be waiting for you.</p>
-            <button onClick={() => onNavigate?.("auth")} className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Register on Mint</button>
+            <p className="text-amber-700 text-xs leading-relaxed">To receive this gift, create a MINT account and complete your FICA verification. Once verified, your gift will be waiting for you.</p>
+            <button onClick={() => onNavigate?.("auth")} className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Register on MINT</button>
           </div>
         )}
 
         {isAlreadyClaimed && !success && (
           <div className="bg-emerald-50 rounded-2xl p-5 mb-4 text-center">
             <p className="text-emerald-700 font-semibold text-sm">This gift has been claimed.</p>
-            <button onClick={() => onNavigate?.("home")} className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Go to Mint</button>
+            <button onClick={() => onNavigate?.("home")} className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-br from-[#1e1b4b] to-[#312e81] text-white font-semibold text-sm">Go to MINT</button>
           </div>
         )}
 
@@ -189,7 +189,7 @@ export default function GiftClaimPage({ token, onBack, onNavigate }) {
           </div>
         )}
 
-        <p className="text-slate-300 text-xs text-center mt-4">Mint — Smart investing for South African families</p>
+        <p className="text-slate-300 text-xs text-center mt-4">MINT — Smart investing for South African families</p>
       </div>
     </div>
   );

@@ -718,12 +718,19 @@ export const useInvestments = () => {
         const invested = g.current_amount || 0;
         let currentValue = invested;
 
-        if (g.linked_security_id || g.linked_strategy_id) {
+        // Read linked IDs directly from the Supabase investment_goals row
+        const linkedStrategyId = g.linked_strategy_id || null;
+        const linkedSecurityId = g.linked_security_id || null;
+
+        if (linkedStrategyId || linkedSecurityId) {
           const linkedHolding = holdings.find(
-            (h) => h.security_id === g.linked_security_id || h.strategy_id === g.linked_strategy_id
+            (h) => (linkedStrategyId && h.strategy_id === linkedStrategyId) ||
+                   (linkedSecurityId && h.security_id === linkedSecurityId)
           );
           if (linkedHolding) {
-            const marketVal = linkedHolding.last_price != null && linkedHolding.quantity != null ? (linkedHolding.last_price * linkedHolding.quantity) / 100 : (linkedHolding.market_value || 0) / 100;
+            const marketVal = linkedHolding.last_price != null && linkedHolding.quantity != null
+              ? (linkedHolding.last_price * linkedHolding.quantity) / 100
+              : (linkedHolding.market_value || 0) / 100;
             const costBasis = costBasisRandsPerShare(linkedHolding) * Number(linkedHolding.quantity || 0);
             const gainLoss = marketVal - costBasis;
             currentValue = invested + (costBasis > 0 ? (gainLoss / costBasis) * invested : 0);

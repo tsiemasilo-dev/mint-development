@@ -382,7 +382,7 @@ export const createWelcomeNotification = async (userId) => {
 
     await supabase.from("notifications").insert({
       user_id: userId,
-      title: "Welcome to Mint!",
+      title: "Welcome to MINT!",
       body: "We're excited to have you on board. Start by completing your profile and exploring your investment options.",
       type: "system",
       payload: { action: "complete_profile" },
@@ -475,7 +475,7 @@ export const createBankNotification = async (userId, status, bankName = "your ba
     },
     removed: {
       title: "Bank Account Removed",
-      body: `Your ${bankName} account has been unlinked from your Mint account.`,
+      body: `Your ${bankName} account has been unlinked from your MINT account.`,
       payload: { action: "bank_removed", status: "removed", bank: bankName },
     },
   };

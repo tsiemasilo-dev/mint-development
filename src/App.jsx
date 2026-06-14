@@ -65,6 +65,7 @@ const PinSetupPage = lazy(() => import("./pages/PinSetupPage.jsx"));
 const FamilyDashboardPage = lazy(() => import("./pages/FamilyDashboardPage.jsx"));
 const ChildDashboardPage = lazy(() => import("./pages/ChildDashboardPage.jsx"));
 const FuneralCoverPage = lazy(() => import("./pages/FuneralCoverPage.jsx"));
+const DeleteAccountPage = lazy(() => import("./pages/DeleteAccountPage.jsx"));
 import { useInactivityTimeout } from "./lib/useInactivityTimeout.jsx";
 import PinLockScreen from "./components/PinLockScreen.jsx";
 import { isPinEnabled } from "./lib/usePin.js";
@@ -1227,7 +1228,7 @@ const App = () => {
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-50">
         <div className="flex w-full max-w-sm flex-col items-center px-8">
           <div className="flex items-center gap-3 mb-10">
-            <img src="/assets/mint-logo.svg" alt="Mint" className="h-6 w-auto" />
+            <img src="/assets/mint-logo.svg" alt="MINT" className="h-6 w-auto" />
             <span className="mint-brand text-lg font-semibold tracking-[0.12em]">MINT</span>
           </div>
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white border-2 border-slate-200 shadow-sm">
@@ -1837,13 +1838,14 @@ const App = () => {
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock";
+            const linkedSecurityId = stockCheckout.security?.id || stockCheckout.security?.security_id || null;
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
                   const { data: goal, error: fetchErr } = await supabase
                     .from("investment_goals")
-                    .select("current_amount, target_amount")
+                    .select("current_amount, target_amount, linked_security_id, linked_strategy_id")
                     .eq("id", goalId)
                     .single();
                   if (fetchErr) console.error("Error fetching goal for update:", fetchErr);
@@ -1851,12 +1853,16 @@ const App = () => {
                     const prevInvested = goal.current_amount || 0;
                     const newInvested = prevInvested + (goalAmount || 0);
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    const updatePayload = {
+                      current_amount: newInvested,
+                      linked_asset_name: linkedAssetName,
+                    };
+                    if (!goal.linked_security_id && !goal.linked_strategy_id && linkedSecurityId) {
+                      updatePayload.linked_security_id = linkedSecurityId;
+                    }
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({
-                        current_amount: newInvested,
-                        linked_asset_name: linkedAssetName,
-                      })
+                      .update(updatePayload)
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
@@ -2154,13 +2160,14 @@ const App = () => {
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = selectedStrategy?.name || "Strategy";
+            const linkedStrategyId = selectedStrategy?.id || null;
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
                   const { data: goal, error: fetchErr } = await supabase
                     .from("investment_goals")
-                    .select("current_amount, target_amount")
+                    .select("current_amount, target_amount, linked_security_id, linked_strategy_id")
                     .eq("id", goalId)
                     .single();
                   if (fetchErr) console.error("Error fetching goal for update:", fetchErr);
@@ -2168,12 +2175,16 @@ const App = () => {
                     const prevInvested = goal.current_amount || 0;
                     const newInvested = prevInvested + (goalAmount || 0);
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    const updatePayload = {
+                      current_amount: newInvested,
+                      linked_asset_name: linkedAssetName,
+                    };
+                    if (!goal.linked_security_id && !goal.linked_strategy_id && linkedStrategyId) {
+                      updatePayload.linked_strategy_id = linkedStrategyId;
+                    }
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({
-                        current_amount: newInvested,
-                        linked_asset_name: linkedAssetName,
-                      })
+                      .update(updatePayload)
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
@@ -2235,6 +2246,23 @@ const App = () => {
         >
           <SettingsPage onNavigate={navigateTo} onBack={goBack} />
         </AppLayout>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "deleteAccount") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <DeleteAccountPage
+          onBack={goBack}
+          onNavigate={navigateTo}
+          onLogout={() => {
+            intentionalLogoutRef.current = true;
+            clearUserStorage();
+            clearAllUserCaches();
+            setCurrentPage("welcome");
+          }}
+        />
       </SwipeBackWrapper>
     );
   }

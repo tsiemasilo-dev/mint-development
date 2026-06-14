@@ -387,7 +387,7 @@ function StepTruIDIntro({ onNext, onCancel }) {
       </div>
 
       <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.6, textAlign: "center", marginBottom: 24, padding: "0 10px" }}>
-        To receive funds via EFT, Mint requires a secure link to your bank account via **truID**. 
+        To receive funds via EFT, MINT requires a secure link to your bank account via **truID**. 
         This ensures capital is disbursed only to your personal verified account.
       </div>
 
@@ -695,7 +695,7 @@ function StepLegal({ principal, calculation, salaryDay, verifiedAcc, profile, pl
       <div style={S.modalTitle}>Legal Review</div>
 
       <div style={S.lscroll} className="no-scrollbar">
-        <h4 style={{ color: "#0d1b2e", fontSize: 12, marginBottom: 6, fontWeight: 700 }}>Loan Agreement — Mint Securities</h4>
+        <h4 style={{ color: "#0d1b2e", fontSize: 12, marginBottom: 6, fontWeight: 700 }}>Loan Agreement — MINT Securities</h4>
         <p>Principal: {formatZAR(principal)}<br />Total Repayable: {formatZAR(calculation.totalRepayable)}<br />Term: {calculation.installments.length} months</p>
         <p>Interest includes daily accrual as per NCR Short-Term Credit regulations.</p>
         <p>Fees: Initiation ({formatZAR(calculation.initiationFee)}) + Service ({formatZAR(calculation.totalServiceFees)})</p>

@@ -75,7 +75,7 @@ export default async function generateLoanAgreementPdf({
   doc.text("(1) MINT PLATFORMS (PTY) LTD", ML, y);
   y += 5;
   doc.setFont("helvetica", "normal");
-  doc.text("Registration Number: 2024/644796/07\n(hereinafter referred to as the \"Lender\" or \"Mint\")", ML, y);
+  doc.text("Registration Number: 2024/644796/07\n(hereinafter referred to as the \"Lender\" or \"MINT\")", ML, y);
   y += 12;
 
   doc.setFont("helvetica", "bold");
@@ -91,7 +91,7 @@ export default async function generateLoanAgreementPdf({
   y += 6;
   doc.setFont("helvetica", "normal");
   const recit = [
-    "A. The Borrower holds certain financial instruments and securities in an investment account maintained on the Mint platform;",
+    "A. The Borrower holds certain financial instruments and securities in an investment account maintained on the MINT platform;",
     "B. The Borrower wishes to obtain a secured loan facility from the Lender against the pledge of such securities as collateral; and",
     "C. The Lender is willing to extend such credit facility on the terms and subject to the conditions set out in this Agreement."
   ];
@@ -171,7 +171,7 @@ export default async function generateLoanAgreementPdf({
 
   y = doc.lastAutoTable.finalY + 6;
   doc.setFontSize(7);
-  doc.text("In the event that the LTV at any time exceeds the Maintenance LTV, Mint shall notify the Borrower and the Borrower shall be obliged to remedy the deficiency within 2 hours (Margin Call).", ML, y, { maxWidth: TW });
+  doc.text("In the event that the LTV at any time exceeds the Maintenance LTV, MINT shall notify the Borrower and the Borrower shall be obliged to remedy the deficiency within 2 hours (Margin Call).", ML, y, { maxWidth: TW });
   y += 8;
 
   // --- Page Break for Clauses ---
@@ -181,7 +181,7 @@ export default async function generateLoanAgreementPdf({
   const clauses = [
     { title: "4. REPRESENTATIONS AND WARRANTIES", content: "The Borrower represents and warrants that: It is the sole legal and beneficial owner of the pledged securities, free from any encumbrance; The pledged securities are not subject to any restriction on transfer, cession, or pledge; All information provided is true, accurate, and complete; It has full legal capacity to enter into this Agreement." },
     { title: "5. ENFORCEMENT UPON DEFAULT", content: "Upon an Event of Default (including payment default, breach of margin requirements, or insolvency), the Lender may: Declare all outstanding Secured Obligations immediately due and payable; Sell, transfer, or otherwise dispose of any or all of the Collateral; Apply proceeds towards costs, interest, and principal; The Borrower shall remain personally liable for any shortfall." },
-    { title: "6. CONSENT TO REHYPOTHECATION", content: "The Borrower hereby consents that Mint may, to the extent permitted by applicable law, re-use, on-pledge, or otherwise rehypothecate the pledged securities for the purposes of funding its operations or hedging its exposures." },
+    { title: "6. CONSENT TO REHYPOTHECATION", content: "The Borrower hereby consents that MINT may, to the extent permitted by applicable law, re-use, on-pledge, or otherwise rehypothecate the pledged securities for the purposes of funding its operations or hedging its exposures." },
     { title: "7. GOVERNING LAW", content: "This Agreement shall be governed by and construed in accordance with the laws of the Republic of South Africa." }
   ];
 
@@ -209,7 +209,7 @@ export default async function generateLoanAgreementPdf({
 
   const colWidth = TW / 2 - 5;
 
-  // Mint Signature
+  // MINT Signature
   doc.setFont("helvetica", "bold");
   doc.text("SIGNED for and on behalf of THE LENDER:", ML, y);
   y += 3;
@@ -235,7 +235,7 @@ export default async function generateLoanAgreementPdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text("Chief Executive Officer (CEO)", ML, y);
-  doc.text("Mint Platforms (Pty) Ltd", ML, y + 4);
+  doc.text("MINT Platforms (Pty) Ltd", ML, y + 4);
   y += 15;
 
   // Borrower Signature
@@ -278,7 +278,7 @@ export default async function generateLoanAgreementPdf({
     doc.setFontSize(CONFIG.FONT.SMALL);
     doc.setTextColor(150);
     doc.text(`Agreement ID: ${agreementId} | Page ${i} of ${pageCount}`, CONFIG.PAGE.WIDTH / 2, 287, { align: "center" });
-    doc.text("Mint Platforms (Pty) Ltd is a registered credit provider.", CONFIG.PAGE.WIDTH / 2, 291, { align: "center" });
+    doc.text("MINT Platforms (Pty) Ltd is a registered credit provider.", CONFIG.PAGE.WIDTH / 2, 291, { align: "center" });
   }
 
   // Finalize & Save

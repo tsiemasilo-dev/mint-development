@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useId, lazy, Suspense } fr
 
 const MarketsPage = lazy(() => import("./MarketsPage.jsx"));
 const MorePage = lazy(() => import("./MorePage.jsx"));
+const ChildMorePage = lazy(() => import("./ChildMorePage.jsx"));
+const ChildDeleteAccountPage = lazy(() => import("./ChildDeleteAccountPage.jsx"));
 const NewsArticlePage = lazy(() => import("./NewsArticlePage.jsx"));
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -3472,7 +3474,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
                 {child?.mint_number && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Mint Number</span>
+                    <span className="text-slate-600">MINT Number</span>
                     <span className="font-mono text-xs font-semibold text-slate-900">{child.mint_number}</span>
                   </div>
                 )}
@@ -3496,7 +3498,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
                 {parentMintNumber && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Parent Mint #</span>
+                    <span className="text-slate-600">Parent MINT #</span>
                     <span className="font-mono text-xs font-semibold text-slate-900">{parentMintNumber}</span>
                   </div>
                 )}
@@ -3596,13 +3598,20 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </div>
       )}
 
-      {/* -- More tab — pre-mounted, shown/hidden via display to avoid flicker -- */}
+      {/* -- More tab — shows child-specific profile/settings -- */}
       <div
-        className="fixed inset-0 z-10 overflow-y-auto"
-        style={{ background: "var(--bg, #0f0a1e)", display: activeChildTab === "more" ? "block" : "none" }}
+        className="fixed inset-0 z-10 overflow-y-auto bg-white"
+        style={{ display: activeChildTab === "more" ? "block" : "none" }}
       >
-        <Suspense fallback={<div style={{ background: "var(--bg, #0f0a1e)", height: "100%" }} />}>
-          <MorePage onNavigate={onTabChange} onBeforeLogout={() => {}} />
+        <Suspense fallback={<div className="bg-white h-full" />}>
+          <ChildMorePage
+            child={child}
+            onCloseAccount={() => setActiveChildTab("closeAccount")}
+            onBackToParent={() => {
+              setActiveChildTab("home");
+              onTabChange?.("home");
+            }}
+          />
         </Suspense>
         {!childNewsArticleId && (
           <Navbar
@@ -3617,7 +3626,23 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         )}
       </div>
 
-      {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
+      {/* -- Close Account overlay — full-screen, above everything -- */}
+      {activeChildTab === "closeAccount" && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50">
+          <Suspense fallback={<div className="bg-slate-50 h-full" />}>
+            <ChildDeleteAccountPage
+              child={child}
+              onBack={() => setActiveChildTab("more")}
+              onDone={() => {
+                setActiveChildTab("home");
+                onTabChange?.("familyDashboard");
+              }}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {/* -- Bottom Navigation Bar (shared MINT Navbar) -- */}
       {!childNewsArticleId && (
         <Navbar
           activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}

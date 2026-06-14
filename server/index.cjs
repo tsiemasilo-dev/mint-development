@@ -942,6 +942,7 @@ async function ensureUserSessionsTable() {
   }
 }
 ensureUserSessionsTable();
+
 runFuneralCoverMigration(pgPool);
 runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 
@@ -3339,6 +3340,477 @@ app.post("/api/account/reset", async (req, res) => {
   } catch (error) {
     console.error("Account reset error:", error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── GET /api/account/delete — check all blockers before account closure ──────
+app.get("/api/account/delete", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await db.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const blockers = [];
+    const children = [];
+
+    // 1. Child accounts — each must be individually closed first
+    const { data: familyMembers } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, relationship, available_balance")
+      .eq("primary_user_id", user.id)
+      .eq("relationship", "child");
+
+    for (const child of familyMembers || []) {
+      const childBlockers = [];
+
+      const { data: activeHoldings } = await db
+        .from("stock_holdings_c")
+        .select("id")
+        .eq("family_member_id", child.id)
+        .eq("Status", "active")
+        .limit(1);
+
+      if (activeHoldings?.length > 0) {
+        childBlockers.push({ type: "holdings", message: `${child.first_name} has active investments that must be sold first` });
+      }
+
+      if ((child.available_balance || 0) > 0) {
+        childBlockers.push({ type: "balance", message: `${child.first_name} has a remaining balance that must be withdrawn first` });
+      }
+
+      children.push({
+        id: child.id,
+        first_name: child.first_name,
+        last_name: child.last_name || "",
+        available_balance: child.available_balance || 0,
+        blockers: childBlockers,
+        canClose: childBlockers.length === 0,
+      });
+    }
+
+    if (children.length > 0) {
+      blockers.push({
+        type: "children",
+        message: `You have ${children.length} linked child account${children.length > 1 ? "s" : ""} that must be closed first`,
+        children,
+      });
+    }
+
+    // 2. Wallet balance
+    const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+    const walletBalance = Number(wallet?.balance || 0);
+    if (walletBalance > 0) {
+      blockers.push({ type: "wallet", message: `Your wallet has R${walletBalance.toFixed(2)} that must be withdrawn before closing your account` });
+    }
+
+    // 3. Active holdings
+    const { data: holdings } = await db.from("stock_holdings_c").select("id").eq("user_id", user.id).eq("Status", "active");
+    if (holdings?.length > 0) {
+      blockers.push({ type: "holdings", message: `You have ${holdings.length} active investment${holdings.length > 1 ? "s" : ""} that must be sold before closing your account` });
+    }
+
+    // 4. Pending transactions
+    const { data: pendingTxns } = await db.from("transactions").select("id").eq("user_id", user.id).in("status", ["pending", "processing"]);
+    if (pendingTxns?.length > 0) {
+      blockers.push({ type: "pending_transactions", message: `You have ${pendingTxns.length} pending transaction${pendingTxns.length > 1 ? "s" : ""} — please wait for them to settle` });
+    }
+
+    return res.json({ canDelete: blockers.length === 0, blockers, children, email: user.email });
+  } catch (e) {
+    console.error("[account/delete] GET error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/account/delete — verify password and submit closure request ─────
+app.post("/api/account/delete", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await db.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const { password, reason, reason_other } = req.body || {};
+    if (!password) return res.status(400).json({ error: "Password is required" });
+    if (!reason) return res.status(400).json({ error: "Please select a reason for closing your account" });
+
+    // Verify password using the anon client (not admin — signInWithPassword requires anon key)
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: user.email, password });
+    if (signInError || !signInData?.user) {
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
+    }
+
+    // Re-check blockers to ensure nothing slipped through
+    const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+    if (Number(wallet?.balance || 0) > 0) return res.status(400).json({ error: "Please withdraw your wallet balance before closing your account." });
+
+    const { data: holdings } = await db.from("stock_holdings_c").select("id").eq("user_id", user.id).eq("Status", "active");
+    if (holdings?.length > 0) return res.status(400).json({ error: "Please sell all investments before closing your account." });
+
+    const { data: childAccounts } = await db.from("family_members").select("id").eq("primary_user_id", user.id).eq("relationship", "child");
+    if (childAccounts?.length > 0) return res.status(400).json({ error: "Please close all linked child accounts before closing your account." });
+
+    // Log the closure request
+    const closureNote = reason === "other" && reason_other
+      ? `Account closure request — Other: ${String(reason_other).slice(0, 200)}`
+      : `Account closure request — Reason: ${reason}`;
+
+    try {
+      await db.from("transactions").insert({
+        user_id: user.id,
+        name: "Account Closure Request",
+        direction: "debit",
+        amount: 0,
+        description: closureNote,
+        status: "closure_requested",
+        currency: "ZAR",
+        transaction_date: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.warn("[account/delete] Could not log closure transaction:", logErr.message);
+    }
+
+    console.log(`[account/delete] Closure requested by ${user.email} (${user.id}). Reason: ${reason}`);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("[account/delete] POST error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/account/delete-child — blocker check before child account closure ──
+app.get("/api/account/delete-child", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const childId = String(req.query.id || "").trim();
+    if (!childId) return res.status(400).json({ error: "id required" });
+
+    // Verify this child belongs to the authenticated parent
+    const { data: childRow, error: childErr } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, relationship, primary_user_id, available_balance, status")
+      .eq("id", childId)
+      .eq("primary_user_id", user.id)
+      .eq("relationship", "child")
+      .maybeSingle();
+    if (childErr) throw childErr;
+    if (!childRow) return res.status(404).json({ error: "Child account not found or not owned by you." });
+
+    // Check active holdings
+    const { data: holdings } = await db
+      .from("stock_holdings_c")
+      .select("id")
+      .eq("family_member_id", childId)
+      .eq("Status", "active");
+
+    // Check pending transactions
+    const { data: pendingTxns } = await db
+      .from("transactions")
+      .select("id")
+      .eq("family_member_id", childId)
+      .in("status", ["pending", "processing"]);
+
+    const hasBalance = Number(childRow.available_balance || 0) > 0;
+    const hasHoldings = (holdings?.length || 0) > 0;
+    const pendingBlocker = (pendingTxns?.length || 0) > 0;
+
+    // Build list of accounts that can receive the child's assets
+    const receivingAccounts = [];
+
+    // Parent's own wallet
+    const { data: parentWallet } = await db
+      .from("wallets")
+      .select("balance")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const { data: parentProfile } = await db
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const parentName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "My Account";
+    receivingAccounts.push({
+      id: user.id,
+      type: "parent",
+      name: parentName,
+      label: "Main account",
+      balance: parentWallet?.balance ?? null,
+    });
+
+    // Other family members (spouse and siblings, excluding this child)
+    const { data: familyMembers } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, relationship, available_balance")
+      .eq("primary_user_id", user.id)
+      .neq("id", childId)
+      .in("status", ["active", "pending_code"]);
+
+    for (const m of familyMembers || []) {
+      const mName = [m.first_name, m.last_name].filter(Boolean).join(" ") || "Family member";
+      receivingAccounts.push({
+        id: m.id,
+        type: m.relationship,
+        name: mName,
+        label: m.relationship === "spouse" ? "Spouse account" : "Child account",
+        balance: m.available_balance ?? null,
+      });
+    }
+
+    const canDeleteImmediately = !pendingBlocker && !hasBalance && !hasHoldings;
+
+    return res.json({
+      canDeleteImmediately,
+      hasBalance,
+      hasHoldings,
+      balance: childRow.available_balance || 0,
+      holdingsCount: holdings?.length || 0,
+      pendingBlocker,
+      receivingAccounts,
+    });
+  } catch (e) {
+    console.error("[account/delete-child] GET error:", e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/account/delete-child — execute child account closure ──
+app.post("/api/account/delete-child", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Missing token" });
+
+    const db = supabaseAdmin || supabase;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
+
+    const { childId, receivingAccountId, receivingAccountType, password, reason, reason_other, verifyOnly } = req.body || {};
+    if (!childId) return res.status(400).json({ error: "childId required" });
+    if (!reason) return res.status(400).json({ error: "reason required" });
+    if (!password) return res.status(400).json({ error: "password required" });
+
+    // Verify parent password via anon client
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: String(password),
+    });
+    if (signInError || !signInData?.user) {
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
+    }
+
+    // Verify ownership
+    const { data: childRow, error: childErr } = await db
+      .from("family_members")
+      .select("id, first_name, last_name, available_balance, primary_user_id")
+      .eq("id", childId)
+      .eq("primary_user_id", user.id)
+      .eq("relationship", "child")
+      .maybeSingle();
+    if (childErr) throw childErr;
+    if (!childRow) return res.status(404).json({ error: "Child account not found or not owned by you." });
+
+    // Re-check all blockers
+    const { data: pendingTxns } = await db
+      .from("transactions")
+      .select("id")
+      .eq("family_member_id", childId)
+      .in("status", ["pending", "processing"]);
+    if ((pendingTxns?.length || 0) > 0) {
+      return res.status(400).json({ error: "There are pending transactions on this account. Please wait for them to settle." });
+    }
+
+    const currentBalance = Number(childRow.available_balance || 0);
+    const { data: currentHoldings } = await db
+      .from("stock_holdings_c")
+      .select("id, strategy_id, quantity, avg_fill")
+      .eq("family_member_id", childId)
+      .eq("Status", "active");
+    const holdingsCount = currentHoldings?.length || 0;
+    const hasAssets = currentBalance > 0 || holdingsCount > 0;
+
+    // Enforce: if assets exist, a valid receiving account is required
+    if (hasAssets && !receivingAccountId) {
+      return res.status(400).json({
+        error: `${childRow.first_name || "This child"}'s account has assets that must be transferred before closing. Please select a receiving account.`,
+      });
+    }
+
+    // Validate receiving account ownership before we do anything destructive
+    let receiverRow = null;
+    if (receivingAccountId) {
+      if (receivingAccountType === "parent") {
+        // Must be the authenticated user's own account
+        if (receivingAccountId !== user.id) {
+          return res.status(403).json({ error: "Invalid receiving account." });
+        }
+      } else {
+        // Must be a family member owned by this parent (not the child being closed)
+        const { data: fm } = await db
+          .from("family_members")
+          .select("id, first_name, last_name, relationship, available_balance, primary_user_id")
+          .eq("id", receivingAccountId)
+          .eq("primary_user_id", user.id)
+          .neq("id", childId)
+          .in("relationship", ["spouse", "child"])
+          .maybeSingle();
+        if (!fm) {
+          return res.status(403).json({ error: "Invalid receiving account — not owned by you." });
+        }
+        receiverRow = fm;
+      }
+    }
+
+    if (verifyOnly) return res.json({ success: true, verified: true });
+
+    const childFirst = childRow.first_name || "Child";
+    const childName = [childRow.first_name, childRow.last_name].filter(Boolean).join(" ") || "Child";
+    const transferTimestamp = new Date().toISOString();
+
+    // ── TRANSFER LOCK: atomically zero child balance using compare-and-swap ─────
+    // Only zeroes if available_balance still equals currentBalance.
+    // This is the idempotency guard: if retried after a partial failure, the
+    // balance will already be 0 so this returns 0 rows → credit is skipped,
+    // preventing double-payment. Holdings reassignment is also retry-safe
+    // because the WHERE family_member_id=childId will find 0 rows if already moved.
+    let balanceCreditApplied = false;
+    let transferredRands = 0;
+    let receiverName = "";
+    if (currentBalance > 0) {
+      const { data: locked, error: lockErr } = await db
+        .from("family_members")
+        .update({ available_balance: 0 })
+        .eq("id", childId)
+        .eq("available_balance", currentBalance)
+        .select("id")
+        .maybeSingle();
+      if (lockErr) throw new Error(`Failed to lock balance for transfer: ${lockErr.message}`);
+      balanceCreditApplied = !!locked; // null = 0 rows matched (balance already zeroed or changed — skip credit)
+    }
+
+    // ── Transfer cash balance to receiver (only if lock succeeded) ────────────
+    if (balanceCreditApplied && receivingAccountId) {
+      if (receivingAccountType === "parent") {
+        const { data: parentWallet, error: walletFetchErr } = await db
+          .from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
+        if (walletFetchErr) throw new Error(`Failed to fetch parent wallet: ${walletFetchErr.message}`);
+        if (!parentWallet) throw new Error("Parent wallet not found — cannot transfer balance.");
+        const newBal = Number(parentWallet.balance || 0) + currentBalance / 100;
+        const { error: walletUpdateErr } = await db.from("wallets").update({ balance: newBal }).eq("user_id", user.id);
+        if (walletUpdateErr) throw new Error(`Failed to credit parent wallet: ${walletUpdateErr.message}`);
+        transferredRands = currentBalance / 100;
+        const { data: parentProfile } = await db.from("profiles").select("first_name, last_name").eq("id", user.id).maybeSingle();
+        receiverName = [parentProfile?.first_name, parentProfile?.last_name].filter(Boolean).join(" ") || "main account";
+      } else {
+        const fmCurrent = receiverRow;
+        const newBal = Number(fmCurrent.available_balance || 0) + currentBalance;
+        const { error: fmUpdateErr } = await db.from("family_members").update({ available_balance: newBal }).eq("id", receivingAccountId);
+        if (fmUpdateErr) throw new Error(`Failed to credit family member balance: ${fmUpdateErr.message}`);
+        transferredRands = currentBalance / 100;
+        receiverName = [fmCurrent.first_name, fmCurrent.last_name].filter(Boolean).join(" ") || "family member";
+      }
+    }
+
+    // ── Transfer holdings (fail-closed; retry-safe: no-op if already moved) ──
+    // If family_member_id was already changed, eq("family_member_id", childId) finds 0 rows.
+    let transferredHoldingsCount = 0;
+    if (receivingAccountId && holdingsCount > 0) {
+      const newFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+      const { error: holdingsErr } = await db
+        .from("stock_holdings_c")
+        .update({ family_member_id: newFamilyMemberId, user_id: user.id })
+        .eq("family_member_id", childId)
+        .eq("Status", "active");
+      if (holdingsErr) throw new Error(`Failed to transfer investments: ${holdingsErr.message}`);
+      transferredHoldingsCount = holdingsCount;
+    }
+
+    // All required transfers completed — safe to proceed with audit records and deletion
+
+    // ── Dual-sided transfer transaction records (best-effort, non-blocking) ───
+    if (receivingAccountId && (transferredRands > 0 || transferredHoldingsCount > 0)) {
+      const txBaseOut = {
+        user_id: user.id,
+        family_member_id: childId,
+        direction: "debit",
+        amount: transferredRands,
+        status: "completed",
+        currency: "ZAR",
+        transaction_date: transferTimestamp,
+        name: "Child Account Closure — Transfer Out",
+        description: `Assets transferred to ${receiverName} on account closure`,
+      };
+      const receiverFamilyMemberId = receivingAccountType === "parent" ? null : receivingAccountId;
+      const txBaseIn = {
+        user_id: user.id,
+        family_member_id: receiverFamilyMemberId,
+        direction: "credit",
+        amount: transferredRands,
+        status: "completed",
+        currency: "ZAR",
+        transaction_date: transferTimestamp,
+        name: "Child Account Closure — Transfer In",
+        description: `Assets received from ${childName} on account closure (R${transferredRands.toFixed(2)}${transferredHoldingsCount > 0 ? ` + ${transferredHoldingsCount} holding${transferredHoldingsCount !== 1 ? "s" : ""}` : ""})`,
+      };
+      try { await db.from("transactions").insert(txBaseOut); } catch (_) {}
+      try { await db.from("transactions").insert(txBaseIn); } catch (_) {}
+    }
+
+    // ── Archive any remaining pending transactions (best-effort) ─────────────
+    try {
+      await db.from("transactions").update({ status: "closure_archived" }).eq("family_member_id", childId).in("status", ["pending", "processing"]);
+    } catch (_) {}
+
+    // ── Delete the child record ───────────────────────────────────────────────
+    await db.from("family_members").update({ available_balance: 0 }).eq("id", childId);
+    const { error: delErr } = await db.from("family_members").delete().eq("id", childId);
+    if (delErr) throw delErr;
+
+    // ── Send detailed confirmation email to parent ────────────────────────────
+    try {
+      const resend = getResendClient();
+      if (resend && user.email) {
+        const transferDetail = receivingAccountId
+          ? `<ul style="padding:0 0 0 20px;margin:8px 0;">
+               ${transferredRands > 0 ? `<li>Cash balance: <strong>R${transferredRands.toFixed(2)}</strong> transferred to <strong>${receiverName}</strong></li>` : ""}
+               ${transferredHoldingsCount > 0 ? `<li>${transferredHoldingsCount} active investment${transferredHoldingsCount !== 1 ? "s" : ""} transferred to <strong>${receiverName}</strong></li>` : ""}
+             </ul>`
+          : "<p>No assets were transferred (account had no balance or investments).</p>";
+
+        await resend.emails.send({
+          from: "Mint <noreply@getmint.co.za>",
+          to: [user.email],
+          subject: `${childFirst}'s Mint account has been closed`,
+          html: `<p>Hi,</p>
+<p>We're confirming that <strong>${childName}</strong>'s Mint account has been permanently closed.</p>
+${transferDetail}
+<p>Transaction records are retained for 5 years in accordance with FICA requirements.</p>
+<p>If you have any questions, please contact Mint support.</p>
+<p>The Mint Team</p>`,
+        });
+      }
+    } catch (emailErr) {
+      console.warn("[account/delete-child] Email notification failed:", emailErr.message);
+    }
+
+    console.log(`[account/delete-child] Closed child ${childId} (${childFirst}) for parent ${user.id}. Reason: ${reason}. Transferred R${transferredRands} + ${transferredHoldingsCount} holdings to: ${receivingAccountId || "none"}`);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("[account/delete-child] POST error:", e.message);
+    return res.status(500).json({ error: e.message });
   }
 });
 
@@ -6035,6 +6507,7 @@ app.get("/api/credit-check-debug", (req, res) => {
     lastCreditCheck: lastCreditCheckDebug
   });
 });
+
 
 app.post("/api/sessions/record", async (req, res) => {
   try {

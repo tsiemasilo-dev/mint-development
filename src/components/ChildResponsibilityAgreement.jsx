@@ -78,7 +78,7 @@ function addPageHeader(doc, pageNum, totalPages) {
   doc.setFontSize(7);
   doc.setTextColor(160, 160, 160);
   doc.text(`Page ${pageNum} of ${totalPages}`, PAGE_W - MARGIN, PAGE_H - MARGIN, { align: "right" });
-  doc.text("CONFIDENTIAL — Mint Platforms (Pty) Ltd", MARGIN, PAGE_H - MARGIN);
+  doc.text("CONFIDENTIAL — MINT Platforms (Pty) Ltd", MARGIN, PAGE_H - MARGIN);
 }
 
 // ─── PDF builder ──────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(130, 100, 170);
-  doc.text("Pursuant to the Mint Platforms (Pty) Ltd Service Framework and the Financial Markets Act 19 of 2012", MARGIN, y);
+  doc.text("Pursuant to the MINT Platforms (Pty) Ltd Service Framework and the Financial Markets Act 19 of 2012", MARGIN, y);
   y += 10;
 
   // Section 1 — Parties
@@ -139,10 +139,10 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
   doc.text("1. PARTIES TO THE AGREEMENT", MARGIN, y);
   y += 5;
 
-  y = drawRow(doc, y, "Service Provider", "Mint Platforms (Pty) Ltd (FSP Licence Pending)", COL1, COL2, MARGIN);
+  y = drawRow(doc, y, "Service Provider", "MINT Platforms (Pty) Ltd (FSP Licence Pending)", COL1, COL2, MARGIN);
   y = drawRow(doc, y, "Custodian / Nominee", "Appointed nominee custodian", COL1, COL2, MARGIN);
   y = drawRow(doc, y, "The Minor (Client)", childName, COL1, COL2, MARGIN);
-  y = drawRow(doc, y, "Minor Mint Account ID", childMint, COL1, COL2, MARGIN);
+  y = drawRow(doc, y, "Minor MINT Account ID", childMint, COL1, COL2, MARGIN);
   y = drawRow(doc, y, "Minor Date of Birth", `${childDob} (${childAge})`, COL1, COL2, MARGIN);
   y = drawRow(doc, y, "Minor Identity Number", childIdNumber, COL1, COL2, MARGIN);
   y = drawRow(doc, y, "Legal Guardian / Parent", parentName, COL1, COL2, MARGIN);
@@ -178,7 +178,7 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
     y += 2;
   };
 
-  writePara("A. Mint Platforms (Pty) Ltd ('the Platform') facilitates the investment of client funds in JSE-listed securities through its platform. The Platform acts as an authorised Financial Services Provider (FSP) pursuant to the Financial Advisory and Intermediary Services Act 37 of 2002 ('FAIS Act').");
+  writePara("A. MINT Platforms (Pty) Ltd ('the Platform') facilitates the investment of client funds in JSE-listed securities through its platform. The Platform acts as an authorised Financial Services Provider (FSP) pursuant to the Financial Advisory and Intermediary Services Act 37 of 2002 ('FAIS Act').");
   writePara("B. Securities purchased by or on behalf of clients are held through an appointed third-party nominee custodian acting as nominee and custodian. Client assets are fully segregated from the Platform's own assets at all times.");
   writePara("C. The Guardian wishes to open and operate an investment account on behalf of the Minor, and the Platform is willing to provide such services subject to the terms and conditions set out herein.");
 
@@ -291,7 +291,7 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(60, 50, 90);
-  doc.text("For and on behalf of Mint Platforms (Pty) Ltd:", MARGIN, y);
+  doc.text("For and on behalf of MINT Platforms (Pty) Ltd:", MARGIN, y);
   y += 5;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
@@ -324,7 +324,7 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(120, 110, 150);
-  doc.text("Chief Executive Officer — Mint Platforms (Pty) Ltd", MARGIN, y);
+  doc.text("Chief Executive Officer — MINT Platforms (Pty) Ltd", MARGIN, y);
 
   // Footer disclaimer box
   y += 14;
@@ -336,7 +336,7 @@ async function buildChildAgreementPdf({ parentProfile, childData, signatureDataU
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(100, 90, 140);
-    const disclaimer = "Securities are held on behalf of clients by an appointed nominee custodian. Client assets are segregated from Platform assets. This Agreement is binding upon signature and forms part of the Platform's standard terms of service. Mint Platforms (Pty) Ltd — FSP Licence Pending — FAIS Compliant.";
+    const disclaimer = "Securities are held on behalf of clients by an appointed nominee custodian. Client assets are segregated from Platform assets. This Agreement is binding upon signature and forms part of the Platform's standard terms of service. MINT Platforms (Pty) Ltd — FSP Licence Pending — FAIS Compliant.";
     const dLines = doc.splitTextToSize(disclaimer, PAGE_W - MARGIN * 2 - 8);
     dLines.forEach((line, i) => doc.text(line, MARGIN + 4, y + 5 + i * 4));
   }
@@ -428,7 +428,7 @@ export default function ChildResponsibilityAgreement({
           <div className="space-y-1.5">
             <div className="flex justify-between items-start py-1 border-b border-slate-100">
               <span className="text-slate-500 shrink-0 pr-3">Service Provider</span>
-              <span className="text-slate-800 font-semibold text-right">Mint Platforms (Pty) Ltd</span>
+              <span className="text-slate-800 font-semibold text-right">MINT Platforms (Pty) Ltd</span>
             </div>
             <div className="flex justify-between items-start py-1 border-b border-slate-100">
               <span className="text-slate-500 shrink-0 pr-3">Custodian / Nominee</span>
@@ -444,7 +444,7 @@ export default function ChildResponsibilityAgreement({
             </div>
             {childData?.mint_number && (
               <div className="flex justify-between items-start py-1 border-b border-slate-100">
-                <span className="text-slate-500 shrink-0 pr-3">Mint Account ID</span>
+                <span className="text-slate-500 shrink-0 pr-3">MINT Account ID</span>
                 <span className="text-slate-800 font-semibold text-right">{childData.mint_number}</span>
               </div>
             )}
@@ -453,13 +453,13 @@ export default function ChildResponsibilityAgreement({
           <div className="rounded-xl bg-purple-50 border border-purple-100 p-3 space-y-2">
             <p className="font-bold text-slate-800 text-[11px]">Key Terms You Are Agreeing To:</p>
             <p className="leading-relaxed">
-              <strong>Custodial Authority:</strong> Securities are held by an appointed nominee custodian, fully segregated from Mint's assets.
+              <strong>Custodial Authority:</strong> Securities are held by an appointed nominee custodian, fully segregated from MINT's assets.
             </p>
             <p className="leading-relaxed">
               <strong>Guardian Responsibility:</strong> You accept full legal and financial responsibility for all account activity, including all buy, sell, and transfer instructions.
             </p>
             <p className="leading-relaxed">
-              <strong>Indemnity:</strong> You indemnify Mint and the appointed nominee custodian against any claim arising from the account, including any future claim by the Minor.
+              <strong>Indemnity:</strong> You indemnify MINT and the appointed nominee custodian against any claim arising from the account, including any future claim by the Minor.
             </p>
             <p className="leading-relaxed">
               <strong>Transition at 18:</strong> Upon the Minor reaching majority (18 years), all authority automatically vests in the Minor, who must complete their own onboarding.

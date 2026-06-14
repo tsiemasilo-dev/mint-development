@@ -156,7 +156,7 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
       if (!kyc_done || !mint_number_set) {
         const reason = !kyc_done
           ? "Your identity (FICA) verification is not complete. You must verify your identity before you can claim an investment gift."
-          : "Your Mint account setup is not complete. You must finish account setup before you can claim an investment gift.";
+          : "Your MINT account setup is not complete. You must finish account setup before you can claim an investment gift.";
         setFicaGate({ giftPreview: gift_preview, reason, cleanCode, cleanId });
         setLoading(false);
         return;
@@ -203,7 +203,7 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
               <div>
                 <p className="text-sm font-semibold text-slate-800">Complete your account setup first</p>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  To claim an investment gift, you need to complete your full FICA verification and Mint account setup. It only takes a few minutes.
+                  To claim an investment gift, you need to complete your full FICA verification and MINT account setup. It only takes a few minutes.
                 </p>
               </div>
             </div>
@@ -399,9 +399,9 @@ export default function GiftCodeEntryPage({ onBack, onNavigate }) {
                 <UserPlus size={16} className="text-violet-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-800">You're not on Mint yet</p>
+                <p className="text-sm font-semibold text-slate-800">You're not on MINT yet</p>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  To claim this investment gift you need a Mint account. Sign up — it only takes a few minutes.
+                  To claim this investment gift you need a MINT account. Sign up — it only takes a few minutes.
                 </p>
               </div>
             </div>

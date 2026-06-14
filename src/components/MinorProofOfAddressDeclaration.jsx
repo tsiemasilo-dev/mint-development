@@ -149,7 +149,7 @@ function addPageHeader(doc, pageNum, totalPages, mintLogoB64) {
   doc.circle(18, 5, 22, "F");
   doc.setGState(doc.GState({ opacity: 1 }));
 
-  // Mint logo or fallback text
+  // MINT logo or fallback text
   if (mintLogoB64?.data && mintLogoB64.width > 0) {
     const logoH = 10;
     const logoW = logoH * (mintLogoB64.width / mintLogoB64.height);
@@ -162,7 +162,7 @@ function addPageHeader(doc, pageNum, totalPages, mintLogoB64) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(...WHITE);
-    doc.text("Mint", MARGIN, HEADER_H / 2 - 1);
+    doc.text("MINT", MARGIN, HEADER_H / 2 - 1);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...MINT_LIGHT);
@@ -206,7 +206,7 @@ function addCeoSignature(doc, ceoSigB64, y) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(60, 50, 90);
-  doc.text("For and on behalf of Mint Platforms (Pty) Ltd:", MARGIN, y);
+  doc.text("For and on behalf of MINT Platforms (Pty) Ltd:", MARGIN, y);
   y += 5;
   doc.text("Name: Lonwabo Damane", MARGIN, y);
   y += 4;
@@ -233,7 +233,7 @@ function addCeoSignature(doc, ceoSigB64, y) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(120, 110, 150);
-  doc.text("Chief Executive Officer — Mint Platforms (Pty) Ltd", MARGIN, y);
+  doc.text("Chief Executive Officer — MINT Platforms (Pty) Ltd", MARGIN, y);
   return y + 5;
 }
 
@@ -248,7 +248,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
 
   const parentName = [parentProfile?.firstName, parentProfile?.lastName].filter(Boolean).join(" ") || "—";
   const parentId = parentProfile?.idNumber || "—";
-  const parentAddress = parentProfile?.address || "Registered address on file with Mint";
+  const parentAddress = parentProfile?.address || "Registered address on file with MINT";
   const childName = `${childData?.first_name || ""} ${childData?.last_name || ""}`.trim() || "—";
   const childId = childData?.id_number || "—";
   const childDob = formatDateLong(childData?.date_of_birth);
@@ -292,7 +292,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   coGuardianProfiles.forEach((cg, idx) => {
     const cgName    = [cg.firstName, cg.lastName].filter(Boolean).join(" ") || "—";
     const cgId      = cg.idNumber || "—";
-    const cgAddress = cg.address || "Registered address on file with Mint";
+    const cgAddress = cg.address || "Registered address on file with MINT";
     y = drawSectionHeading(doc, y, `CO-GUARDIAN${coGuardianProfiles.length > 1 ? " " + (idx + 1) : ""}`);
     y = drawRow(doc, y, "Full Name",          cgName,    false);
     y = drawRow(doc, y, "Identity Number",    cgId,      true);
@@ -326,7 +326,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
     : `I, ${parentName} (Identity Number: ${parentId}),`;
 
   writePara(`${guardianParty} being the parent(s) and/or legal guardian(s) of the minor known as ${childName} (Date of Birth: ${childDob}; Identity Number: ${childId}), do hereby solemnly declare that:`);
-  writePara(`1.  The above-mentioned minor currently resides with ${coGuardianProfiles.length > 0 ? "us" : "me"} at ${coGuardianProfiles.length > 0 ? "our" : "my"} registered residential address on file with Mint Financial Services (Pty) Ltd.`);
+  writePara(`1.  The above-mentioned minor currently resides with ${coGuardianProfiles.length > 0 ? "us" : "me"} at ${coGuardianProfiles.length > 0 ? "our" : "my"} registered residential address on file with MINT Financial Services (Pty) Ltd.`);
   writePara(`2.  The shared residential address is: ${parentAddress}.`);
   if (coGuardianProfiles.length > 0) {
     coGuardianProfiles.forEach(cg => {
@@ -336,7 +336,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
     });
   }
   writePara("3.  This declaration is submitted in compliance with the Financial Intelligence Centre Act 38 of 2001 and applicable FICA Guidance Notes governing minor investment accounts.");
-  writePara(`4.  ${coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify Mint Financial Services (Pty) Ltd in writing within 14 (fourteen) calendar days should the minor's residential address change.`);
+  writePara(`4.  ${coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify MINT Financial Services (Pty) Ltd in writing within 14 (fourteen) calendar days should the minor's residential address change.`);
   writePara("5.  Providing false or misleading information in this declaration constitutes a criminal offence under South African law.");
   y += 6;
 
@@ -373,7 +373,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   doc.setTextColor(120, 110, 150);
   doc.text("Legal Guardian / Parent", MARGIN, y);
   y += 4;
-  doc.text(`Signed electronically via Mint App — ${signedDateTime}`, MARGIN, y);
+  doc.text(`Signed electronically via MINT App — ${signedDateTime}`, MARGIN, y);
   y += 14;
 
   y = addCeoSignature(doc, ceoSigB64, y);
@@ -388,7 +388,7 @@ async function buildSameAddressPdf({ parentProfile, coGuardianProfiles, childDat
   doc.setFontSize(6.5);
   doc.setTextColor(...LABEL_TEXT);
   const legalNote = doc.splitTextToSize(
-    "This declaration was completed electronically via the Mint App and is legally binding. Mint Financial Services (Pty) Ltd | FSP No. 55118",
+    "This declaration was completed electronically via the MINT App and is legally binding. MINT Financial Services (Pty) Ltd | FSP No. 55118",
     PAGE_W - MARGIN * 2
   );
   legalNote.forEach((l) => { doc.text(l, MARGIN, y); y += 3.8; });
@@ -405,7 +405,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
 
   const parentName = [parentProfile?.firstName, parentProfile?.lastName].filter(Boolean).join(" ") || "—";
   const parentId = parentProfile?.idNumber || "—";
-  const parentAddress = parentProfile?.address || "Registered address on file with Mint";
+  const parentAddress = parentProfile?.address || "Registered address on file with MINT";
   const childName = `${childData?.first_name || ""} ${childData?.last_name || ""}`.trim() || "—";
   const childId = childData?.id_number || "—";
   const childDob = formatDateLong(childData?.date_of_birth);
@@ -449,7 +449,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   coGuardianProfiles.forEach((cg, idx) => {
     const cgName    = [cg.firstName, cg.lastName].filter(Boolean).join(" ") || "—";
     const cgId      = cg.idNumber || "—";
-    const cgAddress = cg.address || "Registered address on file with Mint";
+    const cgAddress = cg.address || "Registered address on file with MINT";
     y = drawSectionHeading(doc, y, `CO-GUARDIAN${coGuardianProfiles.length > 1 ? " " + (idx + 1) : ""}`);
     y = drawRow(doc, y, "Full Name",          cgName,    false);
     y = drawRow(doc, y, "Identity Number",    cgId,      true);
@@ -484,10 +484,10 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
 
   writePara(`${guardianParty} being the parent(s) and/or legal guardian(s) of the minor known as ${childName} (Date of Birth: ${childDob}; Identity Number: ${childId}), do hereby solemnly declare that:`);
   writePara(`1.  The above-mentioned minor currently resides at the following residential address: ${fullChildAddress || "as specified above"}.`);
-  writePara(`2.  This address is separate from ${coGuardianProfiles.length > 0 ? "our" : "my"} own registered address(es). ${coGuardianProfiles.length > 0 ? "Our" : "My"} address on file with Mint is: ${parentAddress}.`);
-  writePara("3.  The above minor's address is true and current, and is submitted as proof of residential address for FICA purposes relating to their Mint investment account, in compliance with the Financial Intelligence Centre Act 38 of 2001.");
+  writePara(`2.  This address is separate from ${coGuardianProfiles.length > 0 ? "our" : "my"} own registered address(es). ${coGuardianProfiles.length > 0 ? "Our" : "My"} address on file with MINT is: ${parentAddress}.`);
+  writePara("3.  The above minor's address is true and current, and is submitted as proof of residential address for FICA purposes relating to their MINT investment account, in compliance with the Financial Intelligence Centre Act 38 of 2001.");
   writePara(`4.  ${coGuardianProfiles.length > 0 ? "We are the" : "I am the"} legal parent(s) and/or guardian(s) of this minor and ${coGuardianProfiles.length > 0 ? "are" : "am"} authorised to make this declaration on their behalf.`);
-  writePara(`5.  ${coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify Mint Financial Services (Pty) Ltd in writing within 14 (fourteen) calendar days should the minor's residential address change.`);
+  writePara(`5.  ${coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify MINT Financial Services (Pty) Ltd in writing within 14 (fourteen) calendar days should the minor's residential address change.`);
   writePara("6.  Providing false or misleading information in this declaration constitutes a criminal offence under South African law.");
   y += 6;
 
@@ -524,7 +524,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   doc.setTextColor(120, 110, 150);
   doc.text("Legal Guardian / Parent", MARGIN, y);
   y += 4;
-  doc.text(`Signed electronically via Mint App — ${signedDateTime}`, MARGIN, y);
+  doc.text(`Signed electronically via MINT App — ${signedDateTime}`, MARGIN, y);
   y += 14;
 
   y = addCeoSignature(doc, ceoSigB64, y);
@@ -539,7 +539,7 @@ async function buildDifferentAddressPdf({ parentProfile, coGuardianProfiles, chi
   doc.setFontSize(6.5);
   doc.setTextColor(...LABEL_TEXT);
   const legalNote2 = doc.splitTextToSize(
-    "This declaration was completed electronically via the Mint App and is legally binding. Mint Financial Services (Pty) Ltd | FSP No. 55118",
+    "This declaration was completed electronically via the MINT App and is legally binding. MINT Financial Services (Pty) Ltd | FSP No. 55118",
     PAGE_W - MARGIN * 2
   );
   legalNote2.forEach((l) => { doc.text(l, MARGIN, y); y += 3.8; });
@@ -715,7 +715,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
                 <p className="text-sm font-bold text-slate-900">{parentName}</p>
                 {parentAddress
                   ? <p className="text-xs text-slate-600 mt-1">{parentAddress}</p>
-                  : <p className="text-xs text-slate-400 italic mt-1">Address on file with Mint</p>}
+                  : <p className="text-xs text-slate-400 italic mt-1">Address on file with MINT</p>}
               </div>
             </div>
             {coGuardianProfiles.map((cg, i) => {
@@ -729,7 +729,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
                     <p className="text-sm font-bold text-slate-900">{cgName}</p>
                     {cg.address
                       ? <p className="text-xs text-slate-600 mt-1">{cg.address}</p>
-                      : <p className="text-xs text-slate-400 italic mt-1">Address on file with Mint</p>}
+                      : <p className="text-xs text-slate-400 italic mt-1">Address on file with MINT</p>}
                   </div>
                 </div>
               );
@@ -796,7 +796,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
                 return <span key={i}><strong className="text-slate-900">{cgName}</strong>{i < coGuardianProfiles.length - 1 ? ", " : ""}</span>;
               })}</>
             )}{" "}
-            hereby declare that <strong className="text-slate-900">{childName}</strong> currently resides with {coGuardianProfiles.length > 0 ? "us" : "me"} at the registered address on file with Mint. {coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify Mint within 14 days if this changes.
+            hereby declare that <strong className="text-slate-900">{childName}</strong> currently resides with {coGuardianProfiles.length > 0 ? "us" : "me"} at the registered address on file with MINT. {coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify MINT within 14 days if this changes.
           </p>
         </div>
 
@@ -944,7 +944,7 @@ export default function MinorProofOfAddressDeclaration({ childData, parentProfil
           <div className="p-3 rounded-xl" style={{ background: P_BG }}>
             <p className="text-sm font-bold" style={{ color: PURPLE }}>{fullAddr}</p>
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed mt-3">{coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify Mint within 14 days if this address changes.</p>
+          <p className="text-xs text-slate-600 leading-relaxed mt-3">{coGuardianProfiles.length > 0 ? "We undertake" : "I undertake"} to notify MINT within 14 days if this address changes.</p>
         </div>
 
         {/* Signature box */}
