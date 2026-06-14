@@ -863,7 +863,7 @@ const MintBankPage = ({ onBack, onComplete }) => {
         <div style={{ animation: "subtleBounce 3s ease-in-out infinite" }}>
           <img
             src="/assets/images/coinAlgoMoney.png"
-            alt="MINT"
+            alt="Mint"
             className="h-20 w-20 object-contain drop-shadow-2xl"
           />
         </div>
@@ -914,7 +914,7 @@ const MintBankPage = ({ onBack, onComplete }) => {
 
       {showDetails && (
         <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-100 text-[10px] text-slate-500 leading-relaxed animate-in fade-in zoom-in-95">
-          We use <strong>TruID Connect</strong> to securely verify your bank account. Your credentials are never stored by MINT — 
+          We use <strong>TruID Connect</strong> to securely verify your bank account. Your credentials are never stored by Mint — 
           all verification happens directly with your bank through an encrypted channel. Once linked, you can make deposits, 
           withdrawals, and receive payouts seamlessly.
         </div>

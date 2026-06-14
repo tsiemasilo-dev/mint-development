@@ -26,7 +26,7 @@ const PaymentMethodModal = ({
   const [showEFTPopup, setShowEFTPopup] = useState(false);
   const { profile, loading: profileLoading } = useProfile();
 
-  // ── FIX 1: MINT number pulled directly from profile ──────────────────────
+  // ── FIX 1: Mint number pulled directly from profile ──────────────────────
   const mintNumber = profile?.mintNumber || profile?.mint_number || null;
 
   // ── FIX 2: Wallet balance fetched from the wallets table ─────────────────
@@ -343,11 +343,11 @@ const PaymentMethodModal = ({
                               <CopyBtn value="002064" label="Branch Code" />
                             </div>
 
-                            {/* ── MINT Number reference ── */}
+                            {/* ── Mint Number reference ── */}
                             <div className="flex items-center justify-between rounded-xl bg-violet-50 px-3 py-2">
                               <div>
                                 <p className="text-[10px] text-violet-500 mb-0.5">
-                                  Your Reference (MINT Number)
+                                  Your Reference (Mint Number)
                                 </p>
                                 <p className="text-xs font-bold text-violet-900 tracking-widest">
                                   {profileLoading
@@ -356,12 +356,12 @@ const PaymentMethodModal = ({
                                 </p>
                               </div>
                               {mintNumber && (
-                                <CopyBtn value={mintNumber} label="MINT Number" />
+                                <CopyBtn value={mintNumber} label="Mint Number" />
                               )}
                             </div>
 
                             <p className="text-[10px] text-slate-400 leading-relaxed pt-0.5">
-                              Use your MINT number as the reference. Deposits reflect
+                              Use your Mint number as the reference. Deposits reflect
                               within 1–2 business days.
                             </p>
 
@@ -472,7 +472,7 @@ const PaymentMethodModal = ({
 
                   <div className="flex items-center justify-between rounded-xl bg-violet-50 px-3 py-2">
                     <div>
-                      <p className="text-[10px] text-violet-500 mb-0.5">Your Reference (MINT Number)</p>
+                      <p className="text-[10px] text-violet-500 mb-0.5">Your Reference (Mint Number)</p>
                       <p className="text-xs font-bold text-violet-900 tracking-widest">
                         {profileLoading ? "Loading..." : mintNumber ?? "Not available"}
                       </p>
@@ -481,7 +481,7 @@ const PaymentMethodModal = ({
                   </div>
 
                   <p className="text-[10px] text-slate-400 leading-relaxed">
-                    Use your MINT number as the reference. Deposits reflect within 1–2 business days.
+                    Use your Mint number as the reference. Deposits reflect within 1–2 business days.
                   </p>
 
                   <button

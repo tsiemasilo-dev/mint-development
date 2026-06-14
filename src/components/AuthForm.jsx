@@ -816,7 +816,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
             <div className="flex flex-col items-center gap-3 pb-2 animate-on-load delay-1">
               <img
                 src="/assets/mint-logo.svg"
-                alt="MINT logo"
+                alt="Mint logo"
                 className="h-6 w-auto drop-shadow-sm"
               />
               <span className="mint-brand text-lg font-semibold tracking-[0.2em]">MINT</span>
