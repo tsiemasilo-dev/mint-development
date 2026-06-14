@@ -946,6 +946,112 @@ ensureUserSessionsTable();
 runFuneralCoverMigration(pgPool);
 runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 
+// ── Request a sell ────────────────────────────────────────────────────────────
+// Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
+// book picks them up, and records a pending credit transaction as the instruction.
+app.post("/api/user/request-sell", async (req, res) => {
+  try {
+    if (!supabase) return res.status(500).json({ success: false, error: "Database not connected" });
+    const { user, token, error: authError } = await authenticateUser(req);
+    if (authError || !user) return res.status(401).json({ success: false, error: authError || "Unauthorized" });
+    const db = getAuthenticatedDb(token);
+    const userId = user.id;
+
+    const { kind, holdingId, strategyId, familyMemberId } = req.body || {};
+    if (kind !== "security" && kind !== "strategy")
+      return res.status(400).json({ success: false, error: "kind must be 'security' or 'strategy'" });
+    if (kind === "security" && !holdingId)
+      return res.status(400).json({ success: false, error: "holdingId is required for a security sell" });
+    if (kind === "strategy" && !strategyId)
+      return res.status(400).json({ success: false, error: "strategyId is required for a strategy sell" });
+
+    // If selling on behalf of a child, verify the family member belongs to this user.
+    if (familyMemberId) {
+      const { data: fm, error: fmErr } = await db
+        .from("family_members").select("id, primary_user_id").eq("id", familyMemberId).maybeSingle();
+      if (fmErr || !fm || fm.primary_user_id !== userId)
+        return res.status(403).json({ success: false, error: "Child account not found or access denied" });
+    }
+
+    // Resolve target holdings — must belong to the caller, be active and filled.
+    let q = db
+      .from("stock_holdings_c")
+      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, side, Status")
+      .eq("user_id", userId).eq("Status", "active").gt("avg_fill", 0);
+    q = familyMemberId ? q.eq("family_member_id", familyMemberId) : q.is("family_member_id", null);
+    q = kind === "security" ? q.eq("id", holdingId) : q.eq("strategy_id", strategyId);
+
+    const { data: rows, error: rowsErr } = await q;
+    if (rowsErr) {
+      console.error("[request-sell] holdings lookup error:", rowsErr.message);
+      return res.status(500).json({ success: false, error: "Could not load your holding" });
+    }
+    if (!rows || rows.length === 0)
+      return res.status(404).json({ success: false, error: "Holding not found or not sellable" });
+
+    // Don't double-request: if everything is already a pending sell, bail early.
+    const sellable = rows.filter((r) => r.side !== "sell");
+    if (sellable.length === 0)
+      return res.status(409).json({ success: false, error: "A sell is already pending for this holding", alreadyPending: true });
+
+    const ids = sellable.map((r) => r.id);
+    const estValueCents = sellable.reduce((s, r) => s + Number(r.market_value || 0), 0);
+
+    // Friendly label for the transaction row.
+    let label = "holding";
+    if (kind === "strategy") {
+      const { data: strat } = await db.from("strategies_c").select("name, short_name").eq("id", strategyId).maybeSingle();
+      label = strat?.short_name || strat?.name || "Strategy";
+    } else {
+      const secId = sellable[0].security_id;
+      if (secId) {
+        const { data: sec } = await db.from("securities_c").select("symbol, name").eq("id", secId).maybeSingle();
+        label = sec?.name || sec?.symbol || "Asset";
+      }
+    }
+
+    const reference = "SELL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const now = new Date().toISOString();
+
+    // Flip the holding(s) to a pending SELL.
+    const { error: updErr } = await db
+      .from("stock_holdings_c")
+      .update({ side: "sell", sell_requested_at: now, updated_at: now })
+      .in("id", ids);
+    if (updErr) {
+      console.error("[request-sell] holding update error:", updErr.message);
+      return res.status(500).json({ success: false, error: "Could not queue the sell" });
+    }
+
+    // Record the instruction as a pending credit (proceeds land once the broker fills).
+    const { error: txErr } = await db.from("transactions").insert({
+      user_id: userId,
+      family_member_id: familyMemberId || null,
+      direction: "credit",
+      name: `Sell: ${label}`,
+      description: kind === "strategy"
+        ? `Sell instruction for strategy ${label} (${ids.length} asset${ids.length === 1 ? "" : "s"})`
+        : `Sell instruction for ${label}`,
+      amount: estValueCents,
+      store_reference: reference,
+      currency: "ZAR",
+      status: "pending",
+      transaction_date: now,
+      created_at: now,
+    });
+    if (txErr) {
+      // Holding is already flagged — log but don't fail, surface the reference regardless.
+      console.error("[request-sell] transaction insert error (non-fatal):", txErr.message);
+    }
+
+    console.log(`[request-sell] queued ${ids.length} holding(s) as SELL for user ${userId}, ref ${reference}`);
+    return res.json({ success: true, reference, kind, holdingCount: ids.length, estimatedValueCents: estValueCents });
+  } catch (e) {
+    console.error("[request-sell] error:", e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ── Gift expiry cron — every 15 minutes ────────────────────────────────────
 cron.schedule("*/15 * * * *", async () => {
   const db = supabaseAdmin || supabase;
