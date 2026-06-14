@@ -5704,7 +5704,7 @@ app.get("/api/user/strategies", async (req, res) => {
     // Status = active ensures cancelled/exited rows don't inflate cost basis.
     const { data: userStratHoldings } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, created_at, Status")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, invested_amount, created_at, Status")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .not("strategy_id", "is", null)
@@ -5905,13 +5905,8 @@ app.get("/api/user/strategies", async (req, res) => {
           const qty = Math.abs(Number(h.quantity || 0));
           const avgFillCents = Number(h.avg_fill || 0);
           const avgFillRands = avgFillCents / 100;
-          const expectedRaw = Number(h.Expected_fill || 0);
-          const expectedRands = expectedRaw > 0
-            ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
-            : 0;
-          const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
-          liveInvested += costBasisRands * qty;
-          liveCurrent += (stratLivePriceMap[h.security_id] || costBasisRands) * qty;
+          liveInvested += avgFillRands * qty;
+          liveCurrent += (stratLivePriceMap[h.security_id] || avgFillRands) * qty;
         }
         const hasLiveData = filledHoldings.length > 0;
 
