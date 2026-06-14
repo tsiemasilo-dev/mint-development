@@ -290,7 +290,7 @@ export default function FuneralCoverPage({ onBack, profile, initialDependents = 
         savedPolicyNo = policyNo;
 
         // Build simple text summary to embed
-        doc.setFontSize(20); doc.text("Mint Funeral Cover Policy", 20, 25);
+        doc.setFontSize(20); doc.text("MINT Funeral Cover Policy", 20, 25);
         doc.setFontSize(11);
         doc.text(`Policy No: ${policyNo}`, 20, 38);
         doc.text(`Date: ${dateStr}`, 20, 45);
@@ -308,7 +308,7 @@ export default function FuneralCoverPage({ onBack, profile, initialDependents = 
         doc.text(`Total Monthly Premium: R${Number(totalMonthly).toFixed(2)}`, 20, 110 + addonDetails.length * 7);
         doc.text(`Deduction Date: ${deductionDate} of each month`, 20, 118 + addonDetails.length * 7);
         doc.text("Waiting period: 6 months. Underwritten by GuardRisk Life Ltd (FSP 76).", 20, 128 + addonDetails.length * 7);
-        doc.text("Mint Financial Services (Pty) Ltd — FSP 55118 — www.mymint.co.za", 20, 136 + addonDetails.length * 7);
+        doc.text("MINT Financial Services (Pty) Ltd — FSP 55118 — www.mymint.co.za", 20, 136 + addonDetails.length * 7);
 
         const pdfBase64 = doc.output("datauristring").split(",")[1];
 
@@ -1044,7 +1044,7 @@ export default function FuneralCoverPage({ onBack, profile, initialDependents = 
               <div>
                 <p className="text-sm font-bold text-amber-900 mb-1">Important information</p>
                 <p className="text-xs text-amber-700 leading-relaxed">
-                  A 6-month waiting period applies from the policy start date. Benefits and product offerings may change from time to time. Full terms and conditions apply. Mint Financial Services (Pty) Ltd, FSP No. 55118.
+                  A 6-month waiting period applies from the policy start date. Benefits and product offerings may change from time to time. Full terms and conditions apply. MINT Financial Services (Pty) Ltd, FSP No. 55118.
                 </p>
               </div>
             </div>

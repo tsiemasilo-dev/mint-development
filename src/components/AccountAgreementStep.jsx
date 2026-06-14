@@ -270,8 +270,8 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   const parties = [
     ["Between", true],
     ["", false],
-    ["Mint Platforms (Pty) Ltd, trading as Mint", true],
-    ['Registration Number: 2024/644796/07 ("Mint")', false],
+    ["MINT Platforms (Pty) Ltd, trading as MINT", true],
+    ['Registration Number: 2024/644796/07 ("MINT")', false],
     ["", false],
     ["and", true],
     ["", false],
@@ -321,39 +321,39 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   };
 
   writeHeading("1. APPOINTMENT");
-  writePara(`The Client hereby appoints Mint Platforms (Pty) Ltd, trading as Mint ("Mint"), to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.`);
-  writePara(`The Client further authorises Mint to facilitate the opening and maintenance of an account in the Client's name with an appointed nominee custodian, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.`);
-  writePara("Mint is authorised to:");
+  writePara(`The Client hereby appoints MINT Platforms (Pty) Ltd, trading as MINT ("MINT"), to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.`);
+  writePara(`The Client further authorises MINT to facilitate the opening and maintenance of an account in the Client's name with an appointed nominee custodian, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.`);
+  writePara("MINT is authorised to:");
   writePara("1.1  Facilitate the opening and administration of the Client's securities account with the appointed nominee custodian, including the submission of all required documentation and client information.", 4);
   writePara("1.2  Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.", 4);
   writePara("1.3  Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, settlement agents, and registry service providers in order to give effect to the Client's investment holdings.", 4);
   writePara("1.4  Provide relevant client and investment information, instructions, and documentation to Strate, the appointed nominee custodian, and any related service providers for the purposes of securities settlement, custody administration, and registry maintenance.", 4);
 
   writeHeading("2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS");
-  writePara("2.1  The Client acknowledges that securities acquired through Mint may be held through:", 4);
+  writePara("2.1  The Client acknowledges that securities acquired through MINT may be held through:", 4);
   writeBullet("a nominee structure, or");
   writeBullet("underlying accounts opened in the Client's name with a custodian or registry service provider.");
   y += 2;
-  writePara("2.2  Where required by the relevant service provider, Mint is authorised to facilitate the opening of such underlying accounts in the Client's name for purposes of recording ownership of securities.", 4);
-  writePara("2.3  The Client consents to Mint providing the Client's information to relevant service providers for the purpose of establishing such accounts.", 4);
+  writePara("2.2  Where required by the relevant service provider, MINT is authorised to facilitate the opening of such underlying accounts in the Client's name for purposes of recording ownership of securities.", 4);
+  writePara("2.3  The Client consents to MINT providing the Client's information to relevant service providers for the purpose of establishing such accounts.", 4);
 
   writeHeading("3. RECORD OF OWNERSHIP");
-  writePara("3.1  The Client remains the beneficial owner of any securities purchased or held through Mint.", 4);
-  writePara("3.2  Mint will maintain internal records reflecting the Client's beneficial ownership of securities.", 4);
+  writePara("3.1  The Client remains the beneficial owner of any securities purchased or held through MINT.", 4);
+  writePara("3.2  MINT will maintain internal records reflecting the Client's beneficial ownership of securities.", 4);
   writePara("3.3  Official registry records may be maintained by a transfer secretary or registry provider as required under applicable market infrastructure rules.", 4);
 
   writeHeading("4. CLIENT INSTRUCTIONS");
-  writePara("4.1  Mint will act on instructions provided by the Client regarding:", 4);
+  writePara("4.1  MINT will act on instructions provided by the Client regarding:", 4);
   writeBullet("subscriptions");
   writeBullet("transfers");
   writeBullet("disposals");
   writeBullet("corporate actions");
   writeBullet("other administrative matters relating to the Client's securities.");
   y += 2;
-  writePara("4.2  Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by Mint.", 4);
+  writePara("4.2  Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by MINT.", 4);
 
   writeHeading("5. INFORMATION SHARING");
-  writePara("5.1  The Client authorises Mint to provide relevant client information and investment details to third-party service providers including but not limited to:", 4);
+  writePara("5.1  The Client authorises MINT to provide relevant client information and investment details to third-party service providers including but not limited to:", 4);
   writeBullet("custodians");
   writeBullet("transfer secretaries");
   writeBullet("registry service providers");
@@ -380,7 +380,7 @@ async function buildPDF({ profile, onboardingData, packDetail, signatureDataUrl,
   const cx = MARGIN + colW + 10;
 
   bold(8.5); color(40, 40, 40);
-  doc.text("For and on behalf of Mint Platforms (Pty) Ltd", MARGIN, y);
+  doc.text("For and on behalf of MINT Platforms (Pty) Ltd", MARGIN, y);
   norm(8.5);
   doc.text("Name: Lonwabo Damane", MARGIN, y + 5);
   doc.text("Title: Chief Executive Officer", MARGIN, y + 10);
@@ -962,9 +962,9 @@ export default function AccountAgreementStep({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
             <div style={{ padding: "16px 18px", borderRadius: 12, background: "hsl(270 30% 24%)" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Service Provider</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "white", marginBottom: 3 }}>Mint Platforms (Pty) Ltd</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "white", marginBottom: 3 }}>MINT Platforms (Pty) Ltd</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
-                Trading as <strong style={{ color: "rgba(255,255,255,0.85)" }}>Mint</strong><br />
+                Trading as <strong style={{ color: "rgba(255,255,255,0.85)" }}>MINT</strong><br />
                 Reg: 2024/644796/07
               </div>
             </div>
@@ -982,26 +982,26 @@ export default function AccountAgreementStep({
 
           {/* ── Clauses ── */}
           {clauseHeading("1", "Appointment")}
-          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px" }}>The Client appoints <strong>Mint Platforms (Pty) Ltd</strong> as its authorised securities administrator for custody, administration and record-keeping of securities.</p>
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px" }}>The Client appoints <strong>MINT Platforms (Pty) Ltd</strong> as its authorised securities administrator for custody, administration and record-keeping of securities.</p>
           {subClause("1.1", "Facilitate opening and administration of the Client's securities account with the appointed nominee custodian.")}
           {subClause("1.2", "Administer and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.")}
           {subClause("1.3", "Interface with transfer secretaries, custodians, central securities depositories, and settlement agents.")}
           {subClause("1.4", "Provide client and investment information to Strate, the appointed nominee custodian, and related service providers.")}
 
           {clauseHeading("2", "Nominee & Underlying Account Arrangements")}
-          {subClause("2.1", "Securities acquired through Mint may be held through a nominee structure or underlying accounts in the Client's name.")}
-          {subClause("2.2", "Mint is authorised to facilitate the opening of such underlying accounts in the Client's name.")}
-          {subClause("2.3", "The Client consents to Mint providing the Client's information to relevant service providers for establishing such accounts.")}
+          {subClause("2.1", "Securities acquired through MINT may be held through a nominee structure or underlying accounts in the Client's name.")}
+          {subClause("2.2", "MINT is authorised to facilitate the opening of such underlying accounts in the Client's name.")}
+          {subClause("2.3", "The Client consents to MINT providing the Client's information to relevant service providers for establishing such accounts.")}
 
           {clauseHeading("3", "Record of Ownership")}
-          {subClause("3.1", "The Client remains the beneficial owner of any securities purchased or held through Mint.")}
-          {subClause("3.2", "Mint will maintain internal records reflecting the Client's beneficial ownership of securities.")}
+          {subClause("3.1", "The Client remains the beneficial owner of any securities purchased or held through MINT.")}
+          {subClause("3.2", "MINT will maintain internal records reflecting the Client's beneficial ownership of securities.")}
 
           {clauseHeading("4", "Client Instructions")}
-          {subClause("4.1", "Mint will act on Client instructions regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.")}
+          {subClause("4.1", "MINT will act on Client instructions regarding subscriptions, transfers, disposals, corporate actions, and other administrative matters.")}
 
           {clauseHeading("5", "Information Sharing")}
-          {subClause("5.1", "The Client authorises Mint to share relevant information with custodians, transfer secretaries, registry service providers, and settlement agents solely to administer the Client's securities holdings.")}
+          {subClause("5.1", "The Client authorises MINT to share relevant information with custodians, transfer secretaries, registry service providers, and settlement agents solely to administer the Client's securities holdings.")}
 
           {clauseHeading("6", "Term")}
           <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement commences on the date of signature and remains in effect until terminated by either party upon written notice.</p>
@@ -1010,10 +1010,10 @@ export default function AccountAgreementStep({
           <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 8px", paddingLeft: 8 }}>This Agreement is governed by the laws of the <strong>Republic of South Africa</strong>.</p>
 
           {clauseHeading("8", "Signatures")}
-          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 12px", paddingLeft: 8 }}>Signed at <strong>Mint Platforms</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
+          <p style={{ fontSize: 12, color: "#444", lineHeight: 1.6, margin: "0 0 12px", paddingLeft: 8 }}>Signed at <strong>MINT Platforms</strong> on this <strong>{day}</strong> day of <strong>{month}</strong> 20<strong>{year}</strong>.</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div style={{ padding: "12px 14px", borderRadius: 10, background: purplePale, border: `1px solid ${purpleBorder}` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For Mint</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: purpleMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>For MINT</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: purple }}>Lonwabo Damane</div>
               <div style={{ fontSize: 11, color: purpleMid }}>Chief Executive Officer</div>
             </div>
@@ -1126,9 +1126,9 @@ export default function AccountAgreementStep({
           <div style={{ padding: "24px 28px", maxHeight: 480, overflowY: "auto", fontSize: 13, lineHeight: 1.7, color: "#222" }}>
             <p style={{ textAlign: "center", marginBottom: 16 }}><strong>Between</strong></p>
             <p style={{ textAlign: "center", marginBottom: 4 }}>
-              <strong>Mint Platforms (Pty) Ltd</strong>, trading as <strong>Mint</strong><br />
+              <strong>MINT Platforms (Pty) Ltd</strong>, trading as <strong>MINT</strong><br />
               Registration Number: 2024/644796/07<br />
-              (&quot;Mint&quot;)
+              (&quot;MINT&quot;)
             </p>
             <p style={{ textAlign: "center", margin: "12px 0" }}>and</p>
             <div style={{
@@ -1147,39 +1147,39 @@ export default function AccountAgreementStep({
             <hr style={{ border: "none", borderTop: `1px solid ${purpleBorder}`, margin: "20px 0" }} />
 
             <p><strong style={{ color: purple }}>1. APPOINTMENT</strong></p>
-            <p>The Client hereby appoints <strong>Mint Platforms (Pty) Ltd, trading as Mint (&quot;Mint&quot;)</strong>, to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.</p>
-            <p>The Client further authorises Mint to facilitate the opening and maintenance of an account in the Client&apos;s name with <strong>an appointed nominee custodian</strong>, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.</p>
-            <p>Mint is authorised to:</p>
+            <p>The Client hereby appoints <strong>MINT Platforms (Pty) Ltd, trading as MINT (&quot;MINT&quot;)</strong>, to act as its authorised securities administrator for purposes of facilitating the custody, administration and record-keeping of securities held by the Client.</p>
+            <p>The Client further authorises MINT to facilitate the opening and maintenance of an account in the Client&apos;s name with <strong>an appointed nominee custodian</strong>, or its affiliated companies, acting as nominee and custodian, for the purpose of holding and administering securities on behalf of the Client.</p>
+            <p>MINT is authorised to:</p>
             <p style={{ paddingLeft: 16 }}><strong>1.1</strong> Facilitate the opening and administration of the Client&apos;s securities account with <strong>the appointed nominee custodian</strong>, including the submission of all required documentation and client information.</p>
             <p style={{ paddingLeft: 16 }}><strong>1.2</strong> Administer, record, and facilitate the holding of securities beneficially owned by the Client through the nominee and custody structure.</p>
             <p style={{ paddingLeft: 16 }}><strong>1.3</strong> Interface and communicate with relevant transfer secretaries, custodians, central securities depositories, settlement agents, and registry service providers in order to give effect to the Client&apos;s investment holdings.</p>
             <p style={{ paddingLeft: 16 }}><strong>1.4</strong> Provide relevant client and investment information, instructions, and documentation to <strong>Strate</strong>, <strong>the appointed nominee custodian</strong>, and any related service providers for the purposes of securities settlement, custody administration, and registry maintenance.</p>
 
             <p><strong style={{ color: purple }}>2. NOMINEE AND UNDERLYING ACCOUNT ARRANGEMENTS</strong></p>
-            <p style={{ paddingLeft: 16 }}><strong>2.1</strong> The Client acknowledges that securities acquired through Mint may be held through:</p>
+            <p style={{ paddingLeft: 16 }}><strong>2.1</strong> The Client acknowledges that securities acquired through MINT may be held through:</p>
             <ul style={{ paddingLeft: 32 }}>
               <li>a <strong>nominee structure</strong>, or</li>
               <li><strong>underlying accounts opened in the Client&apos;s name</strong> with a custodian or registry service provider.</li>
             </ul>
-            <p style={{ paddingLeft: 16 }}><strong>2.2</strong> Where required by the relevant service provider, Mint is authorised to facilitate the opening of such underlying accounts in the Client&apos;s name for purposes of recording ownership of securities.</p>
-            <p style={{ paddingLeft: 16 }}><strong>2.3</strong> The Client consents to Mint providing the Client&apos;s information to relevant service providers for the purpose of establishing such accounts.</p>
+            <p style={{ paddingLeft: 16 }}><strong>2.2</strong> Where required by the relevant service provider, MINT is authorised to facilitate the opening of such underlying accounts in the Client&apos;s name for purposes of recording ownership of securities.</p>
+            <p style={{ paddingLeft: 16 }}><strong>2.3</strong> The Client consents to MINT providing the Client&apos;s information to relevant service providers for the purpose of establishing such accounts.</p>
 
             <p><strong style={{ color: purple }}>3. RECORD OF OWNERSHIP</strong></p>
-            <p style={{ paddingLeft: 16 }}><strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through Mint.</p>
-            <p style={{ paddingLeft: 16 }}><strong>3.2</strong> Mint will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.</p>
+            <p style={{ paddingLeft: 16 }}><strong>3.1</strong> The Client remains the <strong>beneficial owner</strong> of any securities purchased or held through MINT.</p>
+            <p style={{ paddingLeft: 16 }}><strong>3.2</strong> MINT will maintain internal records reflecting the Client&apos;s beneficial ownership of securities.</p>
             <p style={{ paddingLeft: 16 }}><strong>3.3</strong> Official registry records may be maintained by a transfer secretary or registry provider as required under applicable market infrastructure rules.</p>
 
             <p><strong style={{ color: purple }}>4. CLIENT INSTRUCTIONS</strong></p>
-            <p style={{ paddingLeft: 16 }}><strong>4.1</strong> Mint will act on instructions provided by the Client regarding:</p>
+            <p style={{ paddingLeft: 16 }}><strong>4.1</strong> MINT will act on instructions provided by the Client regarding:</p>
             <ul style={{ paddingLeft: 32 }}>
               <li>subscriptions</li><li>transfers</li><li>disposals</li>
               <li>corporate actions</li>
               <li>other administrative matters relating to the Client&apos;s securities.</li>
             </ul>
-            <p style={{ paddingLeft: 16 }}><strong>4.2</strong> Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by Mint.</p>
+            <p style={{ paddingLeft: 16 }}><strong>4.2</strong> Instructions may be provided through electronic platforms, written instruction, or other communication channels approved by MINT.</p>
 
             <p><strong style={{ color: purple }}>5. INFORMATION SHARING</strong></p>
-            <p style={{ paddingLeft: 16 }}><strong>5.1</strong> The Client authorises Mint to provide relevant client information and investment details to third-party service providers including but not limited to:</p>
+            <p style={{ paddingLeft: 16 }}><strong>5.1</strong> The Client authorises MINT to provide relevant client information and investment details to third-party service providers including but not limited to:</p>
             <ul style={{ paddingLeft: 32 }}>
               <li>custodians</li><li>transfer secretaries</li>
               <li>registry service providers</li><li>settlement agents</li>
@@ -1198,7 +1198,7 @@ export default function AccountAgreementStep({
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 16 }}>
               <div style={{ borderTop: `2px solid ${purpleBorder}`, paddingTop: 10 }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of Mint Platforms (Pty) Ltd</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>For and on behalf of MINT Platforms (Pty) Ltd</p>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: purpleMid }}>Name: Lonwabo Damane</p>
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: purpleMid }}>Title: Chief Executive Officer</p>
               </div>

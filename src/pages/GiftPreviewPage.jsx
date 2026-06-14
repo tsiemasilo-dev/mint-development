@@ -163,7 +163,7 @@ export default function GiftPreviewPage({ code, idNumber, giftPreview, onBack, o
       const data = await res.json();
       if (!res.ok || data.error) {
         if (data.kyc_required || data.mint_number_required) {
-          setError("You must complete FICA verification and Mint account setup before claiming a gift. Please finish onboarding first.");
+          setError("You must complete FICA verification and MINT account setup before claiming a gift. Please finish onboarding first.");
           return;
         }
         setError(data.error || "Failed to claim gift.");
@@ -230,7 +230,7 @@ export default function GiftPreviewPage({ code, idNumber, giftPreview, onBack, o
               <ShieldCheck size={14} className="text-blue-600" />
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              <span className="font-semibold text-slate-700">FICA verification required.</span> You must be a verified Mint client to claim this investment gift.
+              <span className="font-semibold text-slate-700">FICA verification required.</span> You must be a verified MINT client to claim this investment gift.
             </p>
           </div>
         </div>

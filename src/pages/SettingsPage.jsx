@@ -218,7 +218,7 @@ const SettingsPage = ({ onNavigate, onBack }) => {
           </span>
           <div className="flex-1">
             <h2 className="text-base font-semibold text-red-600">Close Account</h2>
-            <p className="text-sm text-slate-500">Permanently close your Mint account</p>
+            <p className="text-sm text-slate-500">Permanently close your MINT account</p>
           </div>
         </button>
 

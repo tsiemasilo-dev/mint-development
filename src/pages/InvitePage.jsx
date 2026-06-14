@@ -16,8 +16,8 @@ const InvitePage = ({ onBack }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Join Mint",
-          text: "Join Mint and get R50 bonus when you sign up with my link!",
+          title: "Join MINT",
+          text: "Join MINT and get R50 bonus when you sign up with my link!",
           url: referralLink,
         });
       } catch (err) {
@@ -51,7 +51,7 @@ const InvitePage = ({ onBack }) => {
 
           <h2 className="text-xl font-semibold text-slate-900 mb-2">Earn R100 Per Referral</h2>
           <p className="text-sm text-slate-500 mb-8">
-            Invite friends to Mint. You both get R50 when they sign up and make their first investment.
+            Invite friends to MINT. You both get R50 when they sign up and make their first investment.
           </p>
 
           <div className="w-full rounded-2xl bg-white p-5 shadow-sm mb-6">

@@ -3477,7 +3477,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
                 {child?.mint_number && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Mint Number</span>
+                    <span className="text-slate-600">MINT Number</span>
                     <span className="font-mono text-xs font-semibold text-slate-900">{child.mint_number}</span>
                   </div>
                 )}
@@ -3501,7 +3501,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 </div>
                 {parentMintNumber && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-600">Parent Mint #</span>
+                    <span className="text-slate-600">Parent MINT #</span>
                     <span className="font-mono text-xs font-semibold text-slate-900">{parentMintNumber}</span>
                   </div>
                 )}
@@ -3645,7 +3645,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         </div>
       )}
 
-      {/* -- Bottom Navigation Bar (shared Mint Navbar) -- */}
+      {/* -- Bottom Navigation Bar (shared MINT Navbar) -- */}
       {!childNewsArticleId && (
         <Navbar
           activeTab={activeChildTab === "news" ? "news" : activeChildTab === "more" ? "more" : activeChildTab === "portfolio" ? "investments" : "home"}

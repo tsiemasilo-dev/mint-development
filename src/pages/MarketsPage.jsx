@@ -1412,7 +1412,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
-          {/* Toggle between Mint Baskets and Markets */}
+          {/* Toggle between MINT Baskets and Markets */}
           {viewMode !== "news" && !childFilter && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
@@ -1426,7 +1426,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     : "text-white/60 hover:text-white/85"
                 }`}
               >
-                Mint Baskets
+                MINT Baskets
               </button>
               <button
                 onClick={() => {
@@ -2085,10 +2085,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         <span className="inline-flex items-center gap-1.5">
                           <img
                             src="/assets/mint-logo.svg"
-                            alt="Mint"
+                            alt="MINT"
                             className="h-3.5 w-3.5"
                           />
-                          <span className="font-medium">Mint News</span>
+                          <span className="font-medium">MINT News</span>
                         </span>
                         <span>•</span>
                         <span>{timeText}</span>

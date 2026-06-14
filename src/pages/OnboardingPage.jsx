@@ -118,7 +118,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
         <div className="order-2 flex h-full flex-col px-6 py-8 lg:order-1 lg:px-16 lg:py-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 animate-on-load delay-1">
-              <img src="/assets/mint-logo.svg" alt="Mint logo" className="h-6 w-auto" />
+              <img src="/assets/mint-logo.svg" alt="MINT logo" className="h-6 w-auto" />
               <span className="mint-brand text-lg font-semibold tracking-[0.12em]">MINT</span>
             </div>
           </div>
@@ -215,7 +215,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
 
             <div className="space-y-3 animate-on-load delay-2">
               <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
-                Welcome to <span className="mint-brand">Mint</span>
+                Welcome to <span className="mint-brand">MINT</span>
               </h1>
               <p className="text-lg text-slate-600">
                 Your money tools are ready when you are.

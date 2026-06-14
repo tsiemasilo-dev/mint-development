@@ -137,7 +137,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
 
   const isSpouse = type === "spouse";
 
-  /* ── Spouse: send pairing code (link existing Mint member) ── */
+  /* ── Spouse: send pairing code (link existing MINT member) ── */
   async function handleSpouseLinkSubmit() {
     if (!spouseLinkEmail.trim() || !spouseLinkEmail.includes("@")) {
       setError("Please enter a valid email address.");
@@ -196,7 +196,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
     }
   }
 
-  /* ── Spouse: invite (not yet on Mint) ── */
+  /* ── Spouse: invite (not yet on MINT) ── */
   async function handleSpouseInviteSubmit() {
     if (!spouseEmail.trim() || !spouseEmail.includes("@")) {
       setError("Please enter a valid email address.");
@@ -621,7 +621,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-bold text-slate-900">Link existing member</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Your partner already has a Mint account</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Your partner already has a MINT account</p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-slate-400 -rotate-90 flex-shrink-0" />
                 </button>
@@ -633,8 +633,8 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
                     <Mail className="h-5 w-5" style={{ color: P }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-bold text-slate-900">Invite to Mint</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Your partner isn't on Mint yet</p>
+                    <p className="text-[15px] font-bold text-slate-900">Invite to MINT</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Your partner isn't on MINT yet</p>
                   </div>
                   <ChevronDown className="h-4 w-4 text-slate-400 -rotate-90 flex-shrink-0" />
                 </button>
@@ -658,9 +658,9 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
                   {spouseMode === "link" ? "Secure Connection" : "Partnership"}
                 </p>
                 <p className="text-[20px] font-bold text-slate-900 leading-tight">
-                  {spouseMode === "link" && !spousePending ? "Link Mint Member" :
+                  {spouseMode === "link" && !spousePending ? "Link MINT Member" :
                    spouseMode === "link" && spousePending ? "Enter Pairing Code" :
-                   "Invite to Mint"}
+                   "Invite to MINT"}
                 </p>
               </div>
               <button onClick={onClose} className="ml-auto h-9 w-9 flex items-center justify-center rounded-full bg-[#F5F3FF] text-slate-400 hover:bg-[#EDE9FE] transition">
@@ -729,7 +729,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
           {/* ── Invite mode: form ── */}
           {isSpouse && !spouseResult && spouseMode === "invite" && (
             <div className="space-y-3">
-              <p className="text-sm text-slate-500 leading-relaxed mb-4">Fill in your partner's details and we'll send them an invitation to join Mint.</p>
+              <p className="text-sm text-slate-500 leading-relaxed mb-4">Fill in your partner's details and we'll send them an invitation to join MINT.</p>
               <div className="rounded-3xl bg-[#F5F3FF] p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -761,7 +761,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
               </div>
               <p className="text-xl font-bold text-slate-900">Spouse Linked!</p>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">{[spouseResult.member?.first_name, spouseResult.member?.last_name].filter(Boolean).join(" ")} has been linked to your family account.</p>
-              {spouseResult.member?.mint_number && <p className="text-xs text-slate-400 mt-1">Mint # {spouseResult.member.mint_number}</p>}
+              {spouseResult.member?.mint_number && <p className="text-xs text-slate-400 mt-1">MINT # {spouseResult.member.mint_number}</p>}
               <button onClick={() => { onSave(spouseResult.member); }} className="mt-7 w-full rounded-2xl py-4 text-sm font-bold text-white active:scale-[0.98]" style={{ background: `linear-gradient(135deg, ${P2}, ${P})` }}>Done</button>
             </motion.div>
           )}
@@ -775,7 +775,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
               <p className="text-xl font-bold text-slate-900">Spouse Added — KYC Pending</p>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed">{[spouseResult.member?.first_name, spouseResult.member?.last_name].filter(Boolean).join(" ") || "Your spouse"} has been linked, but identity verification is not yet complete.</p>
               <div className="mt-4 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-left">
-                <p className="text-xs text-amber-700 leading-relaxed">Their account will show a <strong>Pending KYC</strong> badge until they complete verification on the Mint app.</p>
+                <p className="text-xs text-amber-700 leading-relaxed">Their account will show a <strong>Pending KYC</strong> badge until they complete verification on the MINT app.</p>
               </div>
               <button onClick={() => { onSave({ ...spouseResult.member, kyc_pending: true }); }} className="mt-7 w-full rounded-2xl py-4 text-sm font-bold text-white active:scale-[0.98]" style={{ background: `linear-gradient(135deg, ${P2}, ${P})` }}>Got it</button>
             </motion.div>
@@ -1055,7 +1055,7 @@ function AddMemberModal({ type, userId, profile, coGuardians = [], onSave, onClo
                 investment account has been set up successfully.
               </p>
               {childComplete.member?.mint_number && (
-                <p className="text-xs text-slate-400 mt-1">Mint # {childComplete.member.mint_number}</p>
+                <p className="text-xs text-slate-400 mt-1">MINT # {childComplete.member.mint_number}</p>
               )}
               <button
                 onClick={() => onSave(childComplete.member)}
