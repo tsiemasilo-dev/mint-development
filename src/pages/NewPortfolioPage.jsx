@@ -657,9 +657,16 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const yearStr = `${new Date().getFullYear()}-01-01`;
       const priorRows = snapshotRows.filter(r => r.as_of_date < yearStr);
       const currentYearRows = snapshotRows.filter(r => r.as_of_date >= yearStr);
-      const allTimePnl = parseFloat((liveVal - liveStrategyMetrics.costBasis).toFixed(2));
-      const allTimePct = parseFloat((liveStrategyMetrics.costBasis > 0
-        ? (allTimePnl / liveStrategyMetrics.costBasis) * 100 : 0).toFixed(4));
+      // Use useUserStrategies totalPnl (unrealized + realized gains) as the
+      // all-time P&L base so realized gains from rebalance sells are included.
+      const hookTotalPnl = currentStrategy?.totalPnl;
+      const hookInvested = currentStrategy?.investedAmount;
+      const allTimePnl = hookTotalPnl != null
+        ? parseFloat(hookTotalPnl.toFixed(2))
+        : parseFloat((liveVal - liveStrategyMetrics.costBasis).toFixed(2));
+      const allTimePctBase = hookInvested ?? liveStrategyMetrics.costBasis;
+      const allTimePct = parseFloat((allTimePctBase > 0
+        ? (allTimePnl / allTimePctBase) * 100 : 0).toFixed(4));
       if (priorRows.length === 0) return { pnl: allTimePnl, pct: allTimePct };
       const yearStartCents = currentYearRows.length > 0 ? Number(currentYearRows[0]?.basket_value || 0) : 0;
       if (!yearStartCents) return { pnl: 0, pct: 0 };
@@ -670,7 +677,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       return { pnl, pct: parseFloat((anchor > 0 ? (pnl / anchor) * 100 : 0).toFixed(4)) };
     }
     return { pnl: 0, pct: 0 };
-  }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings]);
+  }, [snapshotRows, timeFilter, liveStrategyMetrics, directStratHoldings, currentStrategy]);
 
   // ── period chart from basket_value (5D / M / YTD) ────────────────────────
   const snapshotChartData = useMemo(() => {
@@ -1274,9 +1281,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           if (timeFilter === "D") {
                             pnl = liveStrategyMetrics.todayPnl;
                             pnlPct = liveStrategyMetrics.todayPct;
-                          } else if (timeFilter === "5d" || timeFilter === "m" || timeFilter === "ytd") {
+                          } else if (timeFilter === "5d" || timeFilter === "m") {
                             pnl = periodReturnData?.pnl ?? 0;
                             pnlPct = periodReturnData?.pct ?? 0;
+                          } else if (timeFilter === "ytd") {
+                            // Use live-computed derivedPeriodReturn for YTD so realized
+                            // gains (from rebalance sells) are always included — the DB's
+                            // ytd_pnl column lags and omits those locked-in gains.
+                            pnl = derivedPeriodReturn?.pnl ?? 0;
+                            pnlPct = derivedPeriodReturn?.pct ?? 0;
                           } else {
                             pnl = cv - ia;
                             pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;

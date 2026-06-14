@@ -56,6 +56,7 @@ const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage.jsx"));
 const LegalDocumentationPage = lazy(() => import("./pages/LegalDocumentationPage.jsx"));
 const StatementsPage = lazy(() => import("./pages/StatementsPage.jsx"));
 const DepositPage = lazy(() => import("./pages/DepositPage.jsx"));
+const WithdrawPage = lazy(() => import("./pages/WithdrawPage.jsx"));
 const IdentityCheckPage = lazy(() => import("./pages/IdentityCheckPage.jsx"));
 const BankLinkPage = lazy(() => import("./pages/BankLinkPage.jsx"));
 const MintBankPage = lazy(() => import("./pages/MintBankPage.jsx"));
@@ -779,17 +780,18 @@ const App = () => {
       }
 
       const { count, error } = await supabase
-        .from("stock_holdings")
+        .from("stock_holdings_c")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userData.user.id)
-        .eq("is_active", true);
+        .eq("Status", "active")
+        .gt("avg_fill", 0);
 
       if (error || !count) {
         openModal("Withdraw", "You don't have any allocations to withdraw from.");
         return;
       }
 
-      openModal("Withdraw", "Withdrawals are coming soon.");
+      navigateTo("withdraw");
     } catch (err) {
       console.error("Failed to check allocations", err);
       openModal("Withdraw", "You don't have any allocations to withdraw from.");
@@ -1597,6 +1599,21 @@ const App = () => {
         onCloseModal={() => { }}
       >
         <DepositPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "withdraw") {
+    return (
+      <AppLayout
+        activeTab="withdraw"
+        onTabChange={handleTabChange}
+        onWithdraw={() => {}}
+        onShowComingSoon={() => {}}
+        modal={null}
+        onCloseModal={() => {}}
+      >
+        <WithdrawPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
       </AppLayout>
     );
   }

@@ -215,7 +215,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
 
             <div className="space-y-3 animate-on-load delay-2">
               <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
-                Welcome to <span className="mint-brand">MINT</span>
+                Welcome to <span className="mint-brand">Mint</span>
               </h1>
               <p className="text-lg text-slate-600">
                 Your money tools are ready when you are.

@@ -2,3 +2,4 @@
 - [Onboarding reset](onboarding-reset.md) — full reset must also DELETE user_onboarding_pack_details (gates KYC/Step 1); per-step reset uses sumsub_raw.address_saved=false; includes internal-vs-UI step number map.
 - [Portfolio chart-badge consistency](portfolio-chart-badge.md) — stored 5d_pnl/ytd_pnl columns are stale; use basket_value deltas from snapshotRows for both chart and badge so they always match.
 - [Experian Integration](experian-integration.md) — Sumsub replaced with Experian KYC V2 + ID Me Now; UAT credentials in secrets; key endpoints and flow documented.
+- [Holdings is_active dedup](holdings-is-active-dedup.md) — rebalance can leave old rows as is_active=null alongside new is_active=true rows; balance card dedup guard drops the stale null rows to prevent 2× portfolio inflation.
