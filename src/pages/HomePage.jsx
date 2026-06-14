@@ -28,6 +28,7 @@ import { useProfile } from "../lib/useProfile";
 import { useNotificationsContext } from "../lib/NotificationsContext.jsx";
 import NavigationPill from "../components/NavigationPill";
 import { useRequiredActions } from "../lib/useRequiredActions";
+import { useUserStrategies } from "../lib/useUserStrategies";
 import { useSumsubStatus } from "../lib/useSumsubStatus";
 import { parseOnboardingFlags } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
@@ -493,6 +494,7 @@ const HomePage = ({
 }) => {
   const { profile, loading } = useProfile();
   const { bankLinked, loading: actionsLoading, refetch: fetchRequiredActions } = useRequiredActions();
+  const { strategies: hookStrategies } = useUserStrategies();
   const { kycVerified, kycPending, kycNeedsResubmission } = useSumsubStatus();
   const { balance, investments, transactions, bestAssets, loading: financialLoading, refetch: fetchFinancialData } = useFinancialData();
   const { monthlyChangePercent } = useInvestments();
@@ -2292,6 +2294,15 @@ const HomePage = ({
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
 
+                // Override P&L with live data from useUserStrategies so realized
+                // gains (rebalance sells) and buffer/residual cash are included —
+                // the API's invested_amount omits those.
+                const hookStrat = hookStrategies.find(h => h.strategyId === strategy.id || h.id === strategy.id);
+                const displayPnlRands = hookStrat != null ? hookStrat.totalPnl : strategy.pnlRands;
+                const displayPnlPct = hookStrat != null
+                  ? (hookStrat.investedAmount > 0 ? (hookStrat.totalPnl / hookStrat.investedAmount) * 100 : 0)
+                  : strategy.pnlPct;
+
                 // Use purchase batches (one per minute) instead of transactions for accuracy
                 const batches = purchaseBatchesByStrategy[strategy.id] || [];
                 const pendingCount = batches.filter(b => !b.filled).length;
@@ -2320,10 +2331,10 @@ const HomePage = ({
                           </p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          {strategy.pnlRands != null && strategy.investedAmount > 0 ? (
-                            <div className={`text-right ${strategy.pnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              <p className="text-sm font-semibold">{strategy.pnlRands >= 0 ? '+' : ''}R{Math.abs(strategy.pnlRands).toFixed(2)}</p>
-                              <p className="text-xs font-semibold">({strategy.pnlPct >= 0 ? '+' : ''}{strategy.pnlPct.toFixed(2)}%)</p>
+                          {displayPnlRands != null && strategy.investedAmount > 0 ? (
+                            <div className={`text-right ${displayPnlRands >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <p className="text-sm font-semibold">{displayPnlRands >= 0 ? '+' : ''}R{Math.abs(displayPnlRands).toFixed(2)}</p>
+                              <p className="text-xs font-semibold">({displayPnlPct >= 0 ? '+' : ''}{displayPnlPct.toFixed(2)}%)</p>
                             </div>
                           ) : (
                             <p className={`text-sm font-semibold ${pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
