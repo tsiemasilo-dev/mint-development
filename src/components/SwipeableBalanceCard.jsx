@@ -857,6 +857,7 @@ const SwipeableBalanceCard = ({
       if (!strategyIds.length) return;
       try {
         const now = new Date();
+        const todayStr = now.toISOString().split("T")[0];
         const dowUtc = now.getUTCDay();
         const weekendOffset = dowUtc === 6 ? 1 : dowUtc === 0 ? 2 : 0;
         const lastWeekday = new Date(now);
@@ -915,7 +916,7 @@ const SwipeableBalanceCard = ({
               .eq("user_id", userId)
               .is("family_member", null)
               .eq("strategy_id", sid)
-              .lte("as_of_date", lastWeekdayStr)
+              .lte("as_of_date", todayStr)
               .order("as_of_date", { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -942,7 +943,7 @@ const SwipeableBalanceCard = ({
                 .eq("user_id", userId)
                 .is("family_member", null)
                 .eq("strategy_id", strategyIds[0])
-                .lte("as_of_date", lastWeekdayStr)
+                .lte("as_of_date", todayStr)
                 .order("as_of_date", { ascending: false })
                 .range(monthOffset, monthOffset)
                 .maybeSingle();
