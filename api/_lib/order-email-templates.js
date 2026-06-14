@@ -162,7 +162,7 @@ function buildShell({ heroLabel, heroTitle, body, footerNote }) {
  * @param {number} [params.quantity]     - number of shares
  * @param {string} [params.reference]    - transaction reference
  * @param {string} [params.strategyName] - if a strategy, overrides assetName
- * @param {string} [params.paymentMethod] - e.g. "wallet", "paystack"
+ * @param {string} [params.paymentMethod] - e.g. "wallet", "direct_eft"
  */
 export function buildOrderConfirmationHtml({
   assetName,

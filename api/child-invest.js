@@ -1,5 +1,5 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
-import { computeFees } from "./_lib/fees.js";
+import { computeFees, getFeeConfig } from "./_lib/fees.js";
 
 // Latest stock_intraday_c.current_price per security_id — stamped as
 // Expected_fill so child PnL is anchored to the price at click time.
@@ -130,7 +130,8 @@ export default async function handler(req, res) {
     const baseCentsIn = Number(base_amount || 0);
     const baseRandsForFees = baseCentsIn > 0 ? baseCentsIn / 100 : (amount / 100);
     const numAssetsForFees = (strategy.holdings || []).length || 1;
-    const fees = computeFees(baseRandsForFees, numAssetsForFees);
+    const feeConfig = await getFeeConfig(db);
+    const fees = computeFees(baseRandsForFees, numAssetsForFees, feeConfig);
 
     try {
       const txInsert = await db.from("transactions").insert({

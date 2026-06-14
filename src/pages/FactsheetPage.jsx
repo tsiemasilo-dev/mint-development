@@ -4,6 +4,8 @@ import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
+import { useDiscretionType } from "../lib/useDiscretionType";
+import { useFees } from "../lib/useFees";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
 import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import {
@@ -26,8 +28,10 @@ const timeframeOptions = [
 
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding }) => {
+const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding, onUpdateMandate }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
+  const { isLimited: isLimitedDiscretion } = useDiscretionType();
+  const feeRates = useFees();
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -43,6 +47,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
   const marqueeRef = useRef(null);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showDiscretionModal, setShowDiscretionModal] = useState(false);
   const [investChecking, setInvestChecking] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [performanceData, setPerformanceData] = useState({});
@@ -1083,9 +1088,8 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
             <li>• Performance fee: 20% of profits</li>
-            <li>• Brokerage fee: 0.25% of investment amount</li>
-            <li>• Custody fee (ISIN): R69.00 per asset</li>
-            <li>• Transaction fee (Paystack): 3.5% of total</li>
+            <li>• Brokerage fee: {(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}% of investment amount</li>
+            <li>• Custody fee: R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
@@ -1152,6 +1156,42 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
         </div>
       )}
 
+      {showDiscretionModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDiscretionModal(false)}>
+          <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-full bg-violet-100 text-violet-600 mb-4">
+              <Info className="h-7 w-7" />
+            </div>
+            <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
+            <p className="text-center text-sm text-slate-600 mb-6">
+              You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+              <button
+                type="button"
+                onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); else if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
+                className="font-semibold text-violet-600 underline"
+              >
+                update your discretionary
+              </button>{" "}
+              to trade strategies.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setShowDiscretionModal(false); if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
+              className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg"
+            >
+              Update my discretionary
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDiscretionModal(false)}
+              className="w-full mt-2 rounded-2xl py-3 text-sm font-semibold text-slate-500"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+
       {showUpgradeModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowUpgradeModal(false)}>
           <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -1210,14 +1250,21 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
           type="button"
           disabled={investChecking}
           onClick={async () => {
+            // Limited-discretion users cannot trade strategies — prompt to update.
+            if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
             setInvestChecking(true);
             try {
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.user) { setInvestChecking(false); return; }
 
-              // Use the cached status from the hook instead of fresh fetch to avoid race conditions
-              if (onboardingLoading) return;
-              const isOnboarded = onboardingComplete;
+              if (onboardingLoading) { setInvestChecking(false); return; }
+              // Prefer the cached hook value, but never bounce a user to onboarding
+              // on a stale `false` — confirm authoritatively first. (The hook can
+              // latch false if it first ran before the session was ready.)
+              let isOnboarded = onboardingComplete;
+              if (!isOnboarded) {
+                isOnboarded = await checkOnboardingComplete();
+              }
               if (!isOnboarded) {
                 setShowOnboardingModal(true);
                 setInvestChecking(false);
@@ -1257,7 +1304,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding 
               setInvestChecking(false);
             }
           }}
-          className="w-full rounded-2xl bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-70"
+          className={`w-full rounded-2xl py-3 text-sm font-semibold shadow-lg disabled:opacity-70 ${isLimitedDiscretion ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white shadow-violet-200/60"}`}
         >
           {investChecking ? "Checking..." : `Invest in ${currentStrategy.name}`}
         </button>

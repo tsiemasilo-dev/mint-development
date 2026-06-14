@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
+import { higherOfCostPerShareRands, fetchStrategyCashCents } from "./strategyValuation";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
 
@@ -57,7 +58,7 @@ export const useUserStrategies = (familyMemberId = null) => {
       // avoids /api/user/strategies which joins the deleted strategy_metrics table.
       let returnsQuery = supabase
         .from("client_strategy_returns_c")
-        .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct")
+        .select("strategy_id, basket_value, holdings_snapshot, as_of_date, ytd_pct, inception_pnl")
         .eq("user_id", userId);
       returnsQuery = familyMemberId
         ? returnsQuery.eq("family_member", familyMemberId)
@@ -76,14 +77,96 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? residualQuery.eq("family_member_id", familyMemberId)
         : residualQuery.is("family_member_id", null);
 
-      const [allReturnsResult, strategiesResult, residualResult] = await Promise.all([
+      /* Closed positions (rebalance sells / replacements) carry the REALISED P&L.
+         Same basis as the returns job's inception_pnl: (avg_exit − avg_fill) × qty,
+         both in cents. Lets us split total P&L into realised vs unrealised. */
+      let closedQuery = supabase
+        .from("stock_holdings_c")
+        .select("strategy_id, quantity, avg_fill, avg_exit, transaction_id")
+        .eq("user_id", userId)
+        .eq("is_active", false);
+      closedQuery = familyMemberId
+        ? closedQuery.eq("family_member_id", familyMemberId)
+        : closedQuery.is("family_member_id", null);
+
+      /* Open positions — used to value the strategy at LIVE intraday prices
+         (more accurate than the EOD basket_value snapshot, and matches the CRM). */
+      let activeQuery = supabase
+        .from("stock_holdings_c")
+        .select("strategy_id, security_id, quantity, transaction_id, avg_fill, Expected_fill, Fill_date, market_value")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .eq("trade_side", "BUY");
+      activeQuery = familyMemberId
+        ? activeQuery.eq("family_member_id", familyMemberId)
+        : activeQuery.is("family_member_id", null);
+
+      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
           .select("id, name, short_name, description, risk_level, sector, icon_url, image_url, holdings")
           .eq("status", "active"),
         residualQuery,
+        closedQuery,
+        activeQuery,
       ]);
+
+      /* Value positions straight from holdings (NOT the EOD returns snapshot):
+         live price (stock_intraday_c.current_price, cents) × qty, with cost basis
+         on the HIGHER-OF rule max(Expected_fill, avg_fill/100). Only FILLED holdings
+         (avg_fill > 0 && Fill_date set) count. A strategy appears the moment it has
+         filled holdings — no client_strategy_returns_c row needed. */
+      const activeRows = (activeResult?.data || []).filter(
+        (r) => r?.strategy_id && Number(r.avg_fill) > 0 && r.Fill_date != null
+      );
+      const liveSecIds = [...new Set(activeRows.map((r) => r.security_id).filter(Boolean))];
+      const livePxById = {};
+      const secSymbolById = {};
+      if (liveSecIds.length > 0) {
+        const [{ data: intradayRows }, { data: secRows }] = await Promise.all([
+          supabase.from("stock_intraday_c").select("security_id, current_price").in("security_id", liveSecIds).order("timestamp", { ascending: false }),
+          supabase.from("securities_c").select("id, symbol").in("id", liveSecIds),
+        ]);
+        (intradayRows || []).forEach((row) => { if (livePxById[row.security_id] == null) livePxById[row.security_id] = Number(row.current_price) || 0; });
+        (secRows || []).forEach((s) => { secSymbolById[s.id] = s.symbol; });
+      }
+
+      const positionsByStrategy = {};   // live value (rands)
+      const costBasisByStrategy = {};    // higher-of cost basis (rands)
+      const holdingPnlBySymbol = {};     // per-strategy → per-symbol P&L for the holdings list
+      activeRows.forEach((r) => {
+        const sid = r.strategy_id;
+        const qty = Math.abs(Number(r.quantity || 0));
+        const pxCents = livePxById[r.security_id] || 0;
+        const costPerShare = higherOfCostPerShareRands(r);
+        const liveVal = pxCents > 0 ? (pxCents / 100) * qty : costPerShare * qty; // fall back to cost if no live px
+        const costVal = costPerShare * qty;
+        positionsByStrategy[sid] = (positionsByStrategy[sid] || 0) + liveVal;
+        costBasisByStrategy[sid] = (costBasisByStrategy[sid] || 0) + costVal;
+        const sym = secSymbolById[r.security_id];
+        if (sym) {
+          const pr = liveVal - costVal;
+          (holdingPnlBySymbol[sid] = holdingPnlBySymbol[sid] || {})[sym] = {
+            pnlRands: Number(pr.toFixed(2)),
+            pnlPct: costVal > 0 ? Number(((pr / costVal) * 100).toFixed(2)) : 0,
+          };
+        }
+      });
+      const activeStrategyIds = Object.keys(positionsByStrategy);
+
+      /* Held 8% buffer (reserve) per strategy — shared single source of truth
+         (strategyValuation.js). Residual is fetched separately below, so skip it
+         here. Cents → rands for this hook's downstream math. */
+      const { bufferCentsByStrategy } = await fetchStrategyCashCents({
+        userId,
+        familyMemberId,
+        strategyIds: activeStrategyIds,
+        activeHoldings: activeRows,
+        includeResidual: false,
+      });
+      const bufferRandsByStrategy = {};
+      Object.entries(bufferCentsByStrategy).forEach(([sid, cents]) => { bufferRandsByStrategy[sid] = cents / 100; });
 
       if (allReturnsResult.error) {
         console.error("[useUserStrategies] Error fetching returns:", allReturnsResult.error);
@@ -99,10 +182,17 @@ export const useUserStrategies = (familyMemberId = null) => {
         residualRandsByStrategy[row.strategy_id] = Number(row.balance_cents || 0) / 100;
       });
 
-      if (allReturns.length === 0) {
-        setData({ strategies: [], selectedStrategy: null, loading: false, error: null });
-        return;
-      }
+      // Accumulated realised P&L per strategy from closed positions (rands).
+      const realizedRandsByStrategy = {};
+      (closedResult?.data || []).forEach((row) => {
+        if (!row?.strategy_id) return;
+        const fill = Number(row.avg_fill || 0);
+        const exit = Number(row.avg_exit || 0);
+        const qty = Number(row.quantity || 0);
+        if (!fill || !exit || !qty) return;
+        realizedRandsByStrategy[row.strategy_id] =
+          (realizedRandsByStrategy[row.strategy_id] || 0) + ((exit - fill) / 100) * qty;
+      });
 
       // Build latest-row and oldest-row per strategy (allReturns is desc order)
       const latestByStrategy = {};
@@ -120,47 +210,49 @@ export const useUserStrategies = (familyMemberId = null) => {
         strategiesMap[s.id] = s;
       }
 
-      const formattedStrategies = Object.entries(latestByStrategy).map(([strategyId, returnsRow]) => {
+      const formattedStrategies = activeStrategyIds.map((strategyId) => {
+        const returnsRow = latestByStrategy[strategyId] || {}; // chart/YTD only
         const stratMeta = strategiesMap[strategyId] || {};
         const oldestRow = oldestByStrategy[strategyId];
 
-        const snapshot = (() => {
-          try {
-            return typeof returnsRow.holdings_snapshot === "string"
-              ? JSON.parse(returnsRow.holdings_snapshot)
-              : (returnsRow.holdings_snapshot || []);
-          } catch { return []; }
-        })();
-
-        const positionsVal = Number((returnsRow.basket_value / 100).toFixed(2));
-        /* Residual cash from rebalances counts toward the strategy's value —
-           the cash hasn't been redeployed yet but it's still part of the
-           strategy's capital. Without this, a rebalance would look like the
-           portfolio shrank. */
         const residualVal = Number((residualRandsByStrategy[strategyId] || 0).toFixed(2));
-        const currentVal = Number((positionsVal + residualVal).toFixed(2));
-        const invested = snapshot.reduce((sum, h) => sum + costBasisRandsPerShare(h) * (h.qty || h.quantity || 0), 0);
-        const changePct = invested > 0 ? ((currentVal - invested) / invested) * 100 : 0;
+        const bufferVal = Number((bufferRandsByStrategy[strategyId] || 0).toFixed(2));
+        /* Cash element of the strategy for THIS user = rebalance residual + the
+           held 8% buffer (reserve). It's the user's money sitting as cash in the
+           strategy, so it counts toward portfolio value. */
+        const cashElement = Number((residualVal + bufferVal).toFixed(2));
+
+        /* Positions value + cost basis come STRAIGHT FROM HOLDINGS (live intraday
+           price × qty, higher-of cost basis) — never the client_strategy_returns_c
+           snapshot. So a strategy is valued correctly the instant it's bought. */
+        const positionsVal = Number((positionsByStrategy[strategyId] || 0).toFixed(2));
+        const investedBase = Number((costBasisByStrategy[strategyId] || 0).toFixed(2));
+        /* Portfolio value = live positions + cash element (residual + buffer). */
+        const currentVal = Number((positionsVal + cashElement).toFixed(2));
+        /* P&L = realised (locked in from rebalance sells) + unrealised (paper
+           gain on the CURRENT open positions). A rebalance just converts
+           unrealised → realised, so the TOTAL stays stable across rebalances —
+           the gain never "disappears" when sold shares leave the cost basis.
+             realised   = Σ(avg_exit − avg_fill)×qty over closed positions
+             unrealised = live positions − cost basis of open positions
+           invested is then DERIVED from the total so the % return is a stable
+           "money in → money out" base that doesn't drift after a rebalance.
+           (For a fresh buy with no closed lots this equals cost basis + buffer,
+           exactly as before — backward compatible.) */
+        const realizedPnl = Number((realizedRandsByStrategy[strategyId] || 0).toFixed(2));
+        const unrealizedPnl = Number((positionsVal - investedBase).toFixed(2));
+        const totalPnl = Number((unrealizedPnl + realizedPnl).toFixed(2));
+        const invested = Number((currentVal - totalPnl).toFixed(2));
+        const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
-        // Build snapshot lookup by symbol for augmenting base holdings
-        const snapshotMap = {};
-        snapshot.forEach(h => { snapshotMap[h.symbol] = h; });
-
-        // Use strategies_c.holdings as base (has weight/logo_url); augment with P&L from snapshot
-        const baseHoldings = stratMeta.holdings || snapshot.map(h => ({ symbol: h.symbol, name: h.symbol, weight: 0, logo_url: null }));
+        // strategies_c.holdings as base (weight/logo_url); augment with per-asset
+        // P&L computed from live holdings (live price vs higher-of cost basis).
+        const pnlBySymbol = holdingPnlBySymbol[strategyId] || {};
+        const baseHoldings = stratMeta.holdings || [];
         const augmentedHoldings = baseHoldings.map(h => {
-          const snap = snapshotMap[h.symbol] || snapshotMap[h.ticker];
-          if (snap) {
-            const qty = snap.qty || snap.quantity || 0;
-            const currentPriceCents = Number(snap.current_price ?? 0);
-            const stockCurrentVal = (currentPriceCents * qty) / 100;
-            const stockCostBasis = costBasisRandsPerShare(snap) * qty;
-            const pnlRands = stockCurrentVal - stockCostBasis;
-            const pnlPct = stockCostBasis > 0 ? (pnlRands / stockCostBasis) * 100 : 0;
-            return { ...h, pnlRands: Number(pnlRands.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)) };
-          }
-          return h;
+          const p = pnlBySymbol[h.symbol] || pnlBySymbol[h.ticker];
+          return p ? { ...h, ...p } : h;
         });
 
         return {
@@ -176,18 +268,25 @@ export const useUserStrategies = (familyMemberId = null) => {
           holdings: augmentedHoldings,
           investedAmount: Number(invested.toFixed(2)),
           currentValue: currentVal,
-          /* Cash component (rebalance residual) surfaced separately so the
-             UI can show "Positions R890 + Cash R104.61" if it wants to. */
+          /* Realised vs unrealised P&L (rands). realised + unrealised = total P&L
+             shown by the headline (changePct). */
+          totalPnl: Number(totalPnl.toFixed(2)),
+          realizedPnl,
+          unrealizedPnl,
+          /* Cash component surfaced separately so the UI can show
+             "Positions R890 + Cash R104.61". cashElement = residual + buffer. */
           positionsValue: positionsVal,
           residualCash: residualVal,
+          bufferCash: bufferVal,
+          cashElement,
           unitsHeld: 0,
           entryDate: null,
-          lastUpdated: returnsRow.as_of_date,
+          lastUpdated: returnsRow.as_of_date || null,
           previousMonthChange: parseFloat(changePct.toFixed(1)),
           metrics: null,
           firstInvestedDate: oldestRow?.as_of_date || null,
           ytd_pct: ytdPctDecimal,
-          hasReturnsData: true,
+          hasReturnsData: !!latestByStrategy[strategyId],
         };
       });
 
@@ -266,37 +365,13 @@ export const useUserStrategies = (familyMemberId = null) => {
 
           if (stratHoldings.length === 0) continue;
 
-          let liveVal = 0;
-          let costBasis = 0;
-          let hasLive = false;
+          // NOTE: the strategy's value (live positions + 8% buffer + residual) and
+          // cost basis are ALREADY set by the holdings-driven computation above
+          // (positionsByStrategy / costBasisByStrategy / cashElement). Do NOT
+          // re-derive/overwrite them here — main's old live-override valued
+          // positions only, which dropped the buffer. This loop now only flags
+          // pending batches so they can be hidden from the strategies tab.
 
-          for (const h of stratHoldings) {
-            const qty = Math.abs(Number(h.quantity || 0));
-            const livePrice = livePriceMap[h.security_id];
-            if (livePrice > 0) {
-              liveVal += (livePrice / 100) * qty;
-              hasLive = true;
-            }
-            // Match SwipeableBalanceCard: max(Expected_fill, avg_fill/100) with legacy-cents guard
-            const avgFillCentsH = Number(h.avg_fill || 0);
-            const avgFillRandsH = avgFillCentsH / 100;
-            const expectedRawH = Number(h.Expected_fill || 0);
-            const expectedRandsH = expectedRawH > 0
-              ? (expectedRawH > avgFillRandsH * 5 ? expectedRawH / 100 : expectedRawH)
-              : 0;
-            costBasis += Math.max(expectedRandsH, avgFillRandsH) * qty;
-          }
-
-          if (hasLive) {
-            const liveValR = Number(liveVal.toFixed(2));
-            const costBasisR = Number(costBasis.toFixed(2));
-            strat.currentValue = liveValR;
-            strat.positionsValue = liveValR;
-            strat.investedAmount = costBasisR;
-            strat.previousMonthChange = costBasisR > 0
-              ? parseFloat(((liveValR - costBasisR) / costBasisR * 100).toFixed(1))
-              : 0;
-          }
           // Strategy has a new pending batch on top of existing filled holdings
           if (mixedPendingStrategyIds.has(strat.strategyId)) {
             strat.hasPendingBatch = true;

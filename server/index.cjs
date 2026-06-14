@@ -942,6 +942,7 @@ async function ensureUserSessionsTable() {
   }
 }
 ensureUserSessionsTable();
+
 runFuneralCoverMigration(pgPool);
 runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 
@@ -2100,6 +2101,363 @@ app.post("/api/sumsub/webhook", async (req, res) => {
   }
 
   res.status(200).json({ received: true });
+});
+
+// ─── Experian KYC V2 & ID Me Now ─────────────────────────────────────────────
+const EXPERIAN_KYC_USERNAME = readEnv("EXPERIAN_KYC_USERNAME");
+const EXPERIAN_KYC_PASSWORD = readEnv("EXPERIAN_KYC_PASSWORD");
+const EXPERIAN_IDMN_USERNAME = readEnv("EXPERIAN_IDMN_USERNAME");
+const EXPERIAN_IDMN_PASSWORD = readEnv("EXPERIAN_IDMN_PASSWORD");
+const EXPERIAN_KYC_URL = "https://apis-uat.experian.co.za:9443/KycService/RequestNewKYC";
+const EXPERIAN_IDMN_BASE = "https://apis-uat.experian.co.za:9443/IdMeNow";
+const EXPERIAN_IDMN_WORKFLOW_ID = 14; // Full ID Me Now — UAT
+
+function experianRequest(url, bodyObj, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const postData = JSON.stringify(bodyObj);
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: Number(parsedUrl.port) || 443,
+      path: parsedUrl.pathname + (parsedUrl.search || ""),
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+        ...extraHeaders,
+      },
+      rejectUnauthorized: false,
+    };
+    const req2 = require("https").request(options, (resp) => {
+      let data = "";
+      resp.on("data", (chunk) => { data += chunk; });
+      resp.on("end", () => {
+        try { resolve({ status: resp.statusCode, data: JSON.parse(data) }); }
+        catch { resolve({ status: resp.statusCode, data: { raw: data } }); }
+      });
+    });
+    req2.on("error", reject);
+    req2.write(postData);
+    req2.end();
+  });
+}
+
+function experianBasicAuth() {
+  return "Basic " + Buffer.from(`${EXPERIAN_IDMN_USERNAME}:${EXPERIAN_IDMN_PASSWORD}`).toString("base64");
+}
+
+// POST /api/experian/kyc — KYC V2 bureau check
+app.post("/api/experian/kyc", async (req, res) => {
+  try {
+    if (!EXPERIAN_KYC_USERNAME || !EXPERIAN_KYC_PASSWORD) {
+      return res.status(500).json({ success: false, error: { message: "Experian KYC credentials not configured." } });
+    }
+    const authHeader = req.headers.authorization;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
+    if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
+    const userId = user.id;
+    const db = supabaseAdmin || supabase;
+
+    const { data: onboarding } = await db.from("user_onboarding").select("sumsub_raw").eq("user_id", userId).maybeSingle();
+    let raw = {};
+    try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
+
+    const identityNumber = req.body.identity_number || raw?.identity_details?.identity_number;
+    if (!identityNumber) return res.status(400).json({ success: false, error: { message: "Identity number not found. Complete the ID number step first." } });
+
+    const { data: profile } = await db.from("profiles").select("first_name, last_name").eq("id", userId).maybeSingle();
+    const forename = req.body.forename || profile?.first_name || "";
+    const surname = req.body.surname || profile?.last_name || "";
+
+    const kycBody = {
+      auth: { username: EXPERIAN_KYC_USERNAME, password: EXPERIAN_KYC_PASSWORD, version: "1.0", origin: "MINT" },
+      search_criteria: {
+        identity_number: identityNumber,
+        identity_type: "SID",
+        forename,
+        surname,
+        want_search_criteria: "Y",
+        want_addresses: "Y",
+        want_employment: "Y",
+        want_contact: "Y",
+        want_safps: "Y",
+        want_idv_service: "Y",
+      }
+    };
+
+    console.log(`[Experian KYC] Bureau check for user ${userId}`);
+    const { status: httpStatus, data: kycResult } = await experianRequest(EXPERIAN_KYC_URL, kycBody);
+    console.log(`[Experian KYC] HTTP ${httpStatus}:`, JSON.stringify(kycResult).slice(0, 600));
+
+    const updatedRaw = { ...raw, experian_kyc_result: kycResult, experian_kyc_checked_at: new Date().toISOString() };
+    await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, updated_at: new Date().toISOString() }).eq("user_id", userId);
+
+    const bureauOk = kycResult?.ResponseStatus === true || kycResult?.response_status === true || kycResult?.BureauResponse?.ResponseStatus === true;
+    res.json({ success: true, bureauSuccess: bureauOk, result: kycResult });
+  } catch (error) {
+    console.error("[Experian KYC] Error:", error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+});
+
+// POST /api/experian/idmn/start — start ID Me Now biometric workflow
+app.post("/api/experian/idmn/start", async (req, res) => {
+  try {
+    const IDMN_MOCK = process.env.EXPERIAN_MOCK_MODE === "true" || !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
+    const authHeader = req.headers.authorization;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
+    if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
+    const userId = user.id;
+    const db = supabaseAdmin || supabase;
+
+    const { data: onboarding } = await db.from("user_onboarding").select("sumsub_raw, kyc_status, sumsub_applicant_id").eq("user_id", userId).maybeSingle();
+    if (onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete") {
+      return res.json({ success: true, alreadyVerified: true, status: onboarding.kyc_status });
+    }
+
+    let raw = {};
+    try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
+
+    if (raw?.experian_idmn_transaction_id && raw?.experian_idmn_token) {
+      const url = `https://experian.uat.tgpdc.com/anonymous_workflow/${raw.experian_idmn_token}`;
+      return res.json({ success: true, url, transaction_id: String(raw.experian_idmn_transaction_id), token: raw.experian_idmn_token, existing: true });
+    }
+
+    const identityNumber = req.body.identity_number || raw?.identity_details?.identity_number;
+    if (!identityNumber) {
+      return res.status(400).json({ success: false, error: { message: "Identity number not found. Please complete the ID number step first." } });
+    }
+
+    // ── Mock mode (no credentials configured) ──────────────────────────────
+    if (IDMN_MOCK) {
+      console.log(`[Experian IDMN] MOCK MODE — simulating StartWorkflow for user ${userId}`);
+      const mockTxId = `mock-${Date.now()}`;
+      const mockToken = `mock-token-${userId.slice(0, 8)}`;
+      const updatedRaw = { ...raw, experian_idmn_transaction_id: mockTxId, experian_idmn_token: mockToken, experian_idmn_started_at: new Date().toISOString(), experian_mock: true };
+      await db.from("user_onboarding").update({ sumsub_raw: updatedRaw, sumsub_applicant_id: mockTxId, kyc_status: "pending", kyc_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+      const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
+      const raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
+      if (existingAction) { await db.from("required_actions").update(raPayload).eq("user_id", userId); }
+      else { await db.from("required_actions").insert({ user_id: userId, ...raPayload }); }
+      return res.json({ success: true, mockMode: true, url: null, transaction_id: mockTxId, token: mockToken });
+    }
+
+    const { data: profile } = await db.from("profiles").select("first_name, last_name").eq("id", userId).maybeSingle();
+    const name = profile?.first_name || req.body.forename || "Unknown";
+    const surname = profile?.last_name || req.body.surname || "Unknown";
+
+    const idmnBody = {
+      system_settings: {
+        version: "1.0",
+        originating_application: "MINT",
+        originating_environment: "UAT",
+        client_reference: userId,
+        request_time: new Date().toISOString().slice(0, 19),
+      },
+      search_criteria: {
+        identity_number: identityNumber,
+        identity_type: "SID",
+        name,
+        surname,
+        client_consent: "Y",
+        workflow_id: EXPERIAN_IDMN_WORKFLOW_ID,
+      }
+    };
+
+    console.log(`[Experian IDMN] StartWorkflow for user ${userId}`);
+    const { status: httpStatus, data: idmnResult } = await experianRequest(`${EXPERIAN_IDMN_BASE}/StartWorkflow`, idmnBody, { Authorization: experianBasicAuth() });
+    console.log(`[Experian IDMN] StartWorkflow HTTP ${httpStatus}:`, JSON.stringify(idmnResult).slice(0, 600));
+
+    if (idmnResult?.response_status !== "Success") {
+      const errMsg = idmnResult?.error_description || `Experian error: ${idmnResult?.response_status || "Unknown"}`;
+      return res.status(502).json({ success: false, error: { message: errMsg, code: idmnResult?.error_code } });
+    }
+
+    const { transaction_id, token, url } = idmnResult.return_data || {};
+
+    const updatedRaw = {
+      ...raw,
+      experian_idmn_transaction_id: String(transaction_id),
+      experian_idmn_token: token,
+      experian_idmn_started_at: new Date().toISOString(),
+    };
+
+    await db.from("user_onboarding").update({
+      sumsub_raw: updatedRaw,
+      sumsub_applicant_id: String(transaction_id),
+      kyc_status: "pending",
+      kyc_checked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("user_id", userId);
+
+    const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
+    const raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
+    if (existingAction) {
+      await db.from("required_actions").update(raPayload).eq("user_id", userId);
+    } else {
+      await db.from("required_actions").insert({ user_id: userId, ...raPayload });
+    }
+
+    res.json({ success: true, url, transaction_id: String(transaction_id), token });
+  } catch (error) {
+    console.error("[Experian IDMN Start] Error:", error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+});
+
+// POST /api/experian/idmn/collect — collect biometric results
+app.post("/api/experian/idmn/collect", async (req, res) => {
+  try {
+    const IDMN_MOCK = process.env.EXPERIAN_MOCK_MODE === "true" || !EXPERIAN_IDMN_USERNAME || !EXPERIAN_IDMN_PASSWORD;
+    const authHeader = req.headers.authorization;
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader?.replace("Bearer ", "") || "");
+    if (authErr || !user) return res.status(401).json({ success: false, error: { message: "Unauthorized" } });
+    const userId = user.id;
+    const db = supabaseAdmin || supabase;
+
+    const { data: onboarding } = await db.from("user_onboarding").select("sumsub_raw").eq("user_id", userId).maybeSingle();
+    let raw = {};
+    try { raw = typeof onboarding?.sumsub_raw === "string" ? JSON.parse(onboarding.sumsub_raw) : (onboarding?.sumsub_raw || {}); } catch {}
+
+    const transaction_id = raw?.experian_idmn_transaction_id;
+    const token = raw?.experian_idmn_token;
+    if (!transaction_id || !token) {
+      return res.status(400).json({ success: false, error: { message: "No pending verification found. Please start the verification first." } });
+    }
+
+    // ── Mock mode ────────────────────────────────────────────────────────────
+    if (IDMN_MOCK || raw?.experian_mock) {
+      console.log(`[Experian IDMN] MOCK MODE — simulating CollectWorkflowResults for user ${userId}`);
+      const verifiedRaw = { ...raw, experian_idmn_status: "verified", experian_idmn_completed_at: new Date().toISOString(), experian_mock: true };
+      await db.from("user_onboarding").update({ sumsub_raw: verifiedRaw, kyc_status: "onboarding_complete", kyc_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+      await db.from("required_actions").update({ kyc_verified: true, kyc_pending: false, kyc_needs_resubmission: false, kyc_verified_at: new Date().toISOString() }).eq("user_id", userId);
+      const { data: packCheck } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!packCheck) { await db.from("user_onboarding_pack_details").insert({ user_id: userId, created_at: new Date().toISOString() }); }
+      return res.json({ success: true, status: "verified", mockMode: true, message: "Mock verification complete." });
+    }
+
+    const collectBody = {
+      system_settings: {
+        version: "1.0",
+        originating_application: "MINT",
+        originating_environment: "UAT",
+        client_reference: userId,
+        request_time: new Date().toISOString().slice(0, 19),
+      },
+      search_criteria: {
+        transaction_id: Number(transaction_id),
+        reference: token,
+      }
+    };
+
+    console.log(`[Experian IDMN] CollectWorkflowResults for user ${userId}, tx: ${transaction_id}`);
+    const { status: httpStatus, data: collectResult } = await experianRequest(`${EXPERIAN_IDMN_BASE}/CollectWorkflowResults`, collectBody, { Authorization: experianBasicAuth() });
+    console.log(`[Experian IDMN] CollectWorkflowResults HTTP ${httpStatus}:`, JSON.stringify(collectResult).slice(0, 800));
+
+    const errorCode = collectResult?.error_code;
+    let kycStatus = "pending";
+    let reviewAnswer = null;
+
+    if (collectResult?.response_status === "Success") {
+      kycStatus = "verified";
+      reviewAnswer = "GREEN";
+      console.log(`[Experian IDMN] User ${userId} VERIFIED`);
+    } else if (errorCode === "IMN_202") {
+      kycStatus = "pending";
+      console.log(`[Experian IDMN] User ${userId} still in progress`);
+    } else if (errorCode === "IMN_205" || errorCode === "IMN_208") {
+      kycStatus = "not_verified";
+      console.log(`[Experian IDMN] User ${userId} no results/expired`);
+    } else if (collectResult?.response_status === "Failure") {
+      kycStatus = "failed";
+      reviewAnswer = "RED";
+      console.log(`[Experian IDMN] User ${userId} FAILED: ${errorCode}`);
+    }
+
+    const updatedRaw = { ...raw, experian_idmn_result: collectResult, experian_idmn_collected_at: new Date().toISOString() };
+    const onboardingUpdate = {
+      sumsub_raw: updatedRaw,
+      sumsub_review_status: kycStatus,
+      sumsub_review_answer: reviewAnswer,
+      kyc_checked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (kycStatus === "verified") {
+      onboardingUpdate.kyc_status = "verified";
+      onboardingUpdate.kyc_verified_at = new Date().toISOString();
+    } else if (kycStatus === "failed") {
+      onboardingUpdate.kyc_status = "resubmission_required";
+    }
+
+    await db.from("user_onboarding").update(onboardingUpdate).eq("user_id", userId);
+
+    let raPayload = { kyc_pending: true, kyc_verified: false, kyc_needs_resubmission: false };
+    if (kycStatus === "verified") {
+      raPayload = { kyc_pending: false, kyc_verified: true, kyc_needs_resubmission: false };
+      const { data: existingPack } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!existingPack) {
+        await db.from("user_onboarding_pack_details").insert({
+          user_id: userId,
+          pack_details: { experian_idmn: collectResult, verified_at: new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } else if (kycStatus === "failed") {
+      raPayload = { kyc_pending: false, kyc_verified: false, kyc_needs_resubmission: true };
+    }
+
+    const { data: existingAction } = await db.from("required_actions").select("id").eq("user_id", userId).maybeSingle();
+    if (existingAction) {
+      await db.from("required_actions").update(raPayload).eq("user_id", userId);
+    } else {
+      await db.from("required_actions").insert({ user_id: userId, ...raPayload });
+    }
+
+    res.json({ success: true, status: kycStatus, errorCode: errorCode || null, collectResult });
+  } catch (error) {
+    console.error("[Experian IDMN Collect] Error:", error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+});
+
+// POST /api/experian/status — get user's KYC status (replaces /api/sumsub/status)
+app.post("/api/experian/status", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: { message: "userId is required" } });
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(500).json({ success: false, error: { message: "Database not configured" } });
+
+    const { data: packRecord } = await db.from("user_onboarding_pack_details").select("user_id").eq("user_id", userId).maybeSingle();
+    if (packRecord) {
+      return res.json({ success: true, status: "verified", reviewStatus: "completed", reviewAnswer: "GREEN", rejectLabels: [], applicantId: null });
+    }
+
+    const { data: onboarding } = await db.from("user_onboarding").select("kyc_status, sumsub_review_status, sumsub_review_answer, sumsub_applicant_id").eq("user_id", userId).maybeSingle();
+    const { data: actions } = await db.from("required_actions").select("kyc_verified, kyc_pending, kyc_needs_resubmission").eq("user_id", userId).maybeSingle();
+
+    let status = "not_verified";
+    if (actions?.kyc_verified || onboarding?.kyc_status === "verified" || onboarding?.kyc_status === "onboarding_complete") {
+      status = "verified";
+    } else if (actions?.kyc_needs_resubmission || onboarding?.kyc_status === "resubmission_required") {
+      status = "needs_resubmission";
+    } else if (actions?.kyc_pending || onboarding?.kyc_status === "pending") {
+      status = "pending";
+    }
+
+    res.json({
+      success: true,
+      status,
+      applicantId: onboarding?.sumsub_applicant_id || null,
+      reviewStatus: onboarding?.sumsub_review_status || null,
+      reviewAnswer: onboarding?.sumsub_review_answer || null,
+      rejectLabels: [],
+    });
+  } catch (error) {
+    console.error("[Experian Status] Error:", error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
 });
 
 app.post("/api/truid/initiate", async (req, res) => {
@@ -6149,6 +6507,7 @@ app.get("/api/credit-check-debug", (req, res) => {
     lastCreditCheck: lastCreditCheckDebug
   });
 });
+
 
 app.post("/api/sessions/record", async (req, res) => {
   try {

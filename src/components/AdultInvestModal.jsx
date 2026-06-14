@@ -4,15 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3 } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "./PdfViewer";
+import OcrScanModal from "./OcrScanModal";
 import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
 import GiftToggleV2 from "./GiftToggleV2";
-
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
-const MONTHLY_STRATEGY_FEE = 29;
+import { useDiscretionType } from "../lib/useDiscretionType";
+import { useFees } from "../lib/useFees";
 
 function firstBillingDate() {
   const d = new Date();
@@ -29,9 +26,13 @@ export default function AdultInvestModal({
   onClose,
   strategy,
   onContinue,
+  onUpdateMandate,
 }) {
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
+  const { isLimited: isLimitedDiscretion } = useDiscretionType();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE, MONTHLY_STRATEGY_FEE } = useFees();
+  const [showDiscretionModal, setShowDiscretionModal] = useState(false);
 
   const [minimum, setMinimum] = useState(null);
   const [minimumLoading, setMinimumLoading] = useState(false);
@@ -41,6 +42,12 @@ export default function AdultInvestModal({
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
   const [isGift, setIsGift] = useState(false);
+  // Gate for secondary-strategy buys that may need an ID-document scan first:
+  //   'checking' = waiting on the ocr-required check (invest sheet held back)
+  //   'scan'     = showing the in-frame ID scan (invest sheet still held back)
+  //   'open'     = the invest sheet (agreement/fees/payment) is visible
+  // Non-additional buys start — and stay — at 'open'.
+  const [gate, setGate] = useState("open");
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -49,6 +56,12 @@ export default function AdultInvestModal({
     setFeeExpanded(false);
     setAgreementChecked(false);
     setShowMandateModal(false);
+    setIsGift(false);
+    // Gate the sheet until we know whether to show the ID-document scan. The scan
+    // fires on a SECONDARY strategy purchase — detected here (not just from the
+    // isAdditionalStrategy prop) so it works from EVERY buy entry point, not only
+    // the FactsheetPage upgrade modal. Fails open (no gate) on any error.
+    setGate("checking");
 
     // Fetch wallet balance
     (async () => {
@@ -62,6 +75,32 @@ export default function AdultInvestModal({
           .maybeSingle();
         if (data) setWalletBalance(data.balance ?? 0);
       } catch { /* ignore */ }
+    })();
+
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { setGate("open"); return; }
+        // Secondary strategy buy? Either the caller flagged it, or the user
+        // already holds an active strategy other than the one being bought.
+        let additional = isAdditionalStrategy;
+        if (!additional) {
+          const curId = strategy?.id || strategy?.strategyId || null;
+          const { data: hs } = await supabase
+            .from("stock_holdings_c")
+            .select("strategy_id")
+            .eq("user_id", session.user.id)
+            .eq("is_active", true)
+            .is("family_member_id", null);
+          additional = (hs || []).some((h) => h.strategy_id && h.strategy_id !== curId);
+        }
+        if (!additional) { setGate("open"); return; } // first strategy → no scan
+        const res = await fetch("/api/experian/ocr-required", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await res.json();
+        setGate(data?.required ? "scan" : "open");
+      } catch { setGate("open"); /* never block a purchase on this check */ }
     })();
 
     // Resolve minimum investment
@@ -101,16 +140,24 @@ export default function AdultInvestModal({
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [baseAmount, numAssets]);
+  }, [baseAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const totalCostCents = Math.round(fees.totalCost * 100);
   const insufficient = walletBalance !== null && fees.totalCost > walletBalance;
 
-  const handleConfirm = () => {
+  const proceed = () => {
     const sharePrice = strategy?.price_per_share || strategy?.pricePerShare || null;
     const shareCount = sharePrice && sharePrice > 0 ? Math.floor(baseAmount / sharePrice) : null;
     onContinue?.(fees.totalCost, baseAmount, shareCount, fees);
   };
+
+  const handleConfirm = () => {
+    if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
+    proceed();
+  };
+
+  // Scan done (or skipped) → reveal the invest sheet so the user can continue.
+  const finishOcr = () => { setGate("open"); };
 
   const portalTarget = document.getElementById("modal-root") || document.body;
 
@@ -130,7 +177,22 @@ export default function AdultInvestModal({
             onClick={onClose}
           />
 
-          {/* Sheet */}
+          {/* While the secondary-buy ID check runs (or the scan is showing), keep
+              the invest sheet hidden so the user lands on the scan first. */}
+          {gate !== "open" ? (
+            <motion.div
+              key="adult-invest-loading"
+              className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col items-center justify-center rounded-t-[28px] bg-white shadow-2xl"
+              style={{ zIndex: 9999, height: 220, paddingBottom: "env(safe-area-inset-bottom)" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            >
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-violet-500 border-r-transparent mb-3" />
+              <p className="text-sm text-slate-500">Preparing your investment…</p>
+            </motion.div>
+          ) : (
           <motion.div
             key="adult-invest-sheet"
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
@@ -375,15 +437,16 @@ export default function AdultInvestModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={!agreementChecked || !minimum || insufficient}
+                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum || insufficient)}
                   className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                  style={{ background: isLimitedDiscretion ? "#cbd5e1" : "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
                   Continue
                 </button>
               )}
             </div>
           </motion.div>
+          )}
 
           {/* Strategy Mandate PDF — full-screen overlay above the sheet */}
           <AnimatePresence>
@@ -416,6 +479,58 @@ export default function AdultInvestModal({
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <PdfViewer file="/strategy-disclosures.pdf" style={{ height: "100%" }} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Secondary-strategy ID-document scan (skippable, non-blocking) */}
+          <OcrScanModal
+            isOpen={gate === "scan"}
+            onVerified={finishOcr}
+            onSkip={finishOcr}
+          />
+
+          {/* Limited-discretion block */}
+          <AnimatePresence>
+            {showDiscretionModal && (
+              <motion.div
+                key="discretion-overlay"
+                className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                style={{ zIndex: 10001 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowDiscretionModal(false)}
+              >
+                <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
+                  <p className="text-center text-sm text-slate-600 mb-6">
+                    You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+                    <button
+                      type="button"
+                      onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); }}
+                      className="font-semibold text-violet-600 underline"
+                    >
+                      update your discretionary
+                    </button>{" "}
+                    to trade strategies.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); }}
+                    className="w-full rounded-2xl py-3 text-sm font-semibold text-white shadow-lg"
+                    style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)" }}
+                  >
+                    Update my discretionary
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscretionModal(false)}
+                    className="w-full mt-2 rounded-2xl py-3 text-sm font-semibold text-slate-500"
+                  >
+                    Not now
+                  </button>
                 </div>
               </motion.div>
             )}

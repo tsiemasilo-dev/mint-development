@@ -1,9 +1,7 @@
 import { supabase, supabaseAdmin, authenticateUser } from "./_lib/supabase.js";
 import { buildOrderConfirmationHtml } from "./_lib/order-email-templates.js";
-import { computeFees } from "./_lib/fees.js";
+import { computeFees, getFeeConfig } from "./_lib/fees.js";
 import { Resend } from "resend";
-
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
 // Fetch the latest stock_intraday_c.current_price for each given security_id.
 // Used to stamp Expected_fill on holdings at buy time — the price the client
@@ -32,23 +30,6 @@ async function fetchLatestIntradayPrices(db, securityIds) {
 function getResend() {
   if (!process.env.RESEND_API_KEY) return null;
   return new Resend(process.env.RESEND_API_KEY);
-}
-
-async function verifyPaystackPayment(reference) {
-  if (!PAYSTACK_SECRET_KEY) {
-    return { verified: false, error: "Paystack secret key not configured" };
-  }
-  const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-    },
-  });
-  const result = await response.json();
-  if (!result.status || result.data?.status !== "success") {
-    return { verified: false, error: "Payment not successful", data: result.data };
-  }
-  return { verified: true, data: result.data };
 }
 
 async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, assetSymbol, strategyName, amountCents, quantity, priceCents, reference, orderDate, paymentMethod }) {
@@ -151,6 +132,9 @@ export default async function handler(req, res) {
     rollbackUserId = userId;
     const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, paymentMethod, shareCount, childUserId, childFamilyMemberId } = req.body;
     rollbackPaymentMethod = paymentMethod;
+    // Wallet / direct EFT / Ozow are settled in-app, so there's no external paid
+    // amount to reconcile — skip the amount-mismatch verification for them.
+    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
     // baseAmount = investment amount excluding fees (used for holdings/quantity calculations)
     // amount = total charged including fees (used for transaction records)
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
@@ -181,16 +165,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: "Missing required fields: securityId or strategyId, amount, paymentReference" });
     }
 
-    let payData = { amount: Math.round(amount * 100) };
-    const skipVerification = paymentMethod === "wallet" || paymentMethod === "direct_eft" || paymentMethod === "ozow";
-
-    if (!skipVerification) {
-      const { verified, error: payError, data: vPayData } = await verifyPaystackPayment(paymentReference);
-      if (!verified) {
-        return res.status(400).json({ success: false, error: payError || "Payment verification failed" });
-      }
-      payData = vPayData;
-    }
+    const payData = { amount: Math.round(amount * 100) };
 
     // ── WALLET PAYMENT HANDLER (PROMPT 1) ───────────────────────────────────
     let newWalletBalance = null;
@@ -325,7 +300,8 @@ export default async function handler(req, res) {
     // sums (within a few cents of rounding) to transactions.amount.
     const baseRandsForFees = (baseAmount && baseAmount > 0) ? baseAmount : amount;
     const numAssetsForFees = isStrategyInvestment ? preFetchedStrategyHoldings.length : 1;
-    const fees = computeFees(baseRandsForFees, numAssetsForFees);
+    const feeConfig = await getFeeConfig(db);
+    const fees = computeFees(baseRandsForFees, numAssetsForFees, feeConfig);
 
     const { data: txData, error: txError } = await db
       .from("transactions")

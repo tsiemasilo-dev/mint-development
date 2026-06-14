@@ -5,12 +5,7 @@ import PdfViewer from "../components/PdfViewer";
 import { supabase } from "../lib/supabase";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import GiftToggleV2 from "../components/GiftToggleV2";
-
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
-const MONTHLY_STRATEGY_FEE = 29;
+import { useFees } from "../lib/useFees";
 
 function firstBillingDate() {
   const d = new Date();
@@ -27,6 +22,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
     description: "",
   };
   const isAdditionalStrategy = !!currentStrategy.isAdditionalStrategy;
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE, MONTHLY_STRATEGY_FEE } = useFees();
 
   const minimumInvestment =
     currentStrategy.calculatedMinInvestment ||
@@ -63,7 +59,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     
     return { brokerAmount, isinTotal, transactionAmount, totalCost, bufferedBase };
-  }, [amount, numAssets, isAdditionalStrategy]);
+  }, [amount, numAssets, isAdditionalStrategy, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const step = minimumInvestment || 0;
 

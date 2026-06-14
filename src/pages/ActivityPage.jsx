@@ -124,20 +124,21 @@ const ActivityPage = ({ onBack }) => {
   }, [activityItems]);
 
   // When the Fees tab is active, each investment tx is exploded into its
-  // server-recorded fee components (Execution Reserve, brokerage, ISIN,
-  // transaction fee) so users see what they were charged. Pre-migration txs
-  // (all fee columns 0) are skipped here — we don't have a breakdown for
-  // them and showing the full debit as "fees" would be misleading.
+  // server-recorded fee components (brokerage, custody, transaction fee) so
+  // users see what they were charged. The 8% Execution Reserve is held cash
+  // (not a fee) and is deliberately excluded. Pre-migration txs (all fee
+  // columns 0) are skipped — showing the full debit as "fees" would mislead.
   const feeLineItems = useMemo(() => {
     const lines = [];
     for (const item of activityItems) {
       if (item.direction !== "debit") continue;
       const fb = item.feeBreakdown || {};
-      const bufferC = Number(fb.bufferCents || 0);
       const brokerC = Number(fb.brokerFeeCents || 0);
       const isinC = Number(fb.isinFeeCents || 0);
       const txFeeC = Number(fb.transactionFeeCents || 0);
-      if (bufferC + brokerC + isinC + txFeeC === 0) continue;
+      // Execution Reserve (the 8% buffer) is HELD CASH, not a fee — it's excluded
+      // from the Fees breakdown so it doesn't read as a charge.
+      if (brokerC + isinC + txFeeC === 0) continue;
 
       const baseLine = {
         date: item.date,
@@ -148,17 +149,13 @@ const ActivityPage = ({ onBack }) => {
         status: item.status,
       };
 
-      if (bufferC > 0) lines.push({
-        ...baseLine, id: `${item.id}-buffer`, feeType: "buffer",
-        feeLabel: "Execution Reserve", amountCents: bufferC,
-      });
       if (brokerC > 0) lines.push({
         ...baseLine, id: `${item.id}-broker`, feeType: "broker",
         feeLabel: "Brokerage fee", amountCents: brokerC,
       });
       if (isinC > 0) lines.push({
         ...baseLine, id: `${item.id}-isin`, feeType: "isin",
-        feeLabel: "ISIN fee", amountCents: isinC,
+        feeLabel: "Custody fee", amountCents: isinC,
       });
       if (txFeeC > 0) lines.push({
         ...baseLine, id: `${item.id}-txfee`, feeType: "txfee",

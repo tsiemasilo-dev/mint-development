@@ -932,6 +932,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   <p className="text-3xl font-bold text-slate-900">
                     {formatCurrency(currentStrategy.currentValue || 0)}
                   </p>
+                  {isStrategyReady && (currentStrategy.cashElement || 0) > 0 && (
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Positions {formatCurrency(currentStrategy.positionsValue || 0)} · Cash {formatCurrency(currentStrategy.cashElement || 0)}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500 mb-1">Period Return</p>
@@ -940,6 +945,36 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                   </p>
                 </div>
               </div>
+
+              {/* Cost basis + Realised / Unrealised P&L split (EasyEquities-style).
+                  Realised + Unrealised always sums to total P&L; invested stays
+                  stable across rebalances. */}
+              {isStrategyReady && (
+                <div className="grid grid-cols-2 gap-2.5 mb-6">
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500 mb-0.5">Invested</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(currentStrategy.investedAmount || 0)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500 mb-0.5">Total P&amp;L</p>
+                    <p className={`text-sm font-semibold ${(currentStrategy.totalPnl || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {(currentStrategy.totalPnl || 0) >= 0 ? '+' : ''}{formatCurrency(currentStrategy.totalPnl || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500 mb-0.5">Realised</p>
+                    <p className={`text-sm font-semibold ${(currentStrategy.realizedPnl || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {(currentStrategy.realizedPnl || 0) >= 0 ? '+' : ''}{formatCurrency(currentStrategy.realizedPnl || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500 mb-0.5">Unrealised</p>
+                    <p className={`text-sm font-semibold ${(currentStrategy.unrealizedPnl || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {(currentStrategy.unrealizedPnl || 0) >= 0 ? '+' : ''}{formatCurrency(currentStrategy.unrealizedPnl || 0)}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Period Filter Tabs */}
               <div className="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">

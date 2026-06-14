@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     // Includes Expected_fill (price client saw at click time) — preferred cost basis.
     const { data: userHoldings, error: holdingsError } = await db
       .from("stock_holdings_c")
-      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill")
+      .select("id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, is_active, avg_exit, transaction_id")
       .eq("user_id", userId)
       .is("family_member_id", null)
       .not("strategy_id", "is", null);
@@ -108,6 +108,41 @@ export default async function handler(req, res) {
     // If no holdings and no transaction names, return empty
     if (holdingStrategyIds.length === 0 && strategyNames.length === 0) {
       return res.status(200).json({ success: true, strategies: [] });
+    }
+
+    // Per-strategy cash (rebalance residual + held 8% buffer) and realised P&L —
+    // mirrors the app's strategyValuation helper so the server matches the home
+    // card / Portfolio tab and the % return stays stable across rebalances.
+    const residualByStrat = {}; // rands
+    const bufferByStrat = {};   // rands
+    const realizedByStrat = {}; // rands
+    if (holdingStrategyIds.length > 0) {
+      const { data: resRows } = await db
+        .from("strategy_rebalance_residuals")
+        .select("strategy_id, balance_cents")
+        .eq("user_id", userId).is("family_member_id", null)
+        .in("strategy_id", holdingStrategyIds);
+      (resRows || []).forEach(r => { if (r.strategy_id) residualByStrat[r.strategy_id] = (residualByStrat[r.strategy_id] || 0) + Number(r.balance_cents || 0) / 100; });
+
+      // Buffer: each active holding's funding transaction, counted once per strategy.
+      const txIdsByStrat = {}; const allTxIds = new Set();
+      for (const h of (userHoldings || [])) {
+        if (h.is_active === false || !h.transaction_id || !h.strategy_id) continue;
+        (txIdsByStrat[h.strategy_id] = txIdsByStrat[h.strategy_id] || new Set()).add(h.transaction_id);
+        allTxIds.add(h.transaction_id);
+      }
+      if (allTxIds.size > 0) {
+        const { data: bufTxns } = await db.from("transactions").select("id, buffer_cents, buffer_consumed_cents").in("id", [...allTxIds]);
+        const bufById = {}; (bufTxns || []).forEach(t => { bufById[t.id] = Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0); });
+        Object.entries(txIdsByStrat).forEach(([sid, set]) => { let s = 0; set.forEach(tid => { s += bufById[tid] || 0; }); bufferByStrat[sid] = s / 100; });
+      }
+
+      // Realised P&L from closed positions: Σ (avg_exit − avg_fill) × qty (cents → rands).
+      for (const h of (userHoldings || [])) {
+        if (h.is_active !== false || !h.strategy_id) continue;
+        const fill = Number(h.avg_fill || 0), exit = Number(h.avg_exit || 0), qty = Number(h.quantity || 0);
+        if (fill && exit && qty) realizedByStrat[h.strategy_id] = (realizedByStrat[h.strategy_id] || 0) + ((exit - fill) / 100) * qty;
+      }
     }
 
     // 3. Build live price map from user's holdings securities
@@ -234,11 +269,14 @@ export default async function handler(req, res) {
       });
 
       const stratHoldings = holdingsByStratId[strategy.id] || [];
+      // Only OPEN positions value the strategy; closed (sold) positions must not be
+      // counted as still held — they only contribute realised P&L (added below).
+      const activeHoldings = stratHoldings.filter(h => h.is_active !== false);
       let investedAmount = 0;
       let currentMarketValue = 0;
-      const allPending = stratHoldings.length > 0 && stratHoldings.every(h => !h.avg_fill);
+      const allPending = activeHoldings.length > 0 && activeHoldings.every(h => !h.avg_fill);
 
-      if (stratHoldings.length === 0 || allPending) {
+      if (activeHoldings.length === 0 || allPending) {
         // Fall back to transactions for invested amount when no filled holdings
         for (const tx of (transactions || [])) {
           const txName = (tx.name || "").trim();
@@ -256,7 +294,9 @@ export default async function handler(req, res) {
         // Pending strategies must not contribute to portfolio value until fills arrive.
         currentMarketValue = allPending ? 0 : investedAmount;
       } else {
-        for (const h of stratHoldings) {
+        let activeCost = 0;
+        let positions = 0;
+        for (const h of activeHoldings) {
           const qty = Number(h.quantity || 0);
           const avgFill = Number(h.avg_fill || 0);
           const expectedFillRands = Number(h.Expected_fill || 0);
@@ -268,9 +308,19 @@ export default async function handler(req, res) {
             : (avgFill / 100);
 
           const livePrice = livePriceMap[h.security_id] || costBasisRandsPerShare;
-          investedAmount += costBasisRandsPerShare * qty;
-          currentMarketValue += livePrice * qty;
+          activeCost += costBasisRandsPerShare * qty;
+          positions += livePrice * qty;
         }
+        /* P&L = unrealised (open positions − their cost) + realised (locked-in from
+           rebalance sells). currentValue = positions + residual + buffer (same as
+           the home card). invested is DERIVED from the total so the % return stays
+           stable across rebalances and "invested" reflects true money in. */
+        const residual = residualByStrat[strategy.id] || 0;
+        const buffer = bufferByStrat[strategy.id] || 0;
+        const realized = realizedByStrat[strategy.id] || 0;
+        const totalPnl = (positions - activeCost) + realized;
+        currentMarketValue = positions + residual + buffer;
+        investedAmount = currentMarketValue - totalPnl;
       }
 
       matchedStrategies.push({
@@ -287,7 +337,7 @@ export default async function handler(req, res) {
         investedAmount,
         currentMarketValue,
         currentValue: currentMarketValue,
-        isPending: stratHoldings.length > 0 && allPending,
+        isPending: activeHoldings.length > 0 && allPending,
         metrics: latestMetric,
         firstInvestedDate: matchedByTxName ? (strategyFirstDate[matchedByTxName] || null) : null,
       });

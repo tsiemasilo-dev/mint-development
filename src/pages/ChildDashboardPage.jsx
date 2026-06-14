@@ -20,6 +20,7 @@ import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import { useFees } from "../lib/useFees";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
 import {
@@ -307,14 +308,10 @@ function TransferModal({ child, parentBalance, balancesLoading, onTransfer, onCl
 
 // --- Invest Modal (bottom-sheet) - browse strategies & invest ----------------
 
-// Fee rates — must match InvestAmountPage.jsx so child & parent flows quote
+// Fee rates come from useFees() (CRM-configurable) so child & parent flows quote
 // identical totals for a given base investment + holdings count.
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
-
 function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -352,7 +349,7 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [baseAmount, numAssets]);
+  }, [baseAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const totalCostCents = Math.round(fees.totalCost * 100);
   const numAmount = baseAmount; // kept for compatibility with downstream usage

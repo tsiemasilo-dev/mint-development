@@ -1189,7 +1189,7 @@ const App = () => {
     if (!previousPageName || mainTabs.includes(currentPage)) return null;
 
     // Skip background rendering for SDK-heavy pages to prevent duplicate listeners
-    const sdkPages = ["identityCheck", "userOnboarding", "bankLink", "creditApply"];
+    const sdkPages = ["identityCheck", "userOnboarding", "updateMandate", "bankLink", "creditApply"];
     if (sdkPages.includes(previousPageName)) return null;
 
     return renderPageContent(previousPageName, true);
@@ -1453,6 +1453,7 @@ const App = () => {
               navigateTo("investAmount");
             }}
             onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+            onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
           />
         </>
       </Suspense>
@@ -1622,7 +1623,6 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -1735,7 +1735,6 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("stockPayment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -1839,13 +1838,14 @@ const App = () => {
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock";
+            const linkedSecurityId = stockCheckout.security?.id || stockCheckout.security?.security_id || null;
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
                   const { data: goal, error: fetchErr } = await supabase
                     .from("investment_goals")
-                    .select("current_amount, target_amount")
+                    .select("current_amount, target_amount, linked_security_id, linked_strategy_id")
                     .eq("id", goalId)
                     .single();
                   if (fetchErr) console.error("Error fetching goal for update:", fetchErr);
@@ -1853,12 +1853,16 @@ const App = () => {
                     const prevInvested = goal.current_amount || 0;
                     const newInvested = prevInvested + (goalAmount || 0);
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    const updatePayload = {
+                      current_amount: newInvested,
+                      linked_asset_name: linkedAssetName,
+                    };
+                    if (!goal.linked_security_id && !goal.linked_strategy_id && linkedSecurityId) {
+                      updatePayload.linked_security_id = linkedSecurityId;
+                    }
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({
-                        current_amount: newInvested,
-                        linked_asset_name: linkedAssetName,
-                      })
+                      .update(updatePayload)
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
@@ -1917,6 +1921,7 @@ const App = () => {
               }
             }}
             onNavigateToOnboarding={() => navigateTo("identityCheck")}
+            onUpdateMandate={() => navigateTo("updateMandate")}
           />
         </SwipeBackWrapper>
         {showChildInvestModal && marketsChildFilter && selectedStrategy && (
@@ -1925,6 +1930,7 @@ const App = () => {
             strategy={selectedStrategy}
             initialStep="amount"
             onClose={() => setShowChildInvestModal(false)}
+            onUpdateMandate={() => { setShowChildInvestModal(false); navigateTo("updateMandate"); }}
           />
         )}
         <AdultInvestModal
@@ -1958,6 +1964,7 @@ const App = () => {
             navigateTo("investAmount");
           }}
           onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
+          onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
         />
       </>
     );
@@ -2051,7 +2058,6 @@ const App = () => {
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
           childWalletBalanceCents={isChildStrategyPurchase ? (selectedChildForInvest?.available_balance ?? null) : null}
-          onSelectPaystack={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("paystack"); navigateTo("payment"); }}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("payment"); }}
           onSelectOzow={async () => {
             try {
@@ -2154,13 +2160,14 @@ const App = () => {
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = selectedStrategy?.name || "Strategy";
+            const linkedStrategyId = selectedStrategy?.id || null;
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
                   const { data: goal, error: fetchErr } = await supabase
                     .from("investment_goals")
-                    .select("current_amount, target_amount")
+                    .select("current_amount, target_amount, linked_security_id, linked_strategy_id")
                     .eq("id", goalId)
                     .single();
                   if (fetchErr) console.error("Error fetching goal for update:", fetchErr);
@@ -2168,12 +2175,16 @@ const App = () => {
                     const prevInvested = goal.current_amount || 0;
                     const newInvested = prevInvested + (goalAmount || 0);
                     const progress = goal.target_amount > 0 ? Math.min(100, (newInvested / goal.target_amount) * 100) : 0;
+                    const updatePayload = {
+                      current_amount: newInvested,
+                      linked_asset_name: linkedAssetName,
+                    };
+                    if (!goal.linked_security_id && !goal.linked_strategy_id && linkedStrategyId) {
+                      updatePayload.linked_strategy_id = linkedStrategyId;
+                    }
                     const { error: updateErr } = await supabase
                       .from("investment_goals")
-                      .update({
-                        current_amount: newInvested,
-                        linked_asset_name: linkedAssetName,
-                      })
+                      .update(updatePayload)
                       .eq("id", goalId);
                     if (updateErr) {
                       console.error("Goal update failed:", updateErr);
@@ -2519,6 +2530,10 @@ const App = () => {
 
   if (currentPage === "userOnboarding") {
     return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "updateMandate") {
+    return <UserOnboardingPage onComplete={() => setCurrentPage("home")} editMandate />;
   }
 
   if (currentPage === "giftClaim" || currentPage === "giftCodeEntry") {

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import PaymentMethodModal from "../components/PaymentMethodModal";
 import PaymentPendingPage from "./PaymentPendingPage.jsx";
 import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
+import { useFees } from "../lib/useFees";
 
 const PaymentPage = ({
   onBack,
@@ -23,11 +24,9 @@ const PaymentPage = ({
   const { profile } = useProfile();
   const [paymentStatus, setPaymentStatus] = useState(
     initialMethod
-      ? initialMethod === "paystack"
-        ? "initializing"
-        : initialMethod === "wallet"
-          ? "wallet-pending"
-          : "eft-instructions"
+      ? initialMethod === "wallet"
+        ? "wallet-pending"
+        : "eft-instructions"
       : "method-selection",
   );
   const [selectedMethod, setSelectedMethod] = useState(initialMethod || null);
@@ -87,10 +86,6 @@ const PaymentPage = ({
   const handleMethodSelection = useCallback((method) => {
     setSelectedMethod(method);
     setIsMethodModalOpen(false);
-    if (method === "paystack") {
-      setPaymentStatus("initializing");
-      return;
-    }
     if (method === "wallet") {
       setPaymentStatus("wallet-pending");
       setWalletConfirmOpen(true);
@@ -233,68 +228,6 @@ const PaymentPage = ({
     [amount, baseAmount, childFamilyMemberId, childId, isStrategyPurchase, selectedMethod, shareCount, strategy],
   );
 
-  const launchPaystack = useCallback(() => {
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-
-    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-    if (!publicKey) {
-      console.error("Paystack public key missing");
-      setPaymentStatus("failed");
-      setErrorMessage("Payment system unavailable. Please try again later.");
-      return;
-    }
-
-    const chargeAmount = Math.round((amount || 0) * 100);
-    if (!chargeAmount || chargeAmount <= 0) {
-      setPaymentStatus("failed");
-      setErrorMessage("Invalid payment amount.");
-      return;
-    }
-
-    setPaymentStatus("processing");
-
-    const paystack = new window.PaystackPop();
-    paystack.newTransaction({
-      key: publicKey,
-      email: profile?.email || "user@example.com",
-      amount: chargeAmount,
-      currency: "ZAR",
-      channels: ["card", "bank", "bank_transfer"],
-      ref: `MINT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      metadata: {
-        strategy_id: strategy?.id,
-        strategy_name: strategy?.name,
-        user_id: profile?.id,
-        investment_amount: amount,
-        share_count: shareCount ? Number(shareCount) : null,
-      },
-      onClose: function () {
-        if (!isMounted.current) return;
-        setPaymentStatus("failed");
-        setErrorMessage("Payment cancelled");
-        setTimeout(() => onCancel?.(), 2000);
-      },
-      onSuccess: async function (response) {
-        if (!isMounted.current) return;
-        setPaymentStatus("success");
-        const recorded = await recordInvestment(response?.reference || "");
-        if (!recorded.success) {
-          console.error(
-            "Failed to record investment after all retries. Payment ref:",
-            response?.reference,
-          );
-        }
-        setTimeout(() => onSuccess?.(response), 2000);
-      },
-      onError: function (error) {
-        console.error("Payment error:", error);
-        if (!isMounted.current) return;
-        setPaymentStatus("failed");
-        setErrorMessage("Payment failed. Please try again.");
-      },
-    });
-  }, [strategy, amount, profile, onSuccess, onCancel, shareCount, recordInvestment]);
 
   /**
    * IMPORTANT: Fee Architecture Note
@@ -399,34 +332,6 @@ const PaymentPage = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (hasInitialized.current) return;
-    if (selectedMethod !== "paystack") return;
-    if (!profile?.email) return;
-
-    let attempts = 0;
-    const maxAttempts = 20;
-
-    const tryInit = () => {
-      attempts++;
-      if (hasInitialized.current) return;
-
-      if (window.PaystackPop) {
-        launchPaystack();
-        return;
-      }
-
-      if (attempts >= maxAttempts) {
-        setPaymentStatus("failed");
-        setErrorMessage("Payment system unavailable. Please try again later.");
-        return;
-      }
-
-      setTimeout(tryInit, 500);
-    };
-
-    setTimeout(tryInit, 300);
-  }, [profile, launchPaystack, selectedMethod]);
 
   if (paymentStatus === "eft-pending") {
     onCancel?.();
@@ -657,9 +562,7 @@ const PaymentPage = ({
               <span className="text-xs font-semibold text-slate-900">
                 {selectedMethod === "direct_eft"
                   ? "Direct EFT"
-                  : selectedMethod === "paystack"
-                    ? "Paystack"
-                    : selectedMethod === "ozow"
+                  : selectedMethod === "ozow"
                       ? "Ozow"
                       : selectedMethod === "wallet"
                         ? "Wallet"
@@ -687,10 +590,7 @@ const WalletConfirmModal = ({
   onConfirm,
   onNavigateToDeposit,
 }) => {
-  const CASH_BUFFER_RATE = 0.08;
-  const BROKER_FEE_RATE = 0.0025;
-  const ISIN_FEE_PER_ASSET = 69;
-  const TRANSACTION_FEE_RATE = 0.038;
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
 
   const bufferedBase = (baseAmount || 0) * (1 + CASH_BUFFER_RATE);
   const brokerFee = bufferedBase * BROKER_FEE_RATE;

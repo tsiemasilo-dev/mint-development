@@ -2,14 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import GiftToggleV2 from "../components/GiftToggleV2";
+import { useFees } from "../lib/useFees";
 
-const BROKER_FEE_RATE = 0.0025;
-const ISIN_FEE_PER_ASSET = 69;
-const TRANSACTION_FEE_RATE = 0.038;
-const CASH_BUFFER_RATE = 0.08;
 const MIN_INVESTMENT = 1000;
 
 const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone }) => {
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const { displayCurrency, priceValue } = useMemo(() => {
     const currency = security?.currency || "R";
     const normalizedCurrency = currency.toUpperCase() === "ZAC" ? "R" : currency;
@@ -50,7 +48,7 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone 
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [totalAmount, numAssets]);
+  }, [totalAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const isInvalid = !Number.isFinite(shares) || shares <= 0 || shares < minShares;
 
