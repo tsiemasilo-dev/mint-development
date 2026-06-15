@@ -15,6 +15,7 @@ const emptyProfile = {
   mintNumber: "",
   wallet_balance: 0, // ADDED wallet_balance
   watchlist: [],
+  declarations: null,
 };
 
 const buildProfile = ({ user, row }) => {
@@ -31,8 +32,9 @@ const buildProfile = ({ user, row }) => {
     address: row?.address || metadata.address || "",
     idNumber: row?.id_number || metadata.id_number || "",
     mintNumber: row?.mint_number || row?.wallet_mint_number || "",
-    wallet_balance: row?.wallet_balance ?? row?.wallets_balance ?? 0, // USE WALLETS BALANCE FALLBACK
+    wallet_balance: row?.wallet_balance ?? row?.wallets_balance ?? 0,
     watchlist: row?.watchlist || [],
+    declarations: row?.declarations || null,
   };
 };
 
@@ -67,7 +69,7 @@ export const useProfile = ({ enabled = true } = {}) => {
       const { data: d1, error: e1 } = await supabase
         .from("profiles")
         .select(
-          "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist"
+          "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist, declarations"
         )
         .eq("id", user.id)
         .maybeSingle();
@@ -91,7 +93,7 @@ export const useProfile = ({ enabled = true } = {}) => {
         const { data: d2, error: e2 } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist"
+            "id, first_name, last_name, email, avatar_url, phone_number, date_of_birth, gender, address, id_number, watchlist, declarations"
           )
           .eq("id", user.id)
           .maybeSingle();
