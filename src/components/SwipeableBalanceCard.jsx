@@ -1664,7 +1664,7 @@ const SwipeableBalanceCard = ({
           ? displayReturn            // No prior-year anchor → All-time (never fall through to periodReturn)
           : isParentMDTabWaiting
             ? 0                      // Basket data not yet fetched — R0, no stale chart fallback
-            : ((isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
+            : ((!parentMDInsufficientData && isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
 
   // Debug log — fires on every relevant render so values can be compared in console
   if (!childMode && activeTab !== "all" && activeTab !== "d") {
