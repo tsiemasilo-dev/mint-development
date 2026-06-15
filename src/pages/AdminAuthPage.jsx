@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 const ADMIN_BYPASS_KEY = 'mint_admin_bypass';
 
 const AdminAuthPage = ({ onLoginComplete }) => {
+  const [unlocked, setUnlocked] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,7 +22,7 @@ const AdminAuthPage = ({ onLoginComplete }) => {
       }
       sessionStorage.setItem(ADMIN_BYPASS_KEY, 'true');
       onLoginComplete();
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -29,13 +30,35 @@ const AdminAuthPage = ({ onLoginComplete }) => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white px-8">
-      <div className="w-full max-w-sm">
-        <div className="mb-10 text-center">
-          <span className="text-2xl font-bold tracking-tight" style={{ color: '#4f2d8a' }}>MINT</span>
-          <p className="mt-1 text-xs text-gray-400 uppercase tracking-widest">Staff Access</p>
-        </div>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white select-none">
 
+      {/* Logo — clicking this unlocks the form */}
+      <div
+        onClick={() => setUnlocked(true)}
+        className="flex flex-col items-center cursor-default"
+        title=""
+      >
+        <span
+          className="text-3xl font-bold tracking-tight"
+          style={{ color: '#4f2d8a', userSelect: 'none' }}
+        >
+          MINT
+        </span>
+        <p className="mt-1 text-xs text-gray-300 uppercase tracking-widest">
+          mymint.co.za
+        </p>
+      </div>
+
+      {/* Login form — hidden until logo is clicked */}
+      <div
+        className="w-full max-w-sm px-8 overflow-hidden transition-all duration-500 ease-in-out"
+        style={{
+          maxHeight: unlocked ? '400px' : '0px',
+          opacity: unlocked ? 1 : 0,
+          marginTop: unlocked ? '2.5rem' : '0',
+          pointerEvents: unlocked ? 'auto' : 'none',
+        }}
+      >
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
