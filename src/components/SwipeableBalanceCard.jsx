@@ -1050,7 +1050,11 @@ const SwipeableBalanceCard = ({
           }));
           if (cancelled) return;
           const dates = Object.keys(basketByDate).sort();
-          if (dates.length < rowLimit) return;
+          if (dates.length < rowLimit) {
+            // Not enough history for this window — fall through to displayReturn (all-time P&L)
+            setParentMDInsufficientData(true);
+            return;
+          }
           const firstBasket = basketByDate[dates[0]];
           setParentSnapshotStartBasketCents(firstBasket);
           console.log("[PERIOD_DEBUG parent] M/5D set:", {

@@ -11206,10 +11206,11 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   }
 
   const earliestRecord = historyRows?.length ? historyRows[0] : null;
-  // If no record old enough exists (child invested < 9 days ago), fall back to the earliest
-  // available record so we show a real change instead of storing null.
-  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
-  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+  // If no record old enough exists, store null — do NOT fall back to earliestRecord.
+  // Falling back makes 5D and 1M identical for new investors (both use inception as anchor).
+  // The frontend handles null by showing all-time P&L (displayReturn) instead.
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo);
+  const rec1m  = closestRecord(historyRows, oneMonthAgo);
 
   // Mirror the frontend's logic: if the child has NO rows before Jan 1 (invested this year),
   // YTD should equal ALL (inception), not the diff from the earliest row this year.
@@ -11458,8 +11459,11 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
   }
 
   const earliestRecord = historyRows?.length ? historyRows[0] : null;
-  const rec5d  = closestRecord(historyRows, fiveDaysAgo) || earliestRecord;
-  const rec1m  = closestRecord(historyRows, oneMonthAgo) || earliestRecord;
+  // If no record old enough exists, store null — do NOT fall back to earliestRecord.
+  // Falling back makes 5D and 1M identical for new investors (both use inception as anchor).
+  // The frontend handles null by showing all-time P&L (displayReturn) instead.
+  const rec5d  = closestRecord(historyRows, fiveDaysAgo);
+  const rec1m  = closestRecord(historyRows, oneMonthAgo);
 
   // Mirror the child's logic: if the parent has NO rows before Jan 1 (invested this year),
   // YTD should equal ALL (inception), not the earliest row this year.
