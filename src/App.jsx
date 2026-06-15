@@ -76,6 +76,7 @@ import { useOnboardingStatus } from "./lib/useOnboardingStatus.js";
 import { checkOnboardingComplete } from "./lib/checkOnboardingComplete.js";
 import MaintenanceModal from "./components/MaintenanceModal.jsx";
 import HomeSkeleton from "./components/HomeSkeleton.jsx";
+import AdminAuthPage, { ADMIN_BYPASS_KEY } from "./pages/AdminAuthPage.jsx";
 
 const PERSISTENT_KEYS = [
   'mint_device_id',
@@ -108,6 +109,9 @@ const initialGiftToken = (() => {
   const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
   return match ? match[1] : null;
 })();
+
+// Detect secret staff login route
+const isStaffLoginRoute = window.location.pathname === '/staff-login';
 
 // Detect ?gift= query param and persist for post-login claim
 // Validates gift status before storing — expired/claimed/cancelled gifts are ignored
@@ -217,8 +221,10 @@ const App = () => {
   const { refetch: refetchNotifications, reset: resetNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
+  const [appEnabled, setAppEnabled] = useState(true);
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
+
   const { profile, loading: profileLoading } = useProfile({ enabled: isAuthenticated });
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus({ enabled: isAuthenticated });
   const onboardingRef = useRef({ complete: false, loading: true });
@@ -241,6 +247,47 @@ const App = () => {
   const justLoggedInRef = useRef(false);
   const intentionalLogoutRef = useRef(false);
   const lastAuthUserIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const fetchAndEnforce = async (enabled) => {
+      const hasBypass = sessionStorage.getItem(ADMIN_BYPASS_KEY) === 'true';
+      if (!enabled && !hasBypass) {
+        setAppEnabled(false);
+        intentionalLogoutRef.current = true;
+        await supabase.auth.signOut({ scope: 'local' });
+        setCurrentPage('welcome');
+      } else {
+        setAppEnabled(enabled);
+      }
+    };
+
+    supabase
+      .from('app_settings')
+      .select('is_enabled')
+      .limit(1)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) fetchAndEnforce(data.is_enabled);
+      })
+      .catch(() => {});
+
+    const channel = supabase
+      .channel('app_settings_global_maintenance')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'app_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new.is_enabled === 'boolean') {
+            fetchAndEnforce(payload.new.is_enabled);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const handleBeforeLogout = () => {
     intentionalLogoutRef.current = true;
@@ -2640,6 +2687,17 @@ const App = () => {
           />
         </Suspense>
       </SwipeBackWrapper>
+    );
+  }
+
+  if (isStaffLoginRoute) {
+    return (
+      <AdminAuthPage
+        onLoginComplete={() => {
+          window.history.replaceState({}, '', '/');
+          handleLoginComplete();
+        }}
+      />
     );
   }
 
