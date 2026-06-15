@@ -775,6 +775,7 @@ const SwipeableBalanceCard = ({
         const firstBasket = basketByDate[dates[0]];
         // Capture year-start basket for true YTD PnL — but only if the child had investments
         // before this year. If all data is from this year, YTD should equal ALL (use cost basis).
+        let priorYearCountLocal = 0;
         if (activeTab === "ytd") {
           const yearStart = `${new Date().getUTCFullYear()}-01-01`;
           const { count: priorYearCount } = await supabase
@@ -782,7 +783,8 @@ const SwipeableBalanceCard = ({
             .select("as_of_date", { count: "exact", head: true })
             .eq("family_member", familyMemberId)
             .lt("as_of_date", yearStart);
-          setYearStartBasketCents(priorYearCount > 0 ? firstBasket : null);
+          priorYearCountLocal = priorYearCount ?? 0;
+          setYearStartBasketCents(priorYearCountLocal > 0 ? firstBasket : null);
         }
         const points = [{ d: null, v: 0 }];
         dates.forEach(d => {
@@ -821,8 +823,12 @@ const SwipeableBalanceCard = ({
           const storedVal = totalPnlCents / 100;
           const storedPct = totalPctCents / strategyIds.length;
           const pctFallback = activeTab === "ytd" ? null : (basketPct || null);
-          const finalReturn = storedVal !== 0 ? storedVal : basketVal;
-          const finalPct = storedPct !== 0 ? storedPct : pctFallback;
+          // For new child accounts (all investments in the current year) the cron stores
+          // ytd_pnl = basket_value (cost_basis_cents = 0), not the actual gain. Skip the
+          // stored ytd_pnl in that case so the basket-diff fallback is used instead.
+          const skipStoredYtd = activeTab === "ytd" && priorYearCountLocal === 0;
+          const finalReturn = (!skipStoredYtd && storedVal !== 0) ? storedVal : basketVal;
+          const finalPct = (!skipStoredYtd && storedPct !== 0) ? storedPct : pctFallback;
           setPeriodReturn(finalReturn);
           setPeriodPct(finalPct);
         } else {
@@ -1548,6 +1554,9 @@ const SwipeableBalanceCard = ({
     let costBasis = 0;
     let hasPrices = false;
     for (const h of dbData.holdings) {
+      // Skip aggregate strategy items — they duplicate the underlying individual stock holdings.
+      // Iterating both would double-count liveValue and costBasis (causing YTD ≠ ALL).
+      if (h.isStrategy) continue;
       const qty = Number(h.quantity || 0);
       if (qty <= 0) continue;
       // Prefer shared prop (rich format) → internal poll (number) → fallback

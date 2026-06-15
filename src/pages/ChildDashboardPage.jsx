@@ -2528,15 +2528,20 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   const isHoldingFilled = (holding) => Number(holding.avg_fill || 0) > 0 && !!holding.Fill_date;
 
-  // Live price per share in Rands: intraday only (cents / 100).
-  // Returns null when no intraday row is available.
+  // Live price per share in Rands: live poll → intraday DB → last close (all in cents / 100).
+  // Returns null only when no price source is available at all.
   const getHoldingLivePriceRands = (holding) => {
-    // Prefer 15s live poll (same source as balance card) → intraday DB fallback
+    // Prefer 15s live poll (same source as balance card) → intraday DB fallback → last close
     const pollCents = childLivePriceMap[holding.security_id]?.priceCents;
     if (pollCents > 0) return pollCents / 100;
     const intradayCents = Number(holding.intraday_price_cents);
     if (Number.isFinite(intradayCents) && intradayCents > 0) {
       return intradayCents / 100;
+    }
+    // Final fallback: last close price from securities_c (stored in cents)
+    const lastCents = Number(holding.last_price);
+    if (Number.isFinite(lastCents) && lastCents > 0) {
+      return lastCents / 100;
     }
     return null;
   };
@@ -2745,7 +2750,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     })).then(results => setStrategyYearStartBasket(Object.fromEntries(results)));
   }, [child?.id, holdings]);
 
-  // Compute live YTD per strategy — exact same formula as purple card's childLiveMetrics
+  // Compute live YTD per strategy — exact same formula as purple card's childLiveMetrics.
+  // Uses getHoldingMarketValueRands / getHoldingCostRands so price and cost sources are
+  // consistent: live poll → intraday_price_cents → last_price (cents); avg_fill / Expected_fill.
   const strategyYtdMetrics = useMemo(() => {
     const result = {};
     const stratIds = [...new Set(holdings.filter(h => h.strategy_id).map(h => h.strategy_id))];
@@ -2755,13 +2762,10 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
       let costBasis = 0;
       let hasPrices = false;
       for (const h of stratHoldings) {
-        const qty = Number(h.quantity || 0);
-        if (qty <= 0) continue;
-        const liveCents = childLivePriceMap[h.security_id]?.priceCents;
-        const fallbackCents = qty > 0 ? Math.round(Number(h.market_value || 0) / qty) : 0;
-        const priceCents = liveCents > 0 ? liveCents : fallbackCents;
-        if (priceCents > 0) { liveValue += (priceCents / 100) * qty; hasPrices = true; }
-        costBasis += Number(h.invested_amount || 0) / 100;
+        const mv = getHoldingMarketValueRands(h);
+        const cv = getHoldingCostRands(h);
+        if (mv != null) { liveValue += mv; hasPrices = true; }
+        if (cv != null) costBasis += cv;
       }
       if (!hasPrices || costBasis === 0) continue;
       const yearStartBasketCents = strategyYearStartBasket[sid];
