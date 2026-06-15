@@ -177,6 +177,9 @@ const SwipeableBalanceCard = ({
   // Stored pre-computed P&L from client_strategy_returns_c (5d_pnl / 1m_pnl) in rands
   const [parentStoredMDPnl, setParentStoredMDPnl] = useState(null);
   const [parentStoredMDPct, setParentStoredMDPct] = useState(null);
+  // True when the user has fewer snapshot rows than the window requires (new investor).
+  // In this case 5D/M fall through to displayReturn (all-time P&L) rather than showing a misleading value.
+  const [parentMDInsufficientData, setParentMDInsufficientData] = useState(false);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -856,6 +859,7 @@ const SwipeableBalanceCard = ({
     setParentSnapshotStartBasketCents(null);
     setParentStoredMDPnl(null);
     setParentStoredMDPct(null);
+    setParentMDInsufficientData(false);
     if (activeTab === "all" || activeTab === "d") return;
     let cancelled = false;
     const runParentSnapshots = async () => {
@@ -941,9 +945,10 @@ const SwipeableBalanceCard = ({
             let correctedCents = totalStoredCents;
             let anchorBasketCents = totalCurrentBasketCents - totalStoredCents; // implied anchor
 
+            let anchorRow = null;
             try {
               // Get the actual anchor date (row at index monthOffset in descending order)
-              const { data: anchorRow } = await supabase
+              const { data: _ar } = await supabase
                 .from("client_strategy_returns_c")
                 .select("as_of_date, basket_value")
                 .eq("user_id", userId)
@@ -953,6 +958,7 @@ const SwipeableBalanceCard = ({
                 .order("as_of_date", { ascending: false })
                 .range(monthOffset, monthOffset)
                 .maybeSingle();
+              anchorRow = _ar;
 
               if (anchorRow?.as_of_date) {
                 const anchorDate = anchorRow.as_of_date;
@@ -1004,6 +1010,14 @@ const SwipeableBalanceCard = ({
               // Fall back to uncorrected stored value
             }
             if (cancelled) return;
+            // If no anchor row exists at position monthOffset, the user's snapshot history is shorter
+            // than the window (new investor). The stored P&L is anchored to inception, not the period.
+            // Don't display it — fall through to displayReturn (all-time P&L), same as YTD for new investors.
+            if (!anchorRow?.as_of_date) {
+              setParentMDInsufficientData(true);
+              console.log("[PERIOD_DEBUG parent] M/5D insufficient rows — falling back to displayReturn", { activeTab, monthOffset });
+              return;
+            }
 
             const correctedPct = anchorBasketCents > 0
               ? parseFloat(((correctedCents / anchorBasketCents) * 100).toFixed(4))
@@ -1630,7 +1644,8 @@ const SwipeableBalanceCard = ({
   // Only applies to strategy accounts — stock-only accounts never populate parentMDLivePnl
   // (the snapshot effect exits early when strategyIds is empty), so they must fall through to periodReturn.
   const parentHasStrategyHoldings = !childMode && dbData.holdings.some(h => h.strategyId || h.strategy_id);
-  const isParentMDTabWaiting = !childMode && parentHasStrategyHoldings && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null;
+  // parentMDInsufficientData = we fetched and confirmed not enough rows — fall through to displayReturn, not R0
+  const isParentMDTabWaiting = !childMode && parentHasStrategyHoldings && (activeTab === "m" || activeTab === "5d") && parentMDLivePnl === null && !parentMDInsufficientData;
   // For parent YTD: when no prior-year anchor (parentYearStartBasketCents=null → !useParentLiveYtd),
   // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
   const useParentYtdTab = !childMode && activeTab === "ytd";
