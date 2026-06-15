@@ -67,7 +67,6 @@ const AuthPage = ({ initialStep, onSignupComplete, onLoginComplete, onPreLogin }
           setIsEnabled(data.is_enabled);
         }
       } catch {
-        // If query fails (e.g. column not yet added), default to enabled
         setIsEnabled(true);
       } finally {
         setLoading(false);
@@ -75,6 +74,23 @@ const AuthPage = ({ initialStep, onSignupComplete, onLoginComplete, onPreLogin }
     };
 
     checkMaintenanceMode();
+
+    const channel = supabase
+      .channel('app_settings_maintenance')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'app_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new.is_enabled === 'boolean') {
+            setIsEnabled(payload.new.is_enabled);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   if (loading) {
