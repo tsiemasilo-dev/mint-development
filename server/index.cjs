@@ -4771,47 +4771,6 @@ app.post("/api/record-investment", async (req, res) => {
         console.error("[record-investment] user_strategies upsert failed:", usErr.message);
       }
 
-      // Also upsert into Supabase subscriptions table so the Manage Subscriptions page shows it.
-      // Child-owned strategy purchases are not parent subscriptions.
-      if (!targetFamilyMemberId) try {
-        const strategyName = name || symbol || "Strategy Subscription";
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        const nextBilling = nextMonth.toISOString().split("T")[0];
-
-        // Use user-authenticated client so RLS allows the insert (auth.uid() = user_id)
-        const userToken = req.headers.authorization?.replace("Bearer ", "");
-        const subDb = userToken && SUPABASE_URL && SUPABASE_ANON_KEY
-          ? (() => { const { createClient: cc } = require('@supabase/supabase-js'); return cc(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: `Bearer ${userToken}` } } }); })()
-          : db;
-
-        const { data: existingSub } = await subDb
-          .from("subscriptions")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("plan", strategyName)
-          .maybeSingle();
-
-        if (!existingSub) {
-          const { error: subInsertErr } = await subDb.from("subscriptions").insert({
-            user_id: userId,
-            plan: strategyName,
-            amount: 29,
-            currency: "ZAR",
-            current_period_end: nextBilling,
-            status: "active",
-          });
-          if (subInsertErr) {
-            console.warn("[record-investment] subscriptions insert error:", subInsertErr.message);
-          } else {
-            console.log("[record-investment] subscriptions record created for strategy:", strategyName);
-          }
-        } else {
-          console.log("[record-investment] subscriptions record already exists for strategy:", strategyName);
-        }
-      } catch (subErr) {
-        console.warn("[record-investment] Could not write subscriptions:", subErr.message);
-      }
     }
 
     const orderDate = new Date().toISOString();
