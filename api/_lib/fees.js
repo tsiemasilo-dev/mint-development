@@ -18,7 +18,6 @@ export const FEE_CONSTANTS = {
   BROKER_FEE_RATE:        0.0025,
   ISIN_FEE_PER_ASSET:     69,
   TRANSACTION_FEE_RATE:   0.038,
-  MONTHLY_STRATEGY_FEE:   29,     // R29/mo per additional strategy
   REB_BROKERAGE_RATE:     0.005,  // CRM rebalance brokerage (0.5%)
   REB_CUSTODY_FEE:        69,     // CRM rebalance custody (per ISIN, per client)
 };
@@ -33,7 +32,6 @@ function feesJsonToConstants(j) {
     BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS.BROKER_FEE_RATE),
     ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS.ISIN_FEE_PER_ASSET),
     TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS.TRANSACTION_FEE_RATE),
-    MONTHLY_STRATEGY_FEE:   num(j.monthlyStrategyFee,   FEE_CONSTANTS.MONTHLY_STRATEGY_FEE),
     REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS.REB_BROKERAGE_RATE),
     REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS.REB_CUSTODY_FEE),
   };

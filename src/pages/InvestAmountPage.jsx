@@ -7,14 +7,6 @@ import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import GiftToggleV2 from "../components/GiftToggleV2";
 import { useFees } from "../lib/useFees";
 
-function firstBillingDate() {
-  const d = new Date();
-  const day = d.getDate();
-  d.setMonth(d.getMonth() + 1);
-  if (d.getDate() < day) d.setDate(0);
-  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
-}
-
 const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWithGiftOpen = false, onGiftDone }) => {
   const currentStrategy = strategy || {
     name: "",
@@ -22,7 +14,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
     description: "",
   };
   const isAdditionalStrategy = !!currentStrategy.isAdditionalStrategy;
-  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE, MONTHLY_STRATEGY_FEE } = useFees();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
 
   const minimumInvestment =
     currentStrategy.calculatedMinInvestment ||
@@ -281,26 +273,12 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
                   </p>
                 </div>
               </div>
-              {isAdditionalStrategy && (
-                <div className="flex items-center justify-between pt-1 border-t border-dashed border-violet-100 mt-1">
-                  <div>
-                    <p className="text-xs text-violet-700 font-medium">Monthly Strategy Fee</p>
-                    <p className="text-[10px] text-violet-500">First charge on {firstBillingDate()}</p>
-                  </div>
-                  <p className="text-xs font-semibold text-violet-700">
-                    {formatCurrency(MONTHLY_STRATEGY_FEE, currency)}/month
-                  </p>
-                </div>
-              )}
             </div>
           )}
 
           <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
             <div>
               <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
-              {isAdditionalStrategy && (
-                <p className="text-[10px] text-violet-600">R29/month billed from {firstBillingDate()}</p>
-              )}
             </div>
             <p className="text-sm font-bold text-slate-900">
               {formatCurrency(fees.totalCost, currency)}
@@ -334,9 +312,6 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
               <p className="text-xs text-slate-600 mt-1">
                 By continuing, you confirm you have reviewed and agree to all
                 terms and conditions
-                {isAdditionalStrategy && (
-                  <span className="text-violet-700 font-medium">, including the R29/month recurring strategy fee</span>
-                )}
               </p>
             </div>
           </label>

@@ -25,7 +25,6 @@ export default async function handler(req, res) {
         BROKER_FEE_RATE:        c.BROKER_FEE_RATE,
         TRANSACTION_FEE_RATE:   c.TRANSACTION_FEE_RATE,
         EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
-        MONTHLY_STRATEGY_FEE:   c.MONTHLY_STRATEGY_FEE,
         // alias the client code already uses for the 8% reserve
         CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
       },

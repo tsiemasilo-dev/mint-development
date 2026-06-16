@@ -11,14 +11,6 @@ import GiftToggleV2 from "./GiftToggleV2";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
 
-function firstBillingDate() {
-  const d = new Date();
-  const day = d.getDate();
-  d.setMonth(d.getMonth() + 1);
-  if (d.getDate() < day) d.setDate(0);
-  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" });
-}
-
 const fmt = (n) => Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdultInvestModal({
@@ -31,7 +23,7 @@ export default function AdultInvestModal({
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
-  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE, MONTHLY_STRATEGY_FEE } = useFees();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const [showDiscretionModal, setShowDiscretionModal] = useState(false);
 
   const [minimum, setMinimum] = useState(null);
@@ -354,15 +346,6 @@ export default function AdultInvestModal({
                       <p className="text-xs text-slate-500">Transaction fee (3.8%)</p>
                       <p className="text-xs font-semibold text-slate-800">R{fmt(fees.transactionAmount)}</p>
                     </div>
-                    {isAdditionalStrategy && (
-                      <div className="flex justify-between pt-1 border-t border-dashed border-violet-100">
-                        <div>
-                          <p className="text-xs text-violet-700 font-medium">Monthly Strategy Fee</p>
-                          <p className="text-[10px] text-violet-500">From {firstBillingDate()}</p>
-                        </div>
-                        <p className="text-xs font-semibold text-violet-700">R{fmt(MONTHLY_STRATEGY_FEE)}/month</p>
-                      </div>
-                    )}
                   </div>
                 )}
                 <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>

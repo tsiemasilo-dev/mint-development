@@ -504,52 +504,6 @@ export default async function handler(req, res) {
       paymentMethod,
     }).catch(() => {});
 
-    // ── Strategy subscription: create R29/month record if this is an additional strategy ──
-    if (isStrategyInvestment && strategyId && !targetFamilyMemberId) {
-      try {
-        // Check if user has any OTHER active strategy (making this the 2nd+)
-        const { data: otherStrategies } = await db
-          .from("user_strategies")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("status", "active")
-          .neq("strategy_id", strategyId)
-          .limit(1);
-
-        if (otherStrategies && otherStrategies.length > 0) {
-          // Calculate next billing date (same calendar day, next month)
-          const now = new Date();
-          const day = now.getDate();
-          const next = new Date(now);
-          next.setMonth(next.getMonth() + 1);
-          if (next.getDate() < day) next.setDate(0);
-          const nextBillingDate = next.toISOString().split("T")[0];
-
-          const { error: subError } = await db
-            .from("subscriptions")
-            .upsert(
-              {
-                user_id: userId,
-                plan: name || "Strategy",
-                amount: 29,
-                currency: "ZAR",
-                current_period_end: nextBillingDate,
-                status: "active",
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "user_id,plan" }
-            );
-
-          if (subError) {
-            console.warn("[record-investment] Strategy subscription upsert failed:", subError.message);
-          } else {
-            console.log(`[record-investment] Subscription created for user ${userId}, strategy ${name}. First billing: ${nextBillingDate}`);
-          }
-        }
-      } catch (subErr) {
-        console.warn("[record-investment] Subscription setup error (non-fatal):", subErr.message);
-      }
-    }
 
     return res.status(200).json({ 
       success: true, 
