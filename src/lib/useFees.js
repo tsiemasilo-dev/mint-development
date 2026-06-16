@@ -14,7 +14,6 @@ export const FEE_DEFAULTS = {
   BROKER_FEE_RATE:      0.0025,
   TRANSACTION_FEE_RATE: 0.038,
   CASH_BUFFER_RATE:     0.08,   // a.k.a. execution reserve
-  MONTHLY_STRATEGY_FEE: 29,
 };
 
 const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
@@ -36,7 +35,6 @@ function ensureFetch() {
         BROKER_FEE_RATE:      num(f.BROKER_FEE_RATE,      FEE_DEFAULTS.BROKER_FEE_RATE),
         TRANSACTION_FEE_RATE: num(f.TRANSACTION_FEE_RATE, FEE_DEFAULTS.TRANSACTION_FEE_RATE),
         CASH_BUFFER_RATE:     num(f.CASH_BUFFER_RATE ?? f.EXECUTION_RESERVE_RATE, FEE_DEFAULTS.CASH_BUFFER_RATE),
-        MONTHLY_STRATEGY_FEE: num(f.MONTHLY_STRATEGY_FEE, FEE_DEFAULTS.MONTHLY_STRATEGY_FEE),
       };
       listeners.forEach((l) => l());
     })

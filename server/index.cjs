@@ -34,7 +34,6 @@ const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
-const { runStrategySubscriptionMigration } = require("./strategySubscriptionMigration.cjs");
 const cron = require("node-cron");
 const multer = require("multer");
 const Anthropic = require("@anthropic-ai/sdk");
@@ -944,7 +943,6 @@ async function ensureUserSessionsTable() {
 ensureUserSessionsTable();
 
 runFuneralCoverMigration(pgPool);
-runStrategySubscriptionMigration(pgPool, supabaseAdmin, supabase);
 
 // ── Request a sell ────────────────────────────────────────────────────────────
 // Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
@@ -1117,67 +1115,6 @@ cron.schedule("*/15 * * * *", async () => {
     } catch (e) { console.error(`[gift-expire-cron] error for gift ${gift.id}:`, e.message); }
   }
   console.log(`[gift-expire-cron] Processed ${expiredGifts.length} expired gifts at`, now);
-});
-
-// ── Monthly strategy subscription billing cron ─────────────────────────────
-// Runs daily at 22:00 UTC (midnight SAST). Charges R29 for each due subscription.
-cron.schedule("0 22 * * *", async () => {
-  console.log("[strategy-sub-cron] Running subscription billing check...");
-  const db = supabaseAdmin || supabase;
-  if (!db) { console.warn("[strategy-sub-cron] No db client — skipping"); return; }
-
-  const today = new Date().toISOString().split("T")[0];
-
-  const { data: dueSubs, error: fetchErr } = await db
-    .from("subscriptions")
-    .select("id, user_id, plan, amount, current_period_end")
-    .eq("status", "active")
-    .lte("current_period_end", today);
-
-  if (fetchErr) { console.error("[strategy-sub-cron] Fetch error:", fetchErr.message); return; }
-  if (!dueSubs || dueSubs.length === 0) { console.log("[strategy-sub-cron] No subscriptions due today."); return; }
-
-  console.log(`[strategy-sub-cron] Processing ${dueSubs.length} subscription(s)...`);
-
-  for (const sub of dueSubs) {
-    try {
-      const amountRands = Number(sub.amount || 29);
-
-      // Deduct from wallet (allow negative balance)
-      const { data: wallet } = await db.from("wallets").select("balance").eq("user_id", sub.user_id).maybeSingle();
-      const currentBalance = wallet ? Number(wallet.balance) : 0;
-      const newBalance = currentBalance - amountRands;
-      await db.from("wallets").upsert({ user_id: sub.user_id, balance: newBalance }, { onConflict: "user_id" });
-
-      // Record transaction
-      const now = new Date().toISOString();
-      await db.from("transactions").insert({
-        user_id: sub.user_id,
-        direction: "debit",
-        name: `Strategy Subscription Fee: ${sub.plan || "Strategy"}`,
-        description: `Monthly R${amountRands} subscription fee for ${sub.plan || "strategy"}`,
-        amount: Math.round(amountRands * 100),
-        store_reference: `sub-${sub.id}-${today}`,
-        currency: "ZAR",
-        status: "posted",
-        transaction_date: now,
-        created_at: now,
-      });
-
-      // Advance current_period_end by one month
-      const billing = new Date(sub.current_period_end);
-      const day = billing.getDate();
-      billing.setMonth(billing.getMonth() + 1);
-      if (billing.getDate() < day) billing.setDate(0);
-      const nextDate = billing.toISOString().split("T")[0];
-
-      await db.from("subscriptions").update({ current_period_end: nextDate, updated_at: now }).eq("id", sub.id);
-
-      console.log(`[strategy-sub-cron] Billed R${amountRands} for user ${sub.user_id} (${sub.plan}). New balance: R${newBalance}. Next billing: ${nextDate}`);
-    } catch (err) {
-      console.error(`[strategy-sub-cron] Error processing sub ${sub.id}:`, err.message);
-    }
-  }
 });
 
 function generateChildMintNumber(firstName, idNumber, dateOfBirth) {
@@ -4320,70 +4257,6 @@ app.post("/api/reconcile-payments", async (req, res) => {
   }
 });
 
-// ── GET user's strategy subscriptions ─────────────────────────────────────
-app.get("/api/user/strategy-subscriptions", async (req, res) => {
-  try {
-    const { user, token, error: authError } = await authenticateUser(req);
-    if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
-
-    const db = getAuthenticatedDb(token);
-
-    const { data: subs, error: subsErr } = await db
-      .from("subscriptions")
-      .select("id, user_id, plan, amount, currency, current_period_end, status, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (subsErr) {
-      console.error("[strategy-subscriptions] GET error:", subsErr.message);
-      return res.status(500).json({ success: false, error: subsErr.message });
-    }
-
-    return res.json({ success: true, subscriptions: subs || [] });
-  } catch (err) {
-    console.error("[strategy-subscriptions] GET error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ── PATCH update strategy subscription status ──────────────────────────────
-app.patch("/api/user/strategy-subscriptions/:id", async (req, res) => {
-  try {
-    const { user, token, error: authError } = await authenticateUser(req);
-    if (authError || !user) return res.status(401).json({ success: false, error: "Unauthorized" });
-
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!["active", "cancelled"].includes(status)) {
-      return res.status(400).json({ success: false, error: "status must be 'active' or 'cancelled'" });
-    }
-
-    const db = getAuthenticatedDb(token);
-
-    const { data, error: updateErr } = await db
-      .from("subscriptions")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .select("id, status")
-      .maybeSingle();
-
-    if (updateErr) {
-      console.error("[strategy-subscriptions] PATCH error:", updateErr.message);
-      return res.status(500).json({ success: false, error: updateErr.message });
-    }
-    if (!data) {
-      return res.status(404).json({ success: false, error: "Subscription not found" });
-    }
-
-    console.log(`[strategy-subscriptions] User ${user.id} set subscription ${id} to ${status}`);
-    return res.json({ success: true, subscription: data });
-  } catch (err) {
-    console.error("[strategy-subscriptions] PATCH error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 app.post("/api/record-investment", async (req, res) => {
   let rollbackUserId = null;
   let rollbackPaymentMethod = null;
@@ -4898,47 +4771,6 @@ app.post("/api/record-investment", async (req, res) => {
         console.error("[record-investment] user_strategies upsert failed:", usErr.message);
       }
 
-      // Also upsert into Supabase subscriptions table so the Manage Subscriptions page shows it.
-      // Child-owned strategy purchases are not parent subscriptions.
-      if (!targetFamilyMemberId) try {
-        const strategyName = name || symbol || "Strategy Subscription";
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        const nextBilling = nextMonth.toISOString().split("T")[0];
-
-        // Use user-authenticated client so RLS allows the insert (auth.uid() = user_id)
-        const userToken = req.headers.authorization?.replace("Bearer ", "");
-        const subDb = userToken && SUPABASE_URL && SUPABASE_ANON_KEY
-          ? (() => { const { createClient: cc } = require('@supabase/supabase-js'); return cc(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: `Bearer ${userToken}` } } }); })()
-          : db;
-
-        const { data: existingSub } = await subDb
-          .from("subscriptions")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("plan", strategyName)
-          .maybeSingle();
-
-        if (!existingSub) {
-          const { error: subInsertErr } = await subDb.from("subscriptions").insert({
-            user_id: userId,
-            plan: strategyName,
-            amount: 29,
-            currency: "ZAR",
-            current_period_end: nextBilling,
-            status: "active",
-          });
-          if (subInsertErr) {
-            console.warn("[record-investment] subscriptions insert error:", subInsertErr.message);
-          } else {
-            console.log("[record-investment] subscriptions record created for strategy:", strategyName);
-          }
-        } else {
-          console.log("[record-investment] subscriptions record already exists for strategy:", strategyName);
-        }
-      } catch (subErr) {
-        console.warn("[record-investment] Could not write subscriptions:", subErr.message);
-      }
     }
 
     const orderDate = new Date().toISOString();

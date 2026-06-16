@@ -1199,24 +1199,10 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 opacity-20 animate-pulse" />
               <Info className="h-8 w-8 text-violet-600 relative z-10" />
             </div>
-            <h3 className="text-center text-lg font-bold text-slate-900 mb-1">Additional Strategy Fee</h3>
-            <p className="text-center text-xs font-semibold text-violet-600 mb-3">R29/month per strategy</p>
+            <h3 className="text-center text-lg font-bold text-slate-900 mb-1">Add Another Strategy</h3>
             <p className="text-center text-sm text-slate-600 mb-4">
-              You already hold an active strategy. Investing in an additional strategy will incur a recurring fee of <span className="font-semibold text-slate-900">R29 per month</span> for this strategy.
+              You already hold an active strategy. You're about to invest in an additional strategy: <span className="font-semibold text-slate-900">{currentStrategy.name}</span>.
             </p>
-            <div className="mb-5 rounded-2xl bg-violet-50 border border-violet-100 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Monthly strategy fee</p>
-                <p className="text-xs font-semibold text-slate-900">R29.00 / month</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Applies to</p>
-                <p className="text-xs font-semibold text-slate-900">{currentStrategy.name}</p>
-              </div>
-              <p className="text-[11px] text-slate-500 pt-1 border-t border-violet-100">
-                This fee will be reflected in your fee breakdown and charged monthly while you hold this strategy.
-              </p>
-            </div>
             <button
               type="button"
               onClick={() => {

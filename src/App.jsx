@@ -30,7 +30,6 @@ const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
 const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
 const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
 const OpenStrategiesPage = lazy(() => import("./pages/OpenStrategiesPage.jsx"));
-const ManageSubscriptionsPage = lazy(() => import("./pages/ManageSubscriptionsPage.jsx"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage.jsx"));
 const InstantLiquidityPage = lazy(() => import("./pages/credit/InstantLiquidity.jsx"));
 const CreditHowItWorksPage = lazy(() => import("./pages/credit/CreditHowItWorks.jsx"));
@@ -2289,13 +2288,6 @@ const App = () => {
     );
   }
 
-  if (currentPage === "manageSubscriptions") {
-    return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <ManageSubscriptionsPage onBack={goBack} />
-      </SwipeBackWrapper>
-    );
-  }
 
   if (currentPage === "settings") {
     return (
