@@ -5748,7 +5748,9 @@ app.get("/api/user/strategies", async (req, res) => {
       });
 
       // Build per-symbol P&L using the same cost basis formula as the balance card:
-      // max(Expected_fill, avg_fill/100) with a legacy-cents guard on Expected_fill.
+      // Expected_fill (client cost), NOT higher-of — avg_fill carries MINT's spread,
+      // which the 8% buffer absorbs (see src/lib/strategyValuation.js). Legacy-cents
+      // guard on Expected_fill; falls back to avg_fill only when Expected_fill absent.
       for (const h of (userStratHoldings || [])) {
         const sec = stratSecs.find(s => s.id === h.security_id);
         if (!sec) continue;
@@ -5761,7 +5763,7 @@ app.get("/api/user/strategies", async (req, res) => {
         const expectedRands = expectedRaw > 0
           ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
           : 0;
-        const costBasisRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+        const costBasisRands = expectedRands > 0 ? expectedRands : avgFillRands;
         const livePrice = stratLivePriceMap[h.security_id] || costBasisRands;
         symbolPnlMap[sec.symbol] = {
           pnlRands: (livePrice - costBasisRands) * qty,
@@ -11396,7 +11398,18 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     const avgFillCents = Number(h.avg_fill || 0);
     const avgFillRands = avgFillCents / 100;
     const expectedFillRands = Number(h.Expected_fill || 0);
-    const costBasisRands = expectedFillRands > 0 ? Math.max(expectedFillRands, avgFillRands) : avgFillRands;
+    // Client cost basis = Expected_fill (the price the client saw at buy time),
+    // NOT higher-of(Expected, avg_fill). The higher-of CAP on the upside is preserved
+    // (when avg_fill <= Expected both rules return Expected, so reported gains are
+    // never overstated). The ONLY change is the downside: avg_fill carries MINT's
+    // execution spread, which the 8% buffer absorbs (buffer_consumed_cents) — folding
+    // it into cost would charge the client a P&L loss for slippage they already paid
+    // for via the buffer (double-count). Mirrors src/lib/strategyValuation.js.
+    // Legacy-cents guard: rows written before the rands migration stored Expected_fill
+    // ~100x inflated. Falls back to avg_fill only when no Expected_fill was recorded.
+    const costBasisRands = expectedFillRands > 0
+      ? (avgFillRands > 0 && expectedFillRands > avgFillRands * 5 ? expectedFillRands / 100 : expectedFillRands)
+      : avgFillRands;
     const costBasisForHolding = Math.round(costBasisRands * 100 * qty);
 
     const price = priceMap[h.security_id];
