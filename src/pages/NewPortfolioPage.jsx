@@ -616,7 +616,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const avgFillRands = avgFillCents / 100;
       const expectedRaw = Number(h.Expected_fill || 0);
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
-      costBasis += Math.max(expectedRands, avgFillRands) * qty;
+      costBasis += (expectedRands > 0 ? expectedRands : avgFillRands) * qty; // Expected-preferred (not higher-of): slippage absorbed by the 8% buffer
       const abs1d = liveEntry?.abs1dCents != null ? liveEntry.abs1dCents : null;
       if (abs1d != null) todayPnl += (abs1d / 100) * qty;
     }

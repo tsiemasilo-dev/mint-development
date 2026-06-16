@@ -7,17 +7,21 @@ import { supabase } from "./supabase";
 // buffer, and cost basis uses the HIGHER-OF rule. Keep that logic here so it
 // can't drift across components.
 
-// Higher-of cost basis per share (rands). Client cost basis is Expected_fill
-// (rands); avg_fill (cents) carries MINT's spread. We take the higher of the two
-// so cost is never understated, with a legacy-cents guard on Expected_fill
-// (rows written before the rands migration stored it ~100x inflated).
+// Client cost basis per share (rands) = Expected_fill (the price the client saw),
+// NOT higher-of(Expected, avg_fill). avg_fill (cents) carries MINT's execution
+// spread, which the 8% buffer absorbs (buffer_consumed_cents) — folding it in shows
+// buffer-covered slippage as a phantom loss. The upside is unaffected (we never
+// credit a better-than-quoted fill above Expected). Legacy-cents guard on
+// Expected_fill (rows written before the rands migration stored it ~100x inflated);
+// falls back to avg_fill only when no Expected_fill was recorded. (Name kept for
+// import compatibility — this is now Expected-preferred, matching the CRM + server.)
 export const higherOfCostPerShareRands = (h) => {
   const avgFillRands = Number(h?.avg_fill || 0) / 100;
   const expectedRaw = Number(h?.Expected_fill ?? h?.expected_fill ?? 0);
   const expectedRands = expectedRaw > 0
     ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
     : 0;
-  return expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+  return expectedRands > 0 ? expectedRands : avgFillRands;
 };
 
 // Remaining buffer for a transaction (cents): charged 8% reserve minus the

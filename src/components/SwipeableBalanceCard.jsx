@@ -117,7 +117,7 @@ function maxOfCostBasisRands(h) {
   const expectedRands = expectedRaw > 0
     ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw)
     : 0;
-  const perShareRands = expectedRands > 0 ? Math.max(expectedRands, avgFillRands) : avgFillRands;
+  const perShareRands = expectedRands > 0 ? expectedRands : avgFillRands;
   return perShareRands * qty;
 }
 
@@ -465,7 +465,7 @@ const SwipeableBalanceCard = ({
                 ? (expectedFillRaw > avgFillRands * 5 ? expectedFillRaw / 100 : expectedFillRaw)
                 : 0;
               const costBasisPerShareRands = expectedFillRands > 0
-                ? Math.max(expectedFillRands, avgFillRands)
+                ? expectedFillRands
                 : avgFillRands;
               // Prefer live intraday price, fall back to last_price from securities_c
               const intradayCents = intradayMap[h.security_id];
@@ -525,7 +525,7 @@ const SwipeableBalanceCard = ({
               const avgFillRands = avgFillCents / 100;
               const expectedFillRands = Number(h.Expected_fill || 0); // already rands from API
               const costBasisPerShareRands = expectedFillRands > 0
-                ? Math.max(expectedFillRands, avgFillRands)
+                ? expectedFillRands
                 : avgFillRands;
               const investedCents = Math.round(costBasisPerShareRands * 100 * quantity);
               return {

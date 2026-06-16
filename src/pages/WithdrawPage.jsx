@@ -83,7 +83,7 @@ export default function WithdrawPage({ onBack }) {
           const avgFillRands = Number(h.avg_fill || 0) / 100;
           const expectedFillRands = Number(h.Expected_fill || 0); // already in rands from API
           const costBasisPerShare = expectedFillRands > 0
-            ? Math.max(expectedFillRands, avgFillRands)
+            ? expectedFillRands
             : avgFillRands;
           const cost = Math.round(costBasisPerShare * 100 * qty) / 100;
           const pnl = value - cost;
