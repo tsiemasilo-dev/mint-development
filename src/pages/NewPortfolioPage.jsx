@@ -539,7 +539,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     const todayStr = new Date().toISOString().split("T")[0];
     supabase
       .from("client_strategy_returns_c")
-      .select("as_of_date, basket_value, ytd_pct, ytd_pnl")
+      .select("as_of_date, basket_value, ytd_pct, ytd_pnl, 1d_pnl")
       .eq("user_id", profile.id)
       .is("family_member", null)
       .eq("strategy_id", userSelectedStrategy.strategyId)
@@ -781,11 +781,20 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
         const latestBySecId = {};
         for (const row of intradayRows) latestBySecId[row.security_id] = row;
-        const baselineRands = securityIds.reduce((sum, sid) => {
-          const row = latestBySecId[sid];
-          if (!row) return sum;
-          return sum + ((Number(row.current_price) - Number(row["1d_abs"] || 0)) / 100) * (qtyMap[sid] || 0);
-        }, 0) || liveStrategyMetrics.costBasis;
+        // Prefer yesterday's basket_value from snapshots as baseline (avoids wrong-sign
+        // 1d_abs from Yahoo Finance for JSE stocks). Falls back to the 1d_abs formula
+        // if today's snapshot isn't yet saved (i.e. EOD job hasn't run yet).
+        const todayDateStr = new Date().toISOString().split("T")[0];
+        const lastSR = snapshotRows[snapshotRows.length - 1];
+        const prevSR = snapshotRows[snapshotRows.length - 2];
+        const snapshotHasToday = lastSR?.as_of_date === todayDateStr;
+        const baselineRands = (snapshotHasToday && prevSR)
+          ? Number(prevSR.basket_value || 0) / 100
+          : (securityIds.reduce((sum, sid) => {
+              const row = latestBySecId[sid];
+              if (!row) return sum;
+              return sum + ((Number(row.current_price) - Number(row["1d_abs"] || 0)) / 100) * (qtyMap[sid] || 0);
+            }, 0) || liveStrategyMetrics.costBasis);
         const bucketMap = new Map();
         for (const row of intradayRows) {
           const d = new Date(row.timestamp);
@@ -822,7 +831,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       }
     })();
     return () => { cancelled = true; };
-  }, [timeFilter, userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings, liveStrategyMetrics.costBasis, intradayTick]);
+  }, [timeFilter, userSelectedStrategy?.strategyId, directStratHoldings, rawHoldings, liveStrategyMetrics.costBasis, intradayTick, snapshotRows]);
 
   const getChartData = () => {
     if (realChartData && realChartData.length > 0) {
@@ -1276,8 +1285,20 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const isStratPending = liveStrategyMetrics.isPending && (currentStrategy.currentValue || 0) === 0 && ia === 0;
                           let pnl, pnlPct;
                           if (timeFilter === "D") {
-                            pnl = liveStrategyMetrics.todayPnl;
-                            pnlPct = liveStrategyMetrics.todayPct;
+                            // Use 1d_pnl from today's snapshot when available — this is the
+                            // same source the home page uses, avoiding wrong-sign 1d_abs
+                            // values from Yahoo Finance for JSE stocks.
+                            const _todayStr = new Date().toISOString().split("T")[0];
+                            const _lastSR = snapshotRows[snapshotRows.length - 1];
+                            const _prevSR = snapshotRows[snapshotRows.length - 2];
+                            if (_lastSR?.as_of_date === _todayStr && _lastSR?.["1d_pnl"] != null) {
+                              pnl = Number(_lastSR["1d_pnl"]) / 100;
+                              const _prevBasket = Number(_prevSR?.basket_value || 0) / 100;
+                              pnlPct = _prevBasket > 0 ? (pnl / _prevBasket) * 100 : 0;
+                            } else {
+                              pnl = liveStrategyMetrics.todayPnl;
+                              pnlPct = liveStrategyMetrics.todayPct;
+                            }
                           } else if (timeFilter === "5d" || timeFilter === "m") {
                             pnl = periodReturnData?.pnl ?? 0;
                             pnlPct = periodReturnData?.pct ?? 0;
