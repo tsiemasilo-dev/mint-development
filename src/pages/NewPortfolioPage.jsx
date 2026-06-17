@@ -1343,7 +1343,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           }
                           // Before market open on D filter there is no intraday data yet —
                           // hide the PnL row entirely so nothing misleading is shown.
-                          const hideDayPnl = timeFilter === "D" && intradayChartData.length === 0;
+                          const hideDayPnl = timeFilter === "D" && !(intradayChartData?.length);
                           return (
                             <>
                               <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
