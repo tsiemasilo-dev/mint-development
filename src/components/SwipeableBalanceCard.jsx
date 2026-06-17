@@ -848,10 +848,8 @@ const SwipeableBalanceCard = ({
     return () => { cancelled = true; };
   }, [childMode, familyMemberId, dbData.holdings, activeTab, userId]);
 
-  // Parent snapshot fetch — dedicated effect that mirrors fetchChildSnapshots exactly.
-  // Runs on tab change, NOT on every live-price tick (unlike the chart query).
-  // For YTD: queries current-year basket rows + prior-year count check (same as child).
-  // For M/5D: reads stored 1m_pnl/5d_pnl columns, falls back to basket diff.
+  // Parent snapshot effect — runs on tab/strategy change only (NOT on every live-price tick).
+  // Computes cash-adjusted, non-trading-day-aware anchors for 5D/M and cost-basis anchors for YTD/ALL.
   useEffect(() => {
     if (childMode || !userId) return;
     setParentSnapshotPeriodReturn(null);
@@ -860,97 +858,160 @@ const SwipeableBalanceCard = ({
     setParentStoredMDPnl(null);
     setParentStoredMDPct(null);
     setParentMDInsufficientData(false);
-    if (activeTab === "all" || activeTab === "d") return;
+    setParentYearStartBasketCents(null);
+    if (activeTab === "d") return;
     let cancelled = false;
+
     const runParentSnapshots = async () => {
       const strategyIds = parentStrategyKey ? parentStrategyKey.split(",") : [];
       if (!strategyIds.length) return;
       try {
-        const now = new Date();
-        const todayStr = now.toISOString().split("T")[0];
-        const dowUtc = now.getUTCDay();
-        const weekendOffset = dowUtc === 6 ? 1 : dowUtc === 0 ? 2 : 0;
-        const lastWeekday = new Date(now);
-        lastWeekday.setUTCDate(now.getUTCDate() - weekendOffset);
-        const lastWeekdayStr = lastWeekday.toISOString().split("T")[0];
+        // ── Step 1: fetch cash components (buffer + residual with date) ──────────────
+        // Buffer from active holding transaction_ids; residual balance + date from rebalance table.
+        let totalBufferCents = 0;
+        let totalResidualCents = 0;
+        let earliestResidualDateStr = null; // "YYYY-MM-DD"
 
-        if (activeTab === "ytd") {
-          // YTD: accumulate basket rows to find year-start anchor
-          const yearStart = `${now.getUTCFullYear()}-01-01`;
-          const basketByDate = {};
-          await Promise.all(strategyIds.map(async (sid) => {
-            const { data } = await supabase
-              .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
-              .eq("user_id", userId)
-              .is("family_member", null)
-              .eq("strategy_id", sid)
-              .gte("as_of_date", yearStart)
-              .lte("as_of_date", lastWeekdayStr)
-              .order("as_of_date", { ascending: false });
-            (data || []).forEach(r => {
-              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
-            });
-          }));
-          if (cancelled) return;
-          const dates = Object.keys(basketByDate).sort();
-          if (!dates.length) return;
-          const firstBasket = basketByDate[dates[0]];
-          const { count: priorYearCount } = await supabase
-            .from("client_strategy_returns_c")
-            .select("as_of_date", { count: "exact", head: true })
+        const [{ data: activeHlds }, { data: residuals }] = await Promise.all([
+          supabase
+            .from("stock_holdings_c")
+            .select("transaction_id")
+            .eq("is_active", true)
             .eq("user_id", userId)
-            .is("family_member", null)
-            .lt("as_of_date", yearStart);
-          if (cancelled) return;
-          const anchor = priorYearCount > 0 ? firstBasket : null;
-          setParentYearStartBasketCents(anchor);
-          console.log("[PERIOD_DEBUG parent] YTD anchor set:", {
-            priorYearCount, yearStartBasketCents: anchor,
-            yearStartRands: anchor != null ? anchor / 100 : null,
-            firstDate: dates[0], lastDate: dates[dates.length - 1], rowsFetched: dates.length,
-          });
-        } else {
-          // M or 5D — compute from basket_value deltas, identical to the portfolio tab.
-          // This is rebalance-safe by construction: basket_value already reflects any sold/bought
-          // stocks, so there is no need for a client-side injection correction.
-          const rowLimit = activeTab === "5d" ? 5 : 22;
-          const basketByDate = {};
-          await Promise.all(strategyIds.map(async (sid) => {
-            const { data } = await supabase
-              .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
-              .eq("user_id", userId)
-              .is("family_member", null)
-              .eq("strategy_id", sid)
-              .lte("as_of_date", lastWeekdayStr)
-              .order("as_of_date", { ascending: false })
-              .limit(rowLimit);
-            (data || []).forEach(r => {
-              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
-            });
-          }));
-          if (cancelled) return;
-          const dates = Object.keys(basketByDate).sort();
-          if (dates.length < rowLimit) {
-            // Not enough history for this window — fall through to displayReturn (all-time P&L)
-            setParentMDInsufficientData(true);
-            console.log("[PERIOD_DEBUG parent] M/5D insufficient rows — falling back to displayReturn", { activeTab, rowLimit, rowsFetched: dates.length });
-            return;
-          }
-          const anchorBasketCents = basketByDate[dates[0]];
-          setParentSnapshotStartBasketCents(anchorBasketCents);
-          console.log("[PERIOD_DEBUG parent] M/5D basket-delta:", {
-            activeTab,
-            anchorDate: dates[0], latestDate: dates[dates.length - 1],
-            anchorBasketRands: anchorBasketCents / 100,
-            rowsFetched: dates.length,
+            .is("family_member_id", null)
+            .in("strategy_id", strategyIds),
+          supabase
+            .from("strategy_rebalance_residuals")
+            .select("balance_cents, updated_at")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .in("strategy_id", strategyIds),
+        ]);
+
+        const allTxIds = [...new Set((activeHlds || []).map(h => h.transaction_id).filter(Boolean))];
+        if (allTxIds.length > 0) {
+          const { data: txns } = await supabase
+            .from("transactions")
+            .select("buffer_cents, buffer_consumed_cents")
+            .in("id", allTxIds);
+          (txns || []).forEach(t => {
+            totalBufferCents += (Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0));
           });
         }
+
+        (residuals || []).forEach(r => {
+          totalResidualCents += Number(r.balance_cents || 0);
+          const d = r.updated_at ? r.updated_at.split("T")[0] : null;
+          if (d && (!earliestResidualDateStr || d < earliestResidualDateStr)) {
+            earliestResidualDateStr = d;
+          }
+        });
+
+        if (cancelled) return;
+
+        // Cash that was present at a given snapshot date.
+        // Buffer is always present. Residual only exists from the rebalance date onward.
+        const cashCentsAt = (dateStr) =>
+          (earliestResidualDateStr && dateStr >= earliestResidualDateStr)
+            ? totalBufferCents + totalResidualCents
+            : totalBufferCents;
+
+        // ── YTD / ALL — cost-basis approach ──────────────────────────────────────────
+        // Compare today's total (positions + buffer + residual) against the true cash
+        // the user deposited: avg_fill × qty for every user-deposit holding (transaction_id
+        // IS NOT NULL), plus buffer.  Rebalance-created replacement positions (e.g. ABG.JO
+        // bought from CLI.JO proceeds) have transaction_id = null and are intentionally
+        // excluded to avoid double-counting capital.
+        if (activeTab === "ytd" || activeTab === "all") {
+          const { data: allHlds } = await supabase
+            .from("stock_holdings_c")
+            .select("avg_fill, quantity")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .in("strategy_id", strategyIds)
+            .not("transaction_id", "is", null);
+
+          if (cancelled) return;
+
+          let positionCostCents = 0;
+          (allHlds || []).forEach(h => {
+            positionCostCents += Number(h.avg_fill || 0) * Number(h.quantity || 0);
+          });
+          const costBasisCents = positionCostCents + totalBufferCents;
+          // Re-use parentYearStartBasketCents to carry the cost basis — useParentLiveYtd reads it.
+          setParentYearStartBasketCents(costBasisCents > 0 ? costBasisCents : null);
+          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis anchor:", {
+            activeTab,
+            positionCostRands: positionCostCents / 100,
+            bufferRands: totalBufferCents / 100,
+            costBasisRands: costBasisCents / 100,
+          });
+          return;
+        }
+
+        // ── 5D / M — cash-adjusted, non-trading-day-aware anchor ─────────────────────
+        // Fetch 4× more rows than needed so we have enough real trading days after
+        // stripping weekends and SA public holidays (identified by basket_value == prev row).
+        const rowLimit = activeTab === "5d" ? 5 : 22;
+        const FETCH_LIMIT = rowLimit * 4 + 15;
+
+        const basketByDate = {};
+        await Promise.all(strategyIds.map(async (sid) => {
+          const { data } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("user_id", userId)
+            .is("family_member", null)
+            .eq("strategy_id", sid)
+            .order("as_of_date", { ascending: false })
+            .limit(FETCH_LIMIT);
+          (data || []).forEach(r => {
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+          });
+        }));
+
+        if (cancelled) return;
+
+        // Sort ascending; keep only rows where basket changed (trading days).
+        const allDates = Object.keys(basketByDate).sort();
+        const tradingDates = allDates.filter((d, i) =>
+          i === 0 || basketByDate[d] !== basketByDate[allDates[i - 1]]
+        );
+
+        // Need at least rowLimit + 1 trading days (anchor + rowLimit days up to and including today).
+        if (tradingDates.length < rowLimit + 1) {
+          setParentMDInsufficientData(true);
+          console.log("[PERIOD_DEBUG parent] M/5D insufficient trading-day rows:", {
+            activeTab, rowLimit, tradingRows: tradingDates.length,
+          });
+          return;
+        }
+
+        // Anchor = rowLimit real trading days before the most recent snapshot row.
+        const anchorDate = tradingDates[tradingDates.length - 1 - rowLimit];
+        const anchorBasketCents = basketByDate[anchorDate];
+        const anchorCashCents = cashCentsAt(anchorDate);
+        const anchorTotalCents = anchorBasketCents + anchorCashCents;
+
+        // parentMDBasketPnl = displayMarketValue − anchorTotalCents/100
+        //   displayMarketValue already includes buffer + residual.
+        //   anchorTotalCents = positions + buffer + (residual if rebalance ≤ anchor date).
+        //   This makes both sides cash-comparable so the delta reflects only price moves.
+        setParentSnapshotStartBasketCents(anchorTotalCents);
+        console.log("[PERIOD_DEBUG parent] M/5D cash-adjusted anchor:", {
+          activeTab, anchorDate,
+          anchorBasketRands: anchorBasketCents / 100,
+          anchorCashRands: anchorCashCents / 100,
+          anchorTotalRands: anchorTotalCents / 100,
+          tradingDatesCount: tradingDates.length,
+          residualDate: earliestResidualDateStr,
+        });
+
       } catch (e) {
         console.warn("[SwipeableBalanceCard] parentMode snapshot error:", e.message);
       }
     };
+
     runParentSnapshots();
     return () => { cancelled = true; };
   }, [childMode, userId, parentStrategyKey, activeTab]);
@@ -1105,22 +1166,8 @@ const SwipeableBalanceCard = ({
           if (!childMode && latestYtdPnlCents !== null) {
             setParentYtdPnl(latestYtdPnlCents / 100);
           }
-          // Compute year-start basket for live parent YTD — mirrors child mode exactly:
-          // anchor = FIRST basket of the current year, only set when prior-year data exists.
-          // (Child uses gte(yearStart) → dates[0]; we replicate that from our already-fetched rows.)
-          if (!childMode && activeTab === "ytd") {
-            const yearStr = `${new Date().getFullYear()}-01-01`;
-            const allDates = Object.keys(parentBasketByDate).sort();
-            const priorDates = allDates.filter(d => d < yearStr);
-            const currentYearDates = allDates.filter(d => d >= yearStr);
-            // Only activate live YTD when prior-year history exists AND current-year rows are present.
-            // If no prior-year data, fall back to stored ytd_pnl (same as child mode's null path).
-            if (priorDates.length > 0 && currentYearDates.length > 0) {
-              setParentYearStartBasketCents(parentBasketByDate[currentYearDates[0]]);
-            } else {
-              setParentYearStartBasketCents(null);
-            }
-          }
+          // NOTE: parentYearStartBasketCents for YTD/ALL is now set exclusively by the
+          // parent snapshot effect (cost-basis approach). Do not set it here to avoid conflicts.
 
           // Build cumulative sum of 1d_pnl across all dates
           const sortedStrategyDates = Object.keys(strategyDailyPnl).sort();
@@ -1508,7 +1555,8 @@ const SwipeableBalanceCard = ({
   //   sets parentYearStartBasketCents=null when all invested this year → falls back to displayReturn.
   // Parent M/5D: parentSnapshotPeriodReturn from dedicated snapshot query (stored cols or basket diff).
   const useChildLiveYtd = childMode && activeTab === "ytd" && childLiveMetrics != null;
-  const useParentLiveYtd = !childMode && activeTab === "ytd" && parentYearStartBasketCents != null && displayMarketValue > 0;
+  // "all" uses the same cost-basis anchor as "ytd" — parentYearStartBasketCents holds avg_fill×qty+buffer.
+  const useParentLiveYtd = !childMode && (activeTab === "ytd" || activeTab === "all") && parentYearStartBasketCents != null && displayMarketValue > 0;
   // Cap YTD at all-time (displayReturn) to prevent mid-year deposit inflation.
   // Prior-year count check already ensures parentYearStartBasketCents is only set when
   // prior-year rows exist — the cap adds a second safety layer for net-new deposits.
