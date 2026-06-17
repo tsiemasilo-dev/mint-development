@@ -1341,10 +1341,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               </>
                             );
                           }
+                          // Before market open on D filter there is no intraday data yet —
+                          // hide the PnL row entirely so nothing misleading is shown.
+                          const hideDayPnl = timeFilter === "D" && intradayChartData.length === 0;
                           return (
                             <>
                               <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <div className="flex items-center gap-2 mt-1">
+                              {!hideDayPnl && <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
                                   {isPos ? '+' : '-'}R{Math.abs(pnl ?? 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
