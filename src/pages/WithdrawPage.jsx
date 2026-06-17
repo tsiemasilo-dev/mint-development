@@ -612,7 +612,7 @@ const WD_CSS = `
 .wd-sheet-wrap { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; }
 .wd-backdrop { position:absolute; inset:0; background:rgba(26,10,58,0.55); backdrop-filter:blur(3px); }
 .wd-sheet { position:relative; display:flex; flex-direction:column; width:100%; max-width:480px; max-height:90vh; max-height:90dvh; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px 0; animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
-.wd-sheet-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.wd-sheet-scroll { flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; overflow-y:overlay; -webkit-overflow-scrolling:touch; }
 .wd-sheet-footer { flex-shrink:0; display:flex; gap:12px; margin:0 -20px; padding:14px 20px calc(16px + env(safe-area-inset-bottom, 0px)); background:#fff; border-top:0.5px solid rgba(127,119,221,0.14); box-shadow:0 -6px 16px rgba(26,10,58,0.06); }
 .wd-grab { margin:0 auto 16px; height:4px; width:42px; border-radius:100px; background:rgba(127,119,221,0.25); }
 .wd-closex { position:absolute; right:16px; top:16px; height:32px; width:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#9a8fc0; cursor:pointer; background:#f5f2ff; }
