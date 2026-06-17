@@ -618,7 +618,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
       costBasis += (expectedRands > 0 ? expectedRands : avgFillRands) * qty; // Expected-preferred (not higher-of): slippage absorbed by the 8% buffer
       const abs1d = liveEntry?.abs1dCents != null ? liveEntry.abs1dCents : null;
-      if (abs1d != null) todayPnl += (abs1d / 100) * qty;
+      const pct1d = liveEntry?.pct1d ?? 0;
+      // Correct sign using pct1d — Yahoo Finance can store 1d_abs as unsigned for JSE stocks.
+      const signed1d = abs1d != null ? Math.abs(abs1d) * (pct1d < 0 ? -1 : 1) : null;
+      if (signed1d != null) todayPnl += (signed1d / 100) * qty;
     }
     return { liveValue, costBasis, todayPnl, todayPct: costBasis > 0 ? (todayPnl / costBasis) * 100 : 0, isPending: false, hasPrices };
   }, [rawHoldings, userSelectedStrategy?.strategyId, ownLivePriceMap, directStratHoldings]);
@@ -765,7 +768,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         while (true) {
           const { data: batch } = await supabase
             .from("stock_intraday_c")
-            .select("security_id, current_price, 1d_abs, timestamp")
+            .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
             .in("security_id", securityIds)
             .gte("timestamp", `${tradingDay}T00:00:00Z`)
             .lt("timestamp", `${tradingDay}T23:59:59Z`)
@@ -793,7 +796,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           : (securityIds.reduce((sum, sid) => {
               const row = latestBySecId[sid];
               if (!row) return sum;
-              return sum + ((Number(row.current_price) - Number(row["1d_abs"] || 0)) / 100) * (qtyMap[sid] || 0);
+              const abs1d = Number(row["1d_abs"] || 0);
+              const pct1d = Number(row["1d_pct"] || 0);
+              const signed1d = Math.abs(abs1d) * (pct1d < 0 ? -1 : 1);
+              return sum + ((Number(row.current_price) - signed1d) / 100) * (qtyMap[sid] || 0);
             }, 0) || liveStrategyMetrics.costBasis);
         const bucketMap = new Map();
         for (const row of intradayRows) {
