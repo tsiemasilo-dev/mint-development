@@ -503,6 +503,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           investedAmount: sIa,
           change: sPnlPct,
           ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd,
+          cashElement: s.cashElement || 0,
+          positionsValue: s.positionsValue || 0,
         });
       }
     });
@@ -2143,16 +2145,22 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 change: h.change || 0,
                 isPending: h.isPending || false,
                 settlement_status: h.settlement_status || null,
+                cashElement: h.cashElement || 0,
+                positionsValue: h.positionsValue || 0,
               })).sort((a, b) => b.currentValue - a.currentValue);
 
               const flatPieData = (() => {
                 const map = new Map();
+                let totalCashPie = 0;
                 holdingsData.forEach(h => {
                   if (h.isStrategy && h.strategyHoldings?.length > 0) {
+                    // Use positionsValue (stocks only) so cash is shown separately
+                    const stocksVal = h.positionsValue > 0 ? h.positionsValue : h.currentValue;
+                    totalCashPie += h.cashElement || 0;
                     const totalWeight = h.strategyHoldings.reduce((s, c) => s + (c.weight || 0), 0) || 100;
                     h.strategyHoldings.forEach(c => {
                       const pct = (c.weight || 0) / totalWeight;
-                      const val = h.currentValue * pct;
+                      const val = stocksVal * pct;
                       const key = c.symbol || c.name;
                       if (map.has(key)) {
                         map.get(key).value += val;
@@ -2169,6 +2177,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     }
                   }
                 });
+                if (totalCashPie > 0) {
+                  map.set('__CASH__', { name: 'Cash', displayName: 'Cash', value: totalCashPie, isCash: true });
+                }
                 return Array.from(map.values()).sort((a, b) => b.value - a.value);
               })();
 
@@ -2252,16 +2263,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const totalCostBasisValue = holdingsData.reduce((sum, h) => sum + (h.costBasis || h.currentValue), 0);
               const totalDistinct = flatPieData.length;
 
+              const CASH_PIE_COLOR = "#10B981";
               const top10 = flatPieData.slice(0, 10).map((h, idx) => ({
                 name: h.name,
                 displayName: h.displayName,
                 value: h.value,
-                color: pieColors[idx % pieColors.length],
+                isCash: h.isCash || false,
+                color: h.isCash ? CASH_PIE_COLOR : pieColors[idx % pieColors.length],
               }));
               const othersValue = flatPieData.slice(10).reduce((sum, h) => sum + h.value, 0);
               const pieData = othersValue > 0
                 ? [...top10, { name: "Others", displayName: "Others", value: othersValue, color: "#E9D5FF" }]
                 : top10;
+              const totalCashRands = holdingsData.reduce((s, h) => s + (h.cashElement || 0), 0);
 
               return (
                 <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
@@ -2579,6 +2593,28 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               );
                             })}
                           </div>
+
+                          {/* Cash row — buffer + residual combined */}
+                          {totalCashRands > 0 && (
+                            <div className="mt-3 rounded-2xl p-4 border border-emerald-100/60" style={{ background: 'rgba(236,253,245,0.7)' }}>
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)' }}>
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5s2.5.9 2.5 2c0 2-5 2-5 4 0 1.1 1.1 2 2.5 2s2.5-.9 2.5-2" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900">Cash</p>
+                                  <p className="text-xs text-slate-500 font-medium">Buffer &amp; residual</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalCashRands)}</p>
+                                  <p className="text-[10px] text-slate-400">{totalValue > 0 ? ((totalCashRands / totalValue) * 100).toFixed(1) : '0.0'}% of portfolio</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </section>
 
                         {closedHoldings && closedHoldings.length > 0 && (
