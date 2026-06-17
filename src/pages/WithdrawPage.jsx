@@ -494,7 +494,7 @@ function SellSheet({ item, onClose, onSubmit }) {
         <div className="wd-closex" onClick={submitting ? undefined : onClose}><X size={16} /></div>
 
         {done ? (
-          <div style={{ padding: "24px 0", textAlign: "center" }}>
+          <div className="wd-sheet-scroll" style={{ padding: "24px 0", textAlign: "center" }}>
             <div className="wd-success-ico" style={{ animation: "wd-countPop 0.4s ease" }}><Check size={26} /></div>
             <div style={{ fontSize: 17, fontWeight: 500, color: "#26215C" }}>Instruction submitted</div>
             <p style={{ fontSize: 13.5, color: "#7d72a8", margin: "12px auto", maxWidth: 300, lineHeight: 1.5 }}>
@@ -508,6 +508,7 @@ function SellSheet({ item, onClose, onSubmit }) {
           </div>
         ) : (
           <>
+            <div className="wd-sheet-scroll">
             <div style={{ fontSize: 19, fontWeight: 500, color: "#26215C", paddingRight: 32 }}>Confirm sell instruction</div>
             <div style={{ fontSize: 13.5, color: "#7d72a8", marginTop: 4, lineHeight: 1.4 }}>
               {isStrategy
@@ -549,8 +550,9 @@ function SellSheet({ item, onClose, onSubmit }) {
             </div>
 
             {err && <div className="wd-error" style={{ marginTop: 14 }}>{err}</div>}
+            </div>
 
-            <div style={{ position: "sticky", bottom: 0, marginTop: 20, marginLeft: -20, marginRight: -20, padding: "14px 20px calc(16px + env(safe-area-inset-bottom, 0px))", display: "flex", gap: 12, background: "#fff", borderTop: "0.5px solid rgba(127,119,221,0.14)", boxShadow: "0 -6px 16px rgba(26,10,58,0.06)" }}>
+            <div className="wd-sheet-footer">
               <button className="wd-btn-cancel" onClick={onClose} disabled={submitting}>Cancel</button>
               <button
                 className="wd-btn-confirm"
@@ -609,7 +611,9 @@ const WD_CSS = `
 .wd-spin { animation:wd-spin 0.9s linear infinite; }
 .wd-sheet-wrap { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; }
 .wd-backdrop { position:absolute; inset:0; background:rgba(26,10,58,0.55); backdrop-filter:blur(3px); }
-.wd-sheet { position:relative; width:100%; max-width:480px; max-height:92dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px 0; animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
+.wd-sheet { position:relative; display:flex; flex-direction:column; width:100%; max-width:480px; max-height:90vh; max-height:90dvh; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px 0; animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
+.wd-sheet-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.wd-sheet-footer { flex-shrink:0; display:flex; gap:12px; margin:0 -20px; padding:14px 20px calc(16px + env(safe-area-inset-bottom, 0px)); background:#fff; border-top:0.5px solid rgba(127,119,221,0.14); box-shadow:0 -6px 16px rgba(26,10,58,0.06); }
 .wd-grab { margin:0 auto 16px; height:4px; width:42px; border-radius:100px; background:rgba(127,119,221,0.25); }
 .wd-closex { position:absolute; right:16px; top:16px; height:32px; width:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#9a8fc0; cursor:pointer; background:#f5f2ff; }
 .wd-asset-row { margin-top:16px; display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:16px; background:#faf8ff; border:0.5px solid rgba(127,119,221,0.16); }
