@@ -770,6 +770,17 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           ? parseFloat(((pnl / (anchorTotalCents / 100)) * 100).toFixed(4))
           : 0;
 
+        console.log("[HOOK_DEBUG]", activeTab, {
+          liveTotalRands, livePositionsCents: livePositionsCents/100,
+          totalBufferCents, totalResidualCents, earliestResidualDateStr,
+          basketRowsCount: (basketRows||[]).length,
+          allDatesCount: allDates.length,
+          tradingDatesCount: tradingDates.length,
+          firstTradingDate: tradingDates[0],
+          lastTradingDate: tradingDates[tradingDates.length - 1],
+          anchorDate, anchorBasketCents, anchorCashCents, anchorTotalCents,
+          anchorTotalRands: anchorTotalCents/100, pnl,
+        });
         if (!cancelled) setReturnData({ pnl, pct });
       } catch (e) {
         console.warn("[useStrategyLivePeriodReturn] error:", e.message);
