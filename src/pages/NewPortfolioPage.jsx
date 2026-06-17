@@ -550,9 +550,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       .then(({ data }) => {
         if (data && data.length > 0) {
           setSnapshotRows(data);
-          const count = data.length;
+          // Count only real trading days (rows where basket changed) — same
+          // stripping used by derivedPeriodReturn and the home card anchor logic.
+          const tradingCount = data.filter((r, i) =>
+            i === 0 || Number(r.basket_value) !== Number(data[i - 1].basket_value)
+          ).length;
           const latestYtdPct = data[data.length - 1]?.ytd_pct;
-          setAvailablePeriods({ D: true, "5d": count >= 5, m: count >= 22, ytd: latestYtdPct != null, all: true });
+          setAvailablePeriods({ D: true, "5d": tradingCount >= 6, m: tradingCount >= 23, ytd: latestYtdPct != null, all: true });
         }
       });
   }, [userSelectedStrategy?.strategyId, profile?.id]);
@@ -638,17 +642,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const lastCents = Number(h.last_price || 0);
           return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
         }, 0);
+    // Strip non-trading days (weekends / SA holidays) the same way the home
+    // card does: any row where basket_value didn't change from the previous
+    // row is a non-trading day and must not count toward the N-day lookback.
+    const tradingRows = snapshotRows.filter((r, i) =>
+      i === 0 || Number(r.basket_value) !== Number(snapshotRows[i - 1].basket_value)
+    );
     if (timeFilter === "5d") {
-      if (snapshotRows.length < 5 || !liveVal) return { pnl: 0, pct: 0 };
-      const startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+      if (tradingRows.length < 6 || !liveVal) return { pnl: 0, pct: 0 };
+      const startCents = Number(tradingRows[tradingRows.length - 6]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
       return { pnl, pct: parseFloat(((pnl / startRands) * 100).toFixed(4)) };
     }
     if (timeFilter === "m") {
-      if (snapshotRows.length < 22 || !liveVal) return { pnl: 0, pct: 0 };
-      const startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+      if (tradingRows.length < 23 || !liveVal) return { pnl: 0, pct: 0 };
+      const startCents = Number(tradingRows[tradingRows.length - 23]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
