@@ -762,6 +762,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         if (cancelled) return;
         if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
         const tradingDay = latestRow.timestamp.slice(0, 10);
+        // Don't show a previous day's intraday session labelled as "Today" — if
+        // the most recent data is from a prior calendar day (market not yet open)
+        // return nothing so the D tab shows the snapshot-based fallback instead.
+        const _todayUTC = new Date().toISOString().slice(0, 10);
+        if (tradingDay !== _todayUTC) { setIntradayChartData([]); setIntradayLoading(false); return; }
         const PAGE = 1000;
         let intradayRows = [];
         let page = 0;
@@ -791,16 +796,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         const lastSR = snapshotRows[snapshotRows.length - 1];
         const prevSR = snapshotRows[snapshotRows.length - 2];
         const snapshotHasToday = lastSR?.as_of_date === todayDateStr;
+        // Baseline = yesterday's close basket value, sourced entirely from snapshots.
+        // snapshotHasToday → yesterday is prevSR; market still open → yesterday is lastSR.
+        // This avoids Yahoo Finance's unreliable 1d_abs sign for JSE stocks entirely.
         const baselineRands = (snapshotHasToday && prevSR)
           ? Number(prevSR.basket_value || 0) / 100
-          : (securityIds.reduce((sum, sid) => {
-              const row = latestBySecId[sid];
-              if (!row) return sum;
-              const abs1d = Number(row["1d_abs"] || 0);
-              const pct1d = Number(row["1d_pct"] || 0);
-              const signed1d = Math.abs(abs1d) * (pct1d < 0 ? -1 : 1);
-              return sum + ((Number(row.current_price) - signed1d) / 100) * (qtyMap[sid] || 0);
-            }, 0) || liveStrategyMetrics.costBasis);
+          : lastSR
+            ? Number(lastSR.basket_value || 0) / 100
+            : (securityIds.reduce((sum, sid) => {
+                const row = latestBySecId[sid];
+                if (!row) return sum;
+                const abs1d = Number(row["1d_abs"] || 0);
+                const pct1d = Number(row["1d_pct"] || 0);
+                const signed1d = Math.abs(abs1d) * (pct1d < 0 ? -1 : 1);
+                return sum + ((Number(row.current_price) - signed1d) / 100) * (qtyMap[sid] || 0);
+              }, 0) || liveStrategyMetrics.costBasis);
         const bucketMap = new Map();
         for (const row of intradayRows) {
           const d = new Date(row.timestamp);
@@ -1291,13 +1301,14 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const isStratPending = liveStrategyMetrics.isPending && (currentStrategy.currentValue || 0) === 0 && ia === 0;
                           let pnl, pnlPct;
                           if (timeFilter === "D") {
-                            // Use 1d_pnl from today's snapshot when available — this is the
-                            // same source the home page uses, avoiding wrong-sign 1d_abs
-                            // values from Yahoo Finance for JSE stocks.
-                            const _todayStr = new Date().toISOString().split("T")[0];
+                            // Always read 1d_pnl from the most recent snapshot — same source
+                            // as the home page. This avoids wrong-sign values from Yahoo
+                            // Finance's 1d_abs/1d_pct for JSE stocks, and also prevents
+                            // showing stale intraday data from a previous calendar day before
+                            // the current trading session has opened.
                             const _lastSR = snapshotRows[snapshotRows.length - 1];
                             const _prevSR = snapshotRows[snapshotRows.length - 2];
-                            if (_lastSR?.as_of_date === _todayStr && _lastSR?.["1d_pnl"] != null) {
+                            if (_lastSR?.["1d_pnl"] != null) {
                               pnl = Number(_lastSR["1d_pnl"]) / 100;
                               const _prevBasket = Number(_prevSR?.basket_value || 0) / 100;
                               pnlPct = _prevBasket > 0 ? (pnl / _prevBasket) * 100 : 0;
