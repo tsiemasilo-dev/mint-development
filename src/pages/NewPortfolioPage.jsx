@@ -2263,19 +2263,19 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               const totalCostBasisValue = holdingsData.reduce((sum, h) => sum + (h.costBasis || h.currentValue), 0);
               const totalDistinct = flatPieData.length;
 
-              const CASH_PIE_COLOR = "#10B981";
               const top10 = flatPieData.slice(0, 10).map((h, idx) => ({
                 name: h.name,
                 displayName: h.displayName,
                 value: h.value,
                 isCash: h.isCash || false,
-                color: h.isCash ? CASH_PIE_COLOR : pieColors[idx % pieColors.length],
+                color: pieColors[idx % pieColors.length],
               }));
               const othersValue = flatPieData.slice(10).reduce((sum, h) => sum + h.value, 0);
               const pieData = othersValue > 0
                 ? [...top10, { name: "Others", displayName: "Others", value: othersValue, color: "#E9D5FF" }]
                 : top10;
               const totalCashRands = holdingsData.reduce((s, h) => s + (h.cashElement || 0), 0);
+              const cashPieColor = (pieData.find(d => d.isCash) || {}).color || pieColors[pieColors.length - 1];
 
               return (
                 <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
@@ -2596,10 +2596,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
                           {/* Cash row — buffer + residual combined */}
                           {totalCashRands > 0 && (
-                            <div className="mt-3 rounded-2xl p-4 border border-emerald-100/60" style={{ background: 'rgba(236,253,245,0.7)' }}>
+                            <div className="mt-3 rounded-2xl p-4 border border-slate-100/50 bg-white/70">
                               <div className="flex items-center gap-3 w-full">
-                                <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)' }}>
-                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: cashPieColor }}>
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <circle cx="12" cy="12" r="10" />
                                     <path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5s2.5.9 2.5 2c0 2-5 2-5 4 0 1.1 1.1 2 2.5 2s2.5-.9 2.5-2" />
                                   </svg>
