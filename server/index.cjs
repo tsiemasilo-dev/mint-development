@@ -10937,7 +10937,7 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
   // 1. Get child's active holdings for this strategy
   const { data: holdings, error: hErr } = await db
     .from('stock_holdings_c')
-    .select('security_id, quantity, Expected_fill, strategy_id')
+    .select('security_id, quantity, Expected_fill, strategy_id, transaction_id')
     .eq('family_member_id', familyMemberId)
     .eq('strategy_id', strategyId)
     .eq('is_active', true);
@@ -11000,12 +11000,49 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
     });
   }
 
-  const inceptionPnlCents = basketValueCents - costBasisCents;
+  // Realised P&L from closed lots (rebalance sells) — keeps all-time/YTD consistent
+  // with the app headline (unrealised + realised).
+  let realizedCents = 0;
+  {
+    const { data: closedRows } = await db
+      .from('stock_holdings_c')
+      .select('quantity, avg_fill, avg_exit')
+      .eq('family_member_id', familyMemberId).eq('strategy_id', strategyId)
+      .eq('is_active', false);
+    (closedRows || []).forEach(r => {
+      const fill = Number(r.avg_fill || 0), exit = Number(r.avg_exit || 0), qty = Number(r.quantity || 0);
+      if (fill && exit && qty) realizedCents += (exit - fill) * qty;
+    });
+  }
+  const inceptionPnlCents = (basketValueCents - costBasisCents) + realizedCents;
   const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
   const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
 
-  // 4. Look up historical records to calculate 5D, 1M, YTD periods
-  // We fetch enough past records and find the closest one to each target date.
+  // ── Cash (8% buffer remaining + rebalance residual) → TOTAL VALUE ────────────
+  // Period returns run on total_value = positions + cash so rebalances (value moved
+  // position<->cash) are value-neutral. Scoped to this child (family_member_id).
+  let cashCents = 0;
+  let fundingTxns = [];
+  const txIds = [...new Set((holdings || []).map(h => h.transaction_id).filter(Boolean))];
+  if (txIds.length) {
+    const { data: txns } = await db
+      .from('transactions')
+      .select('id, amount, buffer_cents, buffer_consumed_cents, created_at')
+      .in('id', txIds);
+    fundingTxns = txns || [];
+    fundingTxns.forEach(t => { cashCents += Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0); });
+  }
+  {
+    const { data: resRows } = await db
+      .from('strategy_rebalance_residuals')
+      .select('balance_cents')
+      .eq('family_member_id', familyMemberId)
+      .eq('strategy_id', strategyId);
+    (resRows || []).forEach(r => { cashCents += Number(r.balance_cents || 0); });
+  }
+  const totalValueCents = basketValueCents + cashCents;
+
+  // 4. Look up historical TOTAL-VALUE rows to calculate 5D, 1M, YTD periods
   const today = new Date();
   const yearStart = `${today.getUTCFullYear()}-01-01`;
   const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
@@ -11013,7 +11050,7 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
 
   const { data: historyRows } = await db
     .from('client_strategy_returns_c')
-    .select('as_of_date, basket_value')
+    .select('as_of_date, basket_value, total_value_cents')
     .eq('family_member', familyMemberId)
     .eq('strategy_id', strategyId)
     .gte('as_of_date', yearStart)
@@ -11031,11 +11068,22 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
     return best;
   }
 
+  // Genuine external deposits AFTER a date (funding-tx amount, cents) so a mid-period
+  // top-up's principal isn't mistaken for a gain. Rebalance swap-ins have no funding tx.
+  const depositsAfter = (dateStr) => fundingTxns.reduce((s, t) => {
+    const d = (t.created_at || '').slice(0, 10);
+    return (d && d > dateStr) ? s + Number(t.amount || 0) : s;
+  }, 0);
+
+  // Period P&L = total_value(now) − total_value(anchor) − deposits in window.
   function periodMetrics(historicRecord) {
-    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
-    // If the reference basket equals the current value, P&L is genuinely 0 — store 0 not null.
-    const pnl = basketValueCents - Number(historicRecord.basket_value);
-    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    if (!historicRecord) return { pnl: null, pct: null };
+    const anchorTotal = historicRecord.total_value_cents != null
+      ? Number(historicRecord.total_value_cents)
+      : Number(historicRecord.basket_value || 0);
+    if (!anchorTotal) return { pnl: null, pct: null };
+    const pnl = totalValueCents - anchorTotal - depositsAfter(historicRecord.as_of_date);
+    const pct = anchorTotal > 0 ? (pnl / anchorTotal) * 100 : 0;
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
   }
 
@@ -11070,6 +11118,7 @@ async function calculateChildPortfolioReturns(familyMemberId, strategyId, userId
     family_member: familyMemberId,
     basket_value: basketValueCents,
     portfolio_value: basketValueCents,
+    total_value_cents: totalValueCents,
     inception_pnl: inceptionPnlCents,
     inception_pct: parseFloat(inceptionPct.toFixed(4)),
     '1d_pnl': oneDayPnlCents,
@@ -11188,7 +11237,7 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
   // 1. Get parent's active holdings for this strategy
   const { data: holdings, error: hErr } = await db
     .from('stock_holdings_c')
-    .select('security_id, quantity, Expected_fill, avg_fill, strategy_id')
+    .select('security_id, quantity, Expected_fill, avg_fill, strategy_id, transaction_id')
     .eq('user_id', userId)
     .eq('strategy_id', strategyId)
     .is('family_member_id', null)
@@ -11265,12 +11314,57 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     });
   }
 
-  // Same formula as child: basket value now minus what was originally paid.
-  const inceptionPnlCents = basketValueCents - costBasisCents;
+  // Realised P&L from closed lots (rebalance sells) so all-time/YTD captures the
+  // locked-in gains, matching the app's headline (unrealised + realised). Avoids
+  // anchoring YTD to the earliest snapshot row, which is skewed by gradual capital
+  // deployment (positions fill over days, so the first row understates the basket).
+  let realizedCents = 0;
+  {
+    const { data: closedRows } = await db
+      .from('stock_holdings_c')
+      .select('quantity, avg_fill, avg_exit')
+      .eq('user_id', userId).eq('strategy_id', strategyId).is('family_member_id', null)
+      .eq('is_active', false);
+    (closedRows || []).forEach(r => {
+      const fill = Number(r.avg_fill || 0), exit = Number(r.avg_exit || 0), qty = Number(r.quantity || 0);
+      if (fill && exit && qty) realizedCents += (exit - fill) * qty;
+    });
+  }
+  // All-time = open unrealised (positions − cost) + realised (locked-in).
+  const inceptionPnlCents = (basketValueCents - costBasisCents) + realizedCents;
   const inceptionPct = costBasisCents > 0 ? (inceptionPnlCents / costBasisCents) * 100 : 0;
   const oneDayPct = costBasisCents > 0 ? (oneDayPnlCents / costBasisCents) * 100 : 0;
 
-  // 4. Look up historical basket rows to compute 5D / 1M / YTD periods
+  // ── Cash (8% buffer remaining + rebalance residual) → TOTAL VALUE ────────────
+  // Period returns (5D/1M/YTD) run on total_value = positions + cash, NOT positions
+  // alone. A rebalance moves value position<->cash, so total_value is continuous and
+  // the period no longer shows a phantom drop. Buffer is reached via the holdings'
+  // funding transactions; residual from strategy_rebalance_residuals. We also keep
+  // the funding transactions to subtract genuine mid-period deposits (so new capital
+  // isn't mistaken for a gain) — keyed on the deposit's date, NOT Fill_date.
+  let cashCents = 0;
+  let fundingTxns = [];
+  const txIds = [...new Set(holdings.map(h => h.transaction_id).filter(Boolean))];
+  if (txIds.length) {
+    const { data: txns } = await db
+      .from('transactions')
+      .select('id, amount, buffer_cents, buffer_consumed_cents, created_at')
+      .in('id', txIds);
+    fundingTxns = txns || [];
+    fundingTxns.forEach(t => { cashCents += Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0); });
+  }
+  {
+    const { data: resRows } = await db
+      .from('strategy_rebalance_residuals')
+      .select('balance_cents')
+      .eq('user_id', userId)
+      .eq('strategy_id', strategyId)
+      .is('family_member_id', null);
+    (resRows || []).forEach(r => { cashCents += Number(r.balance_cents || 0); });
+  }
+  const totalValueCents = basketValueCents + cashCents;
+
+  // 4. Look up historical TOTAL-VALUE rows to compute 5D / 1M / YTD periods
   const today = new Date();
   const yearStart = `${today.getUTCFullYear()}-01-01`;
   const oneMonthAgo = new Date(today); oneMonthAgo.setUTCDate(today.getUTCDate() - 31);
@@ -11278,7 +11372,7 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
 
   const { data: historyRows } = await db
     .from('client_strategy_returns_c')
-    .select('as_of_date, basket_value')
+    .select('as_of_date, basket_value, total_value_cents')
     .eq('user_id', userId)
     .eq('strategy_id', strategyId)
     .is('family_member', null)
@@ -11296,22 +11390,32 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     return best;
   }
 
+  // Genuine external deposits AFTER a given date (funding-tx amount, in cents) — so a
+  // mid-period top-up's principal doesn't masquerade as a gain. Rebalance swap-ins are
+  // NOT deposits (no new funding tx), so they're correctly left in.
+  const depositsAfter = (dateStr) => fundingTxns.reduce((s, t) => {
+    const d = (t.created_at || '').slice(0, 10);
+    return (d && d > dateStr) ? s + Number(t.amount || 0) : s;
+  }, 0);
+
+  // Period P&L = total_value(now) − total_value(anchor) − deposits in window.
+  // Anchor falls back to basket_value only on legacy rows not yet backfilled.
   function periodMetrics(historicRecord) {
-    if (!historicRecord || !historicRecord.basket_value) return { pnl: null, pct: null };
-    const pnl = basketValueCents - Number(historicRecord.basket_value);
-    const pct = costBasisCents > 0 ? (pnl / costBasisCents) * 100 : 0;
+    if (!historicRecord) return { pnl: null, pct: null };
+    const anchorTotal = historicRecord.total_value_cents != null
+      ? Number(historicRecord.total_value_cents)
+      : Number(historicRecord.basket_value || 0);
+    if (!anchorTotal) return { pnl: null, pct: null };
+    const pnl = totalValueCents - anchorTotal - depositsAfter(historicRecord.as_of_date);
+    const pct = anchorTotal > 0 ? (pnl / anchorTotal) * 100 : 0;
     return { pnl, pct: parseFloat(pct.toFixed(4)) };
   }
 
   const earliestRecord = historyRows?.length ? historyRows[0] : null;
-  // If no record old enough exists, store null — do NOT fall back to earliestRecord.
-  // Falling back makes 5D and 1M identical for new investors (both use inception as anchor).
-  // The frontend handles null by showing all-time P&L (displayReturn) instead.
   const rec5d  = closestRecord(historyRows, fiveDaysAgo);
   const rec1m  = closestRecord(historyRows, oneMonthAgo);
 
-  // Mirror the child's logic: if the parent has NO rows before Jan 1 (invested this year),
-  // YTD should equal ALL (inception), not the earliest row this year.
+  // If invested this year only → YTD = inception (earliest row this year as anchor).
   const { count: priorYearCount } = await db
     .from('client_strategy_returns_c')
     .select('as_of_date', { count: 'exact', head: true })
@@ -11324,7 +11428,8 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
 
   const p5d  = periodMetrics(rec5d);
   const p1m  = periodMetrics(rec1m);
-  // If invested this year only → YTD = inception (same as ALL), not earliest-row diff
+  // YTD: invested-this-year → all-time (inception, incl realised). Prior-year → total-
+  // value delta from the year-start anchor.
   const pYtd = investedThisYearOnly
     ? { pnl: inceptionPnlCents, pct: parseFloat(inceptionPct.toFixed(4)) }
     : periodMetrics(earliestRecord);
@@ -11335,6 +11440,7 @@ async function calculateParentPortfolioReturns(userId, strategyId) {
     family_member: null,
     basket_value: basketValueCents,
     portfolio_value: basketValueCents,
+    total_value_cents: totalValueCents,
     inception_pnl: inceptionPnlCents,
     inception_pct: parseFloat(inceptionPct.toFixed(4)),
     '1d_pnl': oneDayPnlCents,

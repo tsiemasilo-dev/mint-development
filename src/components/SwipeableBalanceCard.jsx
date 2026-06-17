@@ -756,7 +756,7 @@ const SwipeableBalanceCard = ({
         await Promise.all(strategyIds.map(async (sid) => {
           let q = supabase
             .from("client_strategy_returns_c")
-            .select("as_of_date, basket_value")
+            .select("as_of_date, basket_value, total_value_cents")
             .eq("family_member", familyMemberId)
             .eq("strategy_id", sid)
             .order("as_of_date", { ascending: false });
@@ -764,7 +764,10 @@ const SwipeableBalanceCard = ({
           if (rowLimit) q = q.limit(rowLimit);
           const { data } = await q;
           (data || []).forEach(r => {
-            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+            // total_value (positions + cash) so period anchors match the headline (which
+            // includes cash) and rebalances are value-neutral; falls back to basket_value
+            // on legacy rows not yet backfilled.
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.total_value_cents != null ? r.total_value_cents : (r.basket_value || 0));
           });
         }));
 
@@ -881,7 +884,7 @@ const SwipeableBalanceCard = ({
           await Promise.all(strategyIds.map(async (sid) => {
             const { data } = await supabase
               .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
+              .select("as_of_date, basket_value, total_value_cents")
               .eq("user_id", userId)
               .is("family_member", null)
               .eq("strategy_id", sid)
@@ -889,7 +892,10 @@ const SwipeableBalanceCard = ({
               .lte("as_of_date", lastWeekdayStr)
               .order("as_of_date", { ascending: false });
             (data || []).forEach(r => {
-              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+              // total_value (positions + cash) so period anchors match the headline (which
+            // includes cash) and rebalances are value-neutral; falls back to basket_value
+            // on legacy rows not yet backfilled.
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.total_value_cents != null ? r.total_value_cents : (r.basket_value || 0));
             });
           }));
           if (cancelled) return;
@@ -919,7 +925,7 @@ const SwipeableBalanceCard = ({
           await Promise.all(strategyIds.map(async (sid) => {
             const { data } = await supabase
               .from("client_strategy_returns_c")
-              .select("as_of_date, basket_value")
+              .select("as_of_date, basket_value, total_value_cents")
               .eq("user_id", userId)
               .is("family_member", null)
               .eq("strategy_id", sid)
@@ -927,7 +933,10 @@ const SwipeableBalanceCard = ({
               .order("as_of_date", { ascending: false })
               .limit(rowLimit);
             (data || []).forEach(r => {
-              basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.basket_value || 0);
+              // total_value (positions + cash) so period anchors match the headline (which
+            // includes cash) and rebalances are value-neutral; falls back to basket_value
+            // on legacy rows not yet backfilled.
+            basketByDate[r.as_of_date] = (basketByDate[r.as_of_date] || 0) + Number(r.total_value_cents != null ? r.total_value_cents : (r.basket_value || 0));
             });
           }));
           if (cancelled) return;
@@ -1067,7 +1076,7 @@ const SwipeableBalanceCard = ({
             try {
               let query = supabase
                 .from("client_strategy_returns_c")
-                .select("as_of_date, 1d_pnl, ytd_pnl, basket_value")
+                .select("as_of_date, 1d_pnl, ytd_pnl, basket_value, total_value_cents")
                 .eq("user_id", userId)
                 .eq("strategy_id", sid)
                 .is("family_member", null) // parent chart only
@@ -1088,8 +1097,9 @@ const SwipeableBalanceCard = ({
                   const dateKey = row.as_of_date;
                   const dailyPnlRands = (Number(row["1d_pnl"] || 0)) / 100;
                   strategyDailyPnl[dateKey] = (strategyDailyPnl[dateKey] || 0) + dailyPnlRands;
-                  // Sum basket_value across strategies per date (for live YTD anchor)
-                  parentBasketByDate[dateKey] = (parentBasketByDate[dateKey] || 0) + Number(row["basket_value"] || 0);
+                  // Sum total_value (positions + cash) across strategies per date (for live YTD
+                  // anchor) so it matches the cash-inclusive headline; fall back to basket_value.
+                  parentBasketByDate[dateKey] = (parentBasketByDate[dateKey] || 0) + Number(row["total_value_cents"] != null ? row["total_value_cents"] : (row["basket_value"] || 0));
                   // Track the latest row's ytd_pnl (fallback when no prior-year basket available)
                   if (latestYtdDate === null || dateKey > latestYtdDate) {
                     latestYtdDate = dateKey;
