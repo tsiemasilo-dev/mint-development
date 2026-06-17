@@ -1332,13 +1332,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const isPos = (pnl ?? 0) >= 0;
                           if (isStratPending) {
                             return (
-                              <>
-                                <p className="text-3xl font-bold text-slate-900">R0,00</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <SettlementBadge status="pending" size="md" />
-                                  <span className="text-xs text-slate-400">Awaiting trade execution</span>
-                                </div>
-                              </>
+                              <div className="flex items-center gap-2 mt-1">
+                                <SettlementBadge status="pending" size="md" />
+                                <span className="text-xs text-slate-400">Awaiting trade execution</span>
+                              </div>
                             );
                           }
                           // Before market open on D filter there is no intraday data yet —
@@ -1346,7 +1343,6 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const hideDayPnl = timeFilter === "D" && !(intradayChartData?.length);
                           return (
                             <>
-                              <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                               {!hideDayPnl && (
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
