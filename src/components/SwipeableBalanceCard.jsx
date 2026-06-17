@@ -866,6 +866,24 @@ const SwipeableBalanceCard = ({
       const strategyIds = parentStrategyKey ? parentStrategyKey.split(",") : [];
       if (!strategyIds.length) return;
       try {
+        // ── YTD / ALL — use already-computed totalInvested from loadData ──────────────
+        // loadData computes: totalInvested = live_value − (unrealized + realized P&L).
+        // This is consistent with the live portfolio (same position set) and correctly
+        // handles rebalances: realized gains from closed positions stay in P&L, and
+        // replacement positions (transaction_id=null) are never double-counted as capital.
+        // Avoids the previous bug where closed/sold positions (is_active=false) were
+        // included in cost basis, making rebalanced portfolios show false losses.
+        if (activeTab === "ytd" || activeTab === "all") {
+          const costBasisCents = Math.round((dbData.totalInvested || 0) * 100);
+          setParentYearStartBasketCents(costBasisCents > 0 ? costBasisCents : null);
+          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis (dbData.totalInvested):", {
+            activeTab,
+            totalInvestedRands: dbData.totalInvested,
+            costBasisRands: costBasisCents / 100,
+          });
+          return;
+        }
+
         // ── Step 1: fetch cash components (buffer + residual with date) ──────────────
         // Buffer from active holding transaction_ids; residual balance + date from rebalance table.
         let totalBufferCents = 0;
@@ -916,38 +934,7 @@ const SwipeableBalanceCard = ({
             ? totalBufferCents + totalResidualCents
             : totalBufferCents;
 
-        // ── YTD / ALL — cost-basis approach ──────────────────────────────────────────
-        // Compare today's total (positions + buffer + residual) against the true cash
-        // the user deposited: avg_fill × qty for every user-deposit holding (transaction_id
-        // IS NOT NULL), plus buffer.  Rebalance-created replacement positions (e.g. ABG.JO
-        // bought from CLI.JO proceeds) have transaction_id = null and are intentionally
-        // excluded to avoid double-counting capital.
-        if (activeTab === "ytd" || activeTab === "all") {
-          const { data: allHlds } = await supabase
-            .from("stock_holdings_c")
-            .select("avg_fill, quantity")
-            .eq("user_id", userId)
-            .is("family_member_id", null)
-            .in("strategy_id", strategyIds)
-            .not("transaction_id", "is", null);
 
-          if (cancelled) return;
-
-          let positionCostCents = 0;
-          (allHlds || []).forEach(h => {
-            positionCostCents += Number(h.avg_fill || 0) * Number(h.quantity || 0);
-          });
-          const costBasisCents = positionCostCents + totalBufferCents;
-          // Re-use parentYearStartBasketCents to carry the cost basis — useParentLiveYtd reads it.
-          setParentYearStartBasketCents(costBasisCents > 0 ? costBasisCents : null);
-          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis anchor:", {
-            activeTab,
-            positionCostRands: positionCostCents / 100,
-            bufferRands: totalBufferCents / 100,
-            costBasisRands: costBasisCents / 100,
-          });
-          return;
-        }
 
         // ── 5D / M — cash-adjusted, non-trading-day-aware anchor ─────────────────────
         // Fetch 4× more rows than needed so we have enough real trading days after
@@ -1014,7 +1001,7 @@ const SwipeableBalanceCard = ({
 
     runParentSnapshots();
     return () => { cancelled = true; };
-  }, [childMode, userId, parentStrategyKey, activeTab]);
+  }, [childMode, userId, parentStrategyKey, activeTab, dbData.totalInvested]);
 
   // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
   useEffect(() => {
