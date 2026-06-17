@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronLeft, MoreHorizontal, TrendingUp, TrendingDown, PieChart, Wallet,
   ArrowUpRight, ShieldAlert, X, Check, Loader2,
@@ -485,7 +486,7 @@ function SellSheet({ item, onClose, onSubmit }) {
     }
   };
 
-  return (
+  return createPortal(
     <div className="wd-sheet-wrap">
       <div className="wd-backdrop" onClick={submitting ? undefined : onClose} />
       <div className="wd-sheet">
@@ -568,7 +569,8 @@ function SellSheet({ item, onClose, onSubmit }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -607,7 +609,7 @@ const WD_CSS = `
 .wd-spin { animation:wd-spin 0.9s linear infinite; }
 .wd-sheet-wrap { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; }
 .wd-backdrop { position:absolute; inset:0; background:rgba(26,10,58,0.55); backdrop-filter:blur(3px); }
-.wd-sheet { position:relative; width:100%; max-width:480px; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px 28px; animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
+.wd-sheet { position:relative; width:100%; max-width:480px; max-height:92dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px calc(28px + env(safe-area-inset-bottom, 0px)); animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
 .wd-grab { margin:0 auto 16px; height:4px; width:42px; border-radius:100px; background:rgba(127,119,221,0.25); }
 .wd-closex { position:absolute; right:16px; top:16px; height:32px; width:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#9a8fc0; cursor:pointer; background:#f5f2ff; }
 .wd-asset-row { margin-top:16px; display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:16px; background:#faf8ff; border:0.5px solid rgba(127,119,221,0.16); }
