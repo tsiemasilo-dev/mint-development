@@ -633,6 +633,159 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", fa
   return { returnData, loading };
 };
 
+// ── useStrategyLivePeriodReturn ───────────────────────────────────────────────
+// Single source of truth for 5D / M / YTD period P&L on the portfolio tab.
+// Mirrors the purple card's (SwipeableBalanceCard parent-mode) computation
+// exactly: cash-adjusted anchor, trading-day-aware lookback, same live total.
+// This guarantees the portfolio tab always shows the same numbers as the card.
+export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, investedAmount) => {
+  const [returnData, setReturnData] = useState({ pnl: 0, pct: 0 });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!userId || !strategyId || !["5d", "m", "ytd"].includes(activeTab)) {
+      setReturnData({ pnl: 0, pct: 0 });
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    const run = async () => {
+      try {
+        // ── Step 1: active holdings → transaction IDs + security IDs ────────
+        const { data: activeHlds } = await supabase
+          .from("stock_holdings_c")
+          .select("transaction_id, security_id, quantity")
+          .eq("is_active", true)
+          .eq("user_id", userId)
+          .is("family_member_id", null)
+          .eq("strategy_id", strategyId);
+
+        const holdings = activeHlds || [];
+        const allTxIds = [...new Set(holdings.map(h => h.transaction_id).filter(Boolean))];
+        const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+        // ── Step 2: buffer + residual + live prices (parallel) ───────────────
+        const [txnResult, residualResult, priceResult] = await Promise.all([
+          allTxIds.length > 0
+            ? supabase.from("transactions").select("buffer_cents, buffer_consumed_cents").in("id", allTxIds)
+            : Promise.resolve({ data: [] }),
+          supabase
+            .from("strategy_rebalance_residuals")
+            .select("balance_cents, updated_at")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .eq("strategy_id", strategyId),
+          securityIds.length > 0
+            ? supabase.from("stock_intraday_c").select("security_id, current_price").in("security_id", securityIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        if (cancelled) return;
+
+        let totalBufferCents = 0;
+        (txnResult.data || []).forEach(t => {
+          totalBufferCents += Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0);
+        });
+
+        let totalResidualCents = 0;
+        let earliestResidualDateStr = null;
+        (residualResult.data || []).forEach(r => {
+          totalResidualCents += Number(r.balance_cents || 0);
+          const d = r.updated_at ? r.updated_at.split("T")[0] : null;
+          if (d && (!earliestResidualDateStr || d < earliestResidualDateStr)) earliestResidualDateStr = d;
+        });
+
+        const priceMap = {};
+        (priceResult.data || []).forEach(p => { priceMap[p.security_id] = Number(p.current_price || 0); });
+
+        let livePositionsCents = 0;
+        holdings.forEach(h => {
+          const qty = Math.abs(Number(h.quantity || 0));
+          const priceCents = priceMap[h.security_id] || 0;
+          if (priceCents > 0) livePositionsCents += priceCents * qty;
+        });
+
+        const liveTotalRands = livePositionsCents / 100 + (totalBufferCents + totalResidualCents) / 100;
+
+        // Cash present at a given snapshot date (buffer always; residual only from its date onward)
+        const cashCentsAt = (dateStr) =>
+          (earliestResidualDateStr && dateStr >= earliestResidualDateStr)
+            ? totalBufferCents + totalResidualCents
+            : totalBufferCents;
+
+        // ── YTD: live total − invested amount (mirrors home card exactly) ────
+        if (activeTab === "ytd") {
+          if (!investedAmount || investedAmount <= 0) {
+            if (!cancelled) setReturnData({ pnl: 0, pct: 0 });
+            return;
+          }
+          const pnl = parseFloat((liveTotalRands - investedAmount).toFixed(2));
+          const pct = parseFloat(((pnl / investedAmount) * 100).toFixed(4));
+          if (!cancelled) setReturnData({ pnl, pct });
+          return;
+        }
+
+        // ── 5D / M: cash-adjusted, trading-day-aware anchor ─────────────────
+        // Mirrors SwipeableBalanceCard runParentSnapshots lines 939–995 exactly.
+        const rowLimit = activeTab === "5d" ? 5 : 22;
+        const FETCH_LIMIT = rowLimit * 4 + 15;
+
+        const { data: basketRows } = await supabase
+          .from("client_strategy_returns_c")
+          .select("as_of_date, basket_value")
+          .eq("user_id", userId)
+          .is("family_member", null)
+          .eq("strategy_id", strategyId)
+          .order("as_of_date", { ascending: false })
+          .limit(FETCH_LIMIT);
+
+        if (cancelled) return;
+
+        const basketByDate = {};
+        (basketRows || []).forEach(r => {
+          basketByDate[r.as_of_date] = Number(r.basket_value || 0);
+        });
+
+        const allDates = Object.keys(basketByDate).sort();
+        // Strip non-trading days: rows where basket_value didn't change
+        const tradingDates = allDates.filter((d, i) =>
+          i === 0 || basketByDate[d] !== basketByDate[allDates[i - 1]]
+        );
+
+        if (tradingDates.length < rowLimit + 1) {
+          if (!cancelled) setReturnData({ pnl: 0, pct: 0 });
+          return;
+        }
+
+        // Anchor = rowLimit real trading days before the most recent snapshot row
+        const anchorDate = tradingDates[tradingDates.length - 1 - rowLimit];
+        const anchorBasketCents = basketByDate[anchorDate];
+        const anchorCashCents = cashCentsAt(anchorDate);
+        const anchorTotalCents = anchorBasketCents + anchorCashCents;
+
+        const pnl = parseFloat((liveTotalRands - anchorTotalCents / 100).toFixed(2));
+        const pct = anchorTotalCents > 0
+          ? parseFloat(((pnl / (anchorTotalCents / 100)) * 100).toFixed(4))
+          : 0;
+
+        if (!cancelled) setReturnData({ pnl, pct });
+      } catch (e) {
+        console.warn("[useStrategyLivePeriodReturn] error:", e.message);
+        if (!cancelled) setReturnData({ pnl: 0, pct: 0 });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [userId, strategyId, activeTab, investedAmount]);
+
+  return { returnData, loading };
+};
+
 function parseDateParts(ts) {
   const dateStr = ts.split("T")[0];
   const [y, m, d] = dateStr.split("-").map(Number);

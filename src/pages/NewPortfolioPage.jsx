@@ -5,7 +5,7 @@ import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, 
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { useProfile } from "../lib/useProfile";
-import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
+import { useUserStrategies, useStrategyChartData, useStrategyLivePeriodReturn } from "../lib/useUserStrategies";
 import { getMonthlyReturns, getStockMonthlyReturns, getOverallPortfolioMonthlyReturns, getStrategyMonthlyReturnsFromDB } from "../lib/strategyData";
 import { useStockQuotes, useStockChart, useStockReturns } from "../lib/useStockData";
 import { clearMarketDataCache } from "../lib/marketData";
@@ -198,7 +198,12 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [pendingStrategyId, strategies]);
 
   const { chartData: realChartData, loading: chartLoading } = useStrategyChartData(userSelectedStrategy?.strategyId, timeFilter, userSelectedStrategy?.firstInvestedDate || null, profile?.id);
-  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(profile?.id, userSelectedStrategy?.strategyId, timeFilter);
+  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyLivePeriodReturn(
+    profile?.id,
+    userSelectedStrategy?.strategyId,
+    timeFilter,
+    userSelectedStrategy?.investedAmount ?? 0
+  );
 
   const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
     .filter(Boolean).join(" ") || "User";
@@ -1329,17 +1334,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               pnlPct = liveStrategyMetrics.todayPct;
                             }
                           } else if (timeFilter === "5d" || timeFilter === "m") {
-                            // Use live-computed derivedPeriodReturn so today's intraday
-                            // price movement is reflected — the stored 5d_pnl/1m_pnl
-                            // columns only update nightly and lag the home card value.
-                            pnl = derivedPeriodReturn?.pnl ?? 0;
-                            pnlPct = derivedPeriodReturn?.pct ?? 0;
+                            // useStrategyLivePeriodReturn: same cash-adjusted, trading-day
+                            // aware computation as the purple home card — one source of truth.
+                            pnl = periodReturnData?.pnl ?? 0;
+                            pnlPct = periodReturnData?.pct ?? 0;
                           } else if (timeFilter === "ytd") {
-                            // Use live-computed derivedPeriodReturn for YTD so realized
-                            // gains (from rebalance sells) are always included — the DB's
-                            // ytd_pnl column lags and omits those locked-in gains.
-                            pnl = derivedPeriodReturn?.pnl ?? 0;
-                            pnlPct = derivedPeriodReturn?.pct ?? 0;
+                            // useStrategyLivePeriodReturn: live total − investedAmount,
+                            // identical to the home card's YTD calculation.
+                            pnl = periodReturnData?.pnl ?? 0;
+                            pnlPct = periodReturnData?.pct ?? 0;
                           } else {
                             pnl = cv - ia;
                             pnlPct = ia > 0 ? ((cv - ia) / ia) * 100 : 0;
