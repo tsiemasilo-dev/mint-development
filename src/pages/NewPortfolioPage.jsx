@@ -1319,8 +1319,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               pnlPct = liveStrategyMetrics.todayPct;
                             }
                           } else if (timeFilter === "5d" || timeFilter === "m") {
-                            pnl = periodReturnData?.pnl ?? 0;
-                            pnlPct = periodReturnData?.pct ?? 0;
+                            // Use live-computed derivedPeriodReturn so today's intraday
+                            // price movement is reflected — the stored 5d_pnl/1m_pnl
+                            // columns only update nightly and lag the home card value.
+                            pnl = derivedPeriodReturn?.pnl ?? 0;
+                            pnlPct = derivedPeriodReturn?.pct ?? 0;
                           } else if (timeFilter === "ytd") {
                             // Use live-computed derivedPeriodReturn for YTD so realized
                             // gains (from rebalance sells) are always included — the DB's
