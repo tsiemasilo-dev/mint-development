@@ -1,5 +1,6 @@
 - [Securities price units](securities-price-units.md) — last_price & avg_fill are in CENTS; divide by 100 for Rand math (caused 100x credit/liquidity inflation).
 - [Onboarding reset](onboarding-reset.md) — full reset must also DELETE user_onboarding_pack_details (gates KYC/Step 1); per-step reset uses sumsub_raw.address_saved=false; includes internal-vs-UI step number map.
 - [Portfolio chart-badge consistency](portfolio-chart-badge.md) — stored 5d_pnl/ytd_pnl columns are stale; use basket_value deltas from snapshotRows for both chart and badge so they always match.
+- [Home card 5D/M methodology](home-card-period-pnl.md) — basket-delta (Nth row back) now used for 5D/M; no injection correction; matches portfolio tab. Stored 5d_pnl differs by ~R45 (9-calendar-day vs Nth-row anchor).
 - [Experian Integration](experian-integration.md) — Sumsub replaced with Experian KYC V2 + ID Me Now; UAT credentials in secrets; key endpoints and flow documented.
 - [Holdings is_active dedup](holdings-is-active-dedup.md) — rebalance can leave old rows as is_active=null alongside new is_active=true rows; balance card dedup guard drops the stale null rows to prevent 2× portfolio inflation.

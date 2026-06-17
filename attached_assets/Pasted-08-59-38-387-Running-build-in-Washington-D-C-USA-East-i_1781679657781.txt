@@ -1,0 +1,48 @@
+08:59:38.387 Running build in Washington, D.C., USA (East) – iad1
+08:59:38.388 Build machine configuration: 4 cores, 8 GB
+08:59:38.595 Cloning github.com/tsiemasilo-dev/MINT-DEVELOPMENT (Branch: pnlFix3, Commit: 5abafef)
+08:59:47.068 Warning: Failed to fetch one or more git submodules
+08:59:47.069 Cloning completed: 8.474s
+08:59:47.233 Restored build cache from previous deployment (9M83g5C6w8x2MdK2tGn6Az4APdmv)
+08:59:47.484 Running "vercel build"
+08:59:47.497 Vercel CLI 54.14.0
+08:59:48.331 Installing dependencies...
+08:59:49.223 
+08:59:49.224 up to date in 771ms
+08:59:49.224 
+08:59:49.224 81 packages are looking for funding
+08:59:49.224   run `npm fund` for details
+08:59:49.351 
+08:59:49.351 > mint@1.0.0 build
+08:59:49.351 > vite build
+08:59:49.351 
+08:59:49.582 vite v7.3.3 building client environment for production...
+08:59:49.935 transforming...
+08:59:50.206 
+08:59:50.207 ../assets/fonts/future-earth.ttf referenced in ../assets/fonts/future-earth.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+08:59:52.016 ✓ 263 modules transformed.
+08:59:52.017 ✗ Build failed in 2.41s
+08:59:52.017 error during build:
+08:59:52.018 [vite:esbuild] Transform failed with 1 error:
+08:59:52.018 /vercel/path0/src/pages/NewPortfolioPage.jsx:1362:31: ERROR: Unterminated regular expression
+08:59:52.018 file: /vercel/path0/src/pages/NewPortfolioPage.jsx:1362:31
+08:59:52.019 
+08:59:52.019 Unterminated regular expression
+08:59:52.019 1360 |                                  {timeFilter === "ytd" && <span className="text-[10px] text-slate-400 font-medium">YTD...
+08:59:52.019 1361 |                                </div>
+08:59:52.019 1362 |                              </>
+08:59:52.019      |                                 ^
+08:59:52.019 1363 |                            );
+08:59:52.019 1364 |                          })()}
+08:59:52.019 
+08:59:52.019     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1467:15)
+08:59:52.019     at /vercel/path0/node_modules/esbuild/lib/main.js:736:50
+08:59:52.019     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:603:9)
+08:59:52.020     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:658:12)
+08:59:52.020     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:581:7)
+08:59:52.020     at Socket.emit (node:events:509:28)
+08:59:52.020     at addChunk (node:internal/streams/readable:563:12)
+08:59:52.020     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+08:59:52.020     at Readable.push (node:internal/streams/readable:394:5)
+08:59:52.020     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+08:59:52.064 Error: Command "npm run build" exited with 1

@@ -1341,21 +1341,26 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               </>
                             );
                           }
+                          // Before market open on D filter there is no intraday data yet —
+                          // hide the PnL row entirely so nothing misleading is shown.
+                          const hideDayPnl = timeFilter === "D" && intradayChartData.length === 0;
                           return (
                             <>
                               <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {isPos ? '+' : '-'}R{Math.abs(pnl ?? 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
-                                  {isPos ? '+' : ''}{(pnlPct ?? 0).toFixed(1)}%
-                                </span>
-                                {timeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
-                                {timeFilter === "5d" && <span className="text-[10px] text-slate-400 font-medium">5 days</span>}
-                                {timeFilter === "m" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
-                                {timeFilter === "ytd" && <span className="text-[10px] text-slate-400 font-medium">YTD</span>}
-                              </div>
+                              {!hideDayPnl && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {isPos ? '+' : '-'}R{Math.abs(pnl ?? 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isPos ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                                    {isPos ? '+' : ''}{(pnlPct ?? 0).toFixed(1)}%
+                                  </span>
+                                  {timeFilter === "D" && <span className="text-[10px] text-slate-400 font-medium">Today</span>}
+                                  {timeFilter === "5d" && <span className="text-[10px] text-slate-400 font-medium">5 days</span>}
+                                  {timeFilter === "m" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
+                                  {timeFilter === "ytd" && <span className="text-[10px] text-slate-400 font-medium">YTD</span>}
+                                </div>
+                              )}
                             </>
                           );
                         })()}

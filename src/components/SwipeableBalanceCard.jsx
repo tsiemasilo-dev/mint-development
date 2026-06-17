@@ -911,127 +911,9 @@ const SwipeableBalanceCard = ({
             firstDate: dates[0], lastDate: dates[dates.length - 1], rowsFetched: dates.length,
           });
         } else {
-          // M or 5D — try stored pre-computed columns FIRST (needs only 1 row, not 22/5).
-          // This prevents the minRows check from blocking users with slightly fewer basket rows.
-          const storedCol = activeTab === "5d" ? "5d_pnl" : "1m_pnl";
-          const storedPctCol = activeTab === "5d" ? "5d_pct" : "1m_pct";
-          const monthOffset = activeTab === "5d" ? 5 : 22;
-          let totalStoredCents = 0;
-          let totalCurrentBasketCents = 0;
-          let hasStored = false;
-          await Promise.all(strategyIds.map(async (sid) => {
-            const { data: row } = await supabase
-              .from("client_strategy_returns_c")
-              .select(`${storedCol}, ${storedPctCol}, basket_value`)
-              .eq("user_id", userId)
-              .is("family_member", null)
-              .eq("strategy_id", sid)
-              .lte("as_of_date", todayStr)
-              .order("as_of_date", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (row?.[storedCol] != null) {
-              totalStoredCents += Number(row[storedCol]);
-              totalCurrentBasketCents += Number(row.basket_value || 0);
-              hasStored = true;
-            }
-          }));
-          if (cancelled) return;
-          if (hasStored) {
-            // Correct for mid-period capital injections.
-            // The stored P&L = basket_today − basket_N_days_ago. Any holding bought AFTER the
-            // anchor date isn't in that baseline, so its full current MV appears as a "gain".
-            // Fix: find the anchor date, then subtract cost basis of holdings bought after it.
-            let correctedCents = totalStoredCents;
-            let anchorBasketCents = totalCurrentBasketCents - totalStoredCents; // implied anchor
-
-            let anchorRow = null;
-            try {
-              // Get the actual anchor date (row at index monthOffset in descending order)
-              const { data: _ar } = await supabase
-                .from("client_strategy_returns_c")
-                .select("as_of_date, basket_value")
-                .eq("user_id", userId)
-                .is("family_member", null)
-                .eq("strategy_id", strategyIds[0])
-                .lte("as_of_date", todayStr)
-                .order("as_of_date", { ascending: false })
-                .range(monthOffset, monthOffset)
-                .maybeSingle();
-              anchorRow = _ar;
-
-              if (anchorRow?.as_of_date) {
-                const anchorDate = anchorRow.as_of_date;
-                // If multiple strategies, sum their anchor basket values for accurate pct
-                if (strategyIds.length > 1) {
-                  anchorBasketCents = 0;
-                  await Promise.all(strategyIds.map(async (sid) => {
-                    const { data: ar } = await supabase
-                      .from("client_strategy_returns_c")
-                      .select("basket_value")
-                      .eq("user_id", userId)
-                      .is("family_member", null)
-                      .eq("strategy_id", sid)
-                      .eq("as_of_date", anchorDate)
-                      .maybeSingle();
-                    anchorBasketCents += Number(ar?.basket_value || 0);
-                  }));
-                } else {
-                  anchorBasketCents = Number(anchorRow.basket_value || 0);
-                }
-                if (cancelled) return;
-
-                // Find holdings bought after anchor date — their cost basis inflates the P&L
-                const { data: midHoldings } = await supabase
-                  .from("stock_holdings_c")
-                  .select("quantity, avg_fill, Fill_date")
-                  .eq("user_id", userId)
-                  .is("family_member_id", null)
-                  .eq("is_active", true)
-                  .gt("Fill_date", anchorDate);
-
-                let injectionCents = 0;
-                for (const h of (midHoldings || [])) {
-                  injectionCents += Number(h.avg_fill || 0) * Number(h.quantity || 0);
-                }
-                correctedCents = totalStoredCents - injectionCents;
-
-                console.log("[PERIOD_DEBUG parent] M/5D mid-period correction:", {
-                  activeTab, anchorDate,
-                  storedPnlRands: totalStoredCents / 100,
-                  injectionRands: injectionCents / 100,
-                  correctedPnlRands: correctedCents / 100,
-                  anchorBasketRands: anchorBasketCents / 100,
-                  midHoldingsCount: (midHoldings || []).length,
-                });
-              }
-            } catch (corrErr) {
-              console.warn("[SwipeableBalanceCard] mid-period correction error:", corrErr.message);
-              // Fall back to uncorrected stored value
-            }
-            if (cancelled) return;
-            // If no anchor row exists at position monthOffset, the user's snapshot history is shorter
-            // than the window (new investor). The stored P&L is anchored to inception, not the period.
-            // Don't display it — fall through to displayReturn (all-time P&L), same as YTD for new investors.
-            if (!anchorRow?.as_of_date) {
-              setParentMDInsufficientData(true);
-              console.log("[PERIOD_DEBUG parent] M/5D insufficient rows — falling back to displayReturn", { activeTab, monthOffset });
-              return;
-            }
-
-            const correctedPct = anchorBasketCents > 0
-              ? parseFloat(((correctedCents / anchorBasketCents) * 100).toFixed(4))
-              : 0;
-
-            setParentStoredMDPnl(parseFloat((correctedCents / 100).toFixed(2)));
-            setParentStoredMDPct(correctedPct);
-            console.log("[PERIOD_DEBUG parent] M/5D set:", {
-              activeTab, hasStored: true,
-              correctedPnl: correctedCents / 100, correctedPct,
-            });
-            return; // stored columns found — no need for basket-diff fallback
-          }
-          // Fallback: basket-diff (when stored columns absent). Needs minRows to be meaningful.
+          // M or 5D — compute from basket_value deltas, identical to the portfolio tab.
+          // This is rebalance-safe by construction: basket_value already reflects any sold/bought
+          // stocks, so there is no need for a client-side injection correction.
           const rowLimit = activeTab === "5d" ? 5 : 22;
           const basketByDate = {};
           await Promise.all(strategyIds.map(async (sid) => {
@@ -1053,14 +935,16 @@ const SwipeableBalanceCard = ({
           if (dates.length < rowLimit) {
             // Not enough history for this window — fall through to displayReturn (all-time P&L)
             setParentMDInsufficientData(true);
+            console.log("[PERIOD_DEBUG parent] M/5D insufficient rows — falling back to displayReturn", { activeTab, rowLimit, rowsFetched: dates.length });
             return;
           }
-          const firstBasket = basketByDate[dates[0]];
-          setParentSnapshotStartBasketCents(firstBasket);
-          console.log("[PERIOD_DEBUG parent] M/5D set:", {
-            activeTab, hasStored: false,
-            fallbackFirstBasketRands: firstBasket / 100,
-            dates: [dates[0], dates[dates.length - 1]], rowsFetched: dates.length,
+          const anchorBasketCents = basketByDate[dates[0]];
+          setParentSnapshotStartBasketCents(anchorBasketCents);
+          console.log("[PERIOD_DEBUG parent] M/5D basket-delta:", {
+            activeTab,
+            anchorDate: dates[0], latestDate: dates[dates.length - 1],
+            anchorBasketRands: anchorBasketCents / 100,
+            rowsFetched: dates.length,
           });
         }
       } catch (e) {
