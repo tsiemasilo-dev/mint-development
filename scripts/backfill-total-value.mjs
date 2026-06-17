@@ -31,12 +31,18 @@ for (const [key, grp] of Object.entries(groups)) {
   const txIds = [...new Set(hold.map(h => h.transaction_id).filter(Boolean))];
   let buffer = 0;
   if (txIds.length) { const txns = await Q(`transactions?select=buffer_cents,buffer_consumed_cents&id=in.(${txIds.join(",")})`); txns.forEach(t => buffer += Number(t.buffer_cents || 0) - Number(t.buffer_consumed_cents || 0)); }
-  // residual
+  // residual + the date it appeared (its own updated_at) — robust to any rebalance type
+  // (REBALANCE_SELL, REBALANCE_PENDING_SWAP, etc.). The residual is counted into
+  // total_value only from that date forward, so pre-rebalance anchors aren't inflated.
   const resScope = isFam ? `family_member_id=eq.${fam}` : `user_id=eq.${userId}&family_member_id=is.null`;
-  let residual = 0; (await Q(`strategy_rebalance_residuals?select=balance_cents&strategy_id=eq.${strategyId}&${resScope}`)).forEach(r => residual += Number(r.balance_cents || 0));
-  // earliest rebalance sell date for this scope (when residual appeared)
-  const reb = await Q(`stock_holdings_c?select=closed_at&strategy_id=eq.${strategyId}&closed_reason=eq.REBALANCE_SELL&${holdScope}&order=closed_at.asc&limit=1`);
-  const rebDate = (reb[0]?.closed_at || "").slice(0, 10);
+  let residual = 0, resDate = "";
+  (await Q(`strategy_rebalance_residuals?select=balance_cents,updated_at&strategy_id=eq.${strategyId}&${resScope}`)).forEach(r => {
+    residual += Number(r.balance_cents || 0);
+    const d = (r.updated_at || "").slice(0, 10);
+    if (d && (!resDate || d < resDate)) resDate = d;
+  });
+  // If we have a residual balance but no date, treat it as always-present (include for all rows).
+  const rebDate = resDate || (residual ? "2000-01-01" : "");
 
   for (const row of grp) {
     const total = Number(row.basket_value || 0) + buffer + (rebDate && row.as_of_date >= rebDate ? residual : 0);
