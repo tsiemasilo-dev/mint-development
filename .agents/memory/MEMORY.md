@@ -4,3 +4,4 @@
 - [Home card period P&L fix](home-card-period-pnl.md) — 5D/M use cash-adjusted, non-trading-day-aware anchor; YTD/ALL use dbData.totalInvested (live_value minus unrealized+realized P&L) — NOT a holdings re-query.
 - [Experian Integration](experian-integration.md) — Sumsub replaced with Experian KYC V2 + ID Me Now; UAT credentials in secrets; key endpoints and flow documented.
 - [Holdings is_active dedup](holdings-is-active-dedup.md) — rebalance can leave old rows as is_active=null alongside new is_active=true rows; balance card dedup guard drops the stale null rows to prevent 2× portfolio inflation.
+- [Portfolio period P&L source](portfolio-period-pnl-source.md) — hook must use stock_holdings_c.market_value (not a batch intraday query without ordering) to match home card's live total exactly.

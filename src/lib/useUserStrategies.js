@@ -653,10 +653,12 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
 
     const run = async () => {
       try {
-        // ── Step 1: active holdings → transaction IDs + security IDs ────────
+        // ── Step 1: active holdings → market_value (cents) + transaction IDs ──
+        // Uses stock_holdings_c.market_value (held-refresh, same source as home card API)
+        // instead of stock_intraday_c.current_price × qty (different refresh job).
         const { data: activeHlds } = await supabase
           .from("stock_holdings_c")
-          .select("transaction_id, security_id, quantity")
+          .select("transaction_id, market_value")
           .eq("is_active", true)
           .eq("user_id", userId)
           .is("family_member_id", null)
@@ -664,10 +666,9 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
 
         const holdings = activeHlds || [];
         const allTxIds = [...new Set(holdings.map(h => h.transaction_id).filter(Boolean))];
-        const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
 
-        // ── Step 2: buffer + residual + live prices (parallel) ───────────────
-        const [txnResult, residualResult, priceResult] = await Promise.all([
+        // ── Step 2: buffer + residual (parallel) ─────────────────────────────
+        const [txnResult, residualResult] = await Promise.all([
           allTxIds.length > 0
             ? supabase.from("transactions").select("buffer_cents, buffer_consumed_cents").in("id", allTxIds)
             : Promise.resolve({ data: [] }),
@@ -677,9 +678,6 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
             .eq("user_id", userId)
             .is("family_member_id", null)
             .eq("strategy_id", strategyId),
-          securityIds.length > 0
-            ? supabase.from("stock_intraday_c").select("security_id, current_price").in("security_id", securityIds)
-            : Promise.resolve({ data: [] }),
         ]);
 
         if (cancelled) return;
@@ -697,15 +695,9 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           if (d && (!earliestResidualDateStr || d < earliestResidualDateStr)) earliestResidualDateStr = d;
         });
 
-        const priceMap = {};
-        (priceResult.data || []).forEach(p => { priceMap[p.security_id] = Number(p.current_price || 0); });
-
+        // Sum market_value directly from holdings (cents, same as home card API source)
         let livePositionsCents = 0;
-        holdings.forEach(h => {
-          const qty = Math.abs(Number(h.quantity || 0));
-          const priceCents = priceMap[h.security_id] || 0;
-          if (priceCents > 0) livePositionsCents += priceCents * qty;
-        });
+        holdings.forEach(h => { livePositionsCents += Number(h.market_value || 0); });
 
         const liveTotalRands = livePositionsCents / 100 + (totalBufferCents + totalResidualCents) / 100;
 
@@ -770,17 +762,6 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           ? parseFloat(((pnl / (anchorTotalCents / 100)) * 100).toFixed(4))
           : 0;
 
-        console.log("[HOOK_DEBUG]", activeTab, {
-          liveTotalRands, livePositionsCents: livePositionsCents/100,
-          totalBufferCents, totalResidualCents, earliestResidualDateStr,
-          basketRowsCount: (basketRows||[]).length,
-          allDatesCount: allDates.length,
-          tradingDatesCount: tradingDates.length,
-          firstTradingDate: tradingDates[0],
-          lastTradingDate: tradingDates[tradingDates.length - 1],
-          anchorDate, anchorBasketCents, anchorCashCents, anchorTotalCents,
-          anchorTotalRands: anchorTotalCents/100, pnl,
-        });
         if (!cancelled) setReturnData({ pnl, pct });
       } catch (e) {
         console.warn("[useStrategyLivePeriodReturn] error:", e.message);
