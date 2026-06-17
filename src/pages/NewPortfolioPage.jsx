@@ -503,6 +503,8 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           investedAmount: sIa,
           change: sPnlPct,
           ytd_return: s.ytd_pct != null ? s.ytd_pct : s.metrics?.r_ytd,
+          cashElement: s.cashElement || 0,
+          positionsValue: s.positionsValue || 0,
         });
       }
     });
@@ -548,9 +550,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
       .then(({ data }) => {
         if (data && data.length > 0) {
           setSnapshotRows(data);
-          const count = data.length;
+          // Count only real trading days (rows where basket changed) — same
+          // stripping used by derivedPeriodReturn and the home card anchor logic.
+          const tradingCount = data.filter((r, i) =>
+            i === 0 || Number(r.basket_value) !== Number(data[i - 1].basket_value)
+          ).length;
           const latestYtdPct = data[data.length - 1]?.ytd_pct;
-          setAvailablePeriods({ D: true, "5d": count >= 5, m: count >= 22, ytd: latestYtdPct != null, all: true });
+          setAvailablePeriods({ D: true, "5d": tradingCount >= 6, m: tradingCount >= 23, ytd: latestYtdPct != null, all: true });
         }
       });
   }, [userSelectedStrategy?.strategyId, profile?.id]);
@@ -636,17 +642,23 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           const lastCents = Number(h.last_price || 0);
           return sum + (lastCents > 0 ? (lastCents / 100) * qty : 0);
         }, 0);
+    // Strip non-trading days (weekends / SA holidays) the same way the home
+    // card does: any row where basket_value didn't change from the previous
+    // row is a non-trading day and must not count toward the N-day lookback.
+    const tradingRows = snapshotRows.filter((r, i) =>
+      i === 0 || Number(r.basket_value) !== Number(snapshotRows[i - 1].basket_value)
+    );
     if (timeFilter === "5d") {
-      if (snapshotRows.length < 5 || !liveVal) return { pnl: 0, pct: 0 };
-      const startCents = Number(snapshotRows[snapshotRows.length - 5]?.basket_value || 0);
+      if (tradingRows.length < 6 || !liveVal) return { pnl: 0, pct: 0 };
+      const startCents = Number(tradingRows[tradingRows.length - 6]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
       return { pnl, pct: parseFloat(((pnl / startRands) * 100).toFixed(4)) };
     }
     if (timeFilter === "m") {
-      if (snapshotRows.length < 22 || !liveVal) return { pnl: 0, pct: 0 };
-      const startCents = Number(snapshotRows[snapshotRows.length - 22]?.basket_value || 0);
+      if (tradingRows.length < 23 || !liveVal) return { pnl: 0, pct: 0 };
+      const startCents = Number(tradingRows[tradingRows.length - 23]?.basket_value || 0);
       if (!startCents) return { pnl: 0, pct: 0 };
       const startRands = startCents / 100;
       const pnl = parseFloat((liveVal - startRands).toFixed(2));
@@ -1317,8 +1329,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               pnlPct = liveStrategyMetrics.todayPct;
                             }
                           } else if (timeFilter === "5d" || timeFilter === "m") {
-                            pnl = periodReturnData?.pnl ?? 0;
-                            pnlPct = periodReturnData?.pct ?? 0;
+                            // Use live-computed derivedPeriodReturn so today's intraday
+                            // price movement is reflected — the stored 5d_pnl/1m_pnl
+                            // columns only update nightly and lag the home card value.
+                            pnl = derivedPeriodReturn?.pnl ?? 0;
+                            pnlPct = derivedPeriodReturn?.pct ?? 0;
                           } else if (timeFilter === "ytd") {
                             // Use live-computed derivedPeriodReturn for YTD so realized
                             // gains (from rebalance sells) are always included — the DB's
@@ -1332,21 +1347,17 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const isPos = (pnl ?? 0) >= 0;
                           if (isStratPending) {
                             return (
-                              <>
-                                <p className="text-3xl font-bold text-slate-900">R0,00</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <SettlementBadge status="pending" size="md" />
-                                  <span className="text-xs text-slate-400">Awaiting trade execution</span>
-                                </div>
-                              </>
+                              <div className="flex items-center gap-2 mt-1">
+                                <SettlementBadge status="pending" size="md" />
+                                <span className="text-xs text-slate-400">Awaiting trade execution</span>
+                              </div>
                             );
                           }
                           // Before market open on D filter there is no intraday data yet —
                           // hide the PnL row entirely so nothing misleading is shown.
-                          const hideDayPnl = timeFilter === "D" && intradayChartData.length === 0;
+                          const hideDayPnl = timeFilter === "D" && !(intradayChartData?.length);
                           return (
                             <>
-                              <p className="text-3xl font-bold text-slate-900">R{cv.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                               {!hideDayPnl && (
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className={`text-sm font-semibold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -2147,16 +2158,22 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 change: h.change || 0,
                 isPending: h.isPending || false,
                 settlement_status: h.settlement_status || null,
+                cashElement: h.cashElement || 0,
+                positionsValue: h.positionsValue || 0,
               })).sort((a, b) => b.currentValue - a.currentValue);
 
               const flatPieData = (() => {
                 const map = new Map();
+                let totalCashPie = 0;
                 holdingsData.forEach(h => {
                   if (h.isStrategy && h.strategyHoldings?.length > 0) {
+                    // Use positionsValue (stocks only) so cash is shown separately
+                    const stocksVal = h.positionsValue > 0 ? h.positionsValue : h.currentValue;
+                    totalCashPie += h.cashElement || 0;
                     const totalWeight = h.strategyHoldings.reduce((s, c) => s + (c.weight || 0), 0) || 100;
                     h.strategyHoldings.forEach(c => {
                       const pct = (c.weight || 0) / totalWeight;
-                      const val = h.currentValue * pct;
+                      const val = stocksVal * pct;
                       const key = c.symbol || c.name;
                       if (map.has(key)) {
                         map.get(key).value += val;
@@ -2173,6 +2190,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     }
                   }
                 });
+                if (totalCashPie > 0) {
+                  map.set('__CASH__', { name: 'Cash', displayName: 'Cash', value: totalCashPie, isCash: true });
+                }
                 return Array.from(map.values()).sort((a, b) => b.value - a.value);
               })();
 
@@ -2260,12 +2280,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 name: h.name,
                 displayName: h.displayName,
                 value: h.value,
+                isCash: h.isCash || false,
                 color: pieColors[idx % pieColors.length],
               }));
               const othersValue = flatPieData.slice(10).reduce((sum, h) => sum + h.value, 0);
               const pieData = othersValue > 0
                 ? [...top10, { name: "Others", displayName: "Others", value: othersValue, color: "#E9D5FF" }]
                 : top10;
+              const totalCashRands = holdingsData.reduce((s, h) => s + (h.cashElement || 0), 0);
+              const cashPieColor = (pieData.find(d => d.isCash) || {}).color || pieColors[pieColors.length - 1];
 
               return (
                 <div className="relative mx-auto flex w-full max-w-sm flex-col gap-4 px-4 pb-10 md:max-w-md md:px-8">
@@ -2583,6 +2606,28 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                               );
                             })}
                           </div>
+
+                          {/* Cash row — buffer + residual combined */}
+                          {totalCashRands > 0 && (
+                            <div className="mt-3 rounded-2xl p-4 border border-slate-100/50 bg-white/70">
+                              <div className="flex items-center gap-3 w-full">
+                                <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: cashPieColor }}>
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5s2.5.9 2.5 2c0 2-5 2-5 4 0 1.1 1.1 2 2.5 2s2.5-.9 2.5-2" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900">Cash</p>
+                                  <p className="text-xs text-slate-500 font-medium">Buffer &amp; residual</p>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="text-sm font-bold text-slate-900">{formatCurrency(totalCashRands)}</p>
+                                  <p className="text-[10px] text-slate-400">{totalValue > 0 ? ((totalCashRands / totalValue) * 100).toFixed(1) : '0.0'}% of portfolio</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </section>
 
                         {closedHoldings && closedHoldings.length > 0 && (
