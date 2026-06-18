@@ -11959,6 +11959,70 @@ app.patch('/api/incidents/:id', async (req, res) => {
   }
 });
 
+// GET /api/fees-config — public fee schedule for client UIs
+// Reads live values from app_settings('fees') so the UI always shows what the
+// CRM has set, instead of falling back to hardcoded defaults.
+const FEE_CONSTANTS_DEFAULT = {
+  EXECUTION_RESERVE_RATE: 0.08,
+  BROKER_FEE_RATE:        0.0025,
+  ISIN_FEE_PER_ASSET:     69,
+  TRANSACTION_FEE_RATE:   0.038,
+  REB_BROKERAGE_RATE:     0.005,
+  REB_CUSTODY_FEE:        69,
+};
+let _feeCfgCache = null;
+let _feeCfgCacheAt = 0;
+const FEE_CFG_TTL = 60_000;
+
+async function getServerFeeConfig() {
+  const now = Date.now();
+  if (_feeCfgCache && now - _feeCfgCacheAt < FEE_CFG_TTL) return _feeCfgCache;
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return { ...FEE_CONSTANTS_DEFAULT };
+    const { data } = await db.from('app_settings').select('value').eq('key', 'fees').maybeSingle();
+    const j = data?.value;
+    if (j && typeof j === 'object') {
+      const num = (v, d) => (v == null || v === '' || isNaN(Number(v)) ? d : Number(v));
+      _feeCfgCache = {
+        EXECUTION_RESERVE_RATE: num(j.executionReserveRate, FEE_CONSTANTS_DEFAULT.EXECUTION_RESERVE_RATE),
+        BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS_DEFAULT.BROKER_FEE_RATE),
+        ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS_DEFAULT.ISIN_FEE_PER_ASSET),
+        TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS_DEFAULT.TRANSACTION_FEE_RATE),
+        REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS_DEFAULT.REB_BROKERAGE_RATE),
+        REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS_DEFAULT.REB_CUSTODY_FEE),
+      };
+      _feeCfgCacheAt = now;
+      return _feeCfgCache;
+    }
+  } catch (e) {
+    console.warn('[fees-config] Could not load from app_settings, using defaults:', e.message);
+  }
+  return { ...FEE_CONSTANTS_DEFAULT };
+}
+
+app.get('/api/fees-config', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60');
+  try {
+    const c = await getServerFeeConfig();
+    return res.json({
+      success: true,
+      fees: {
+        ISIN_FEE_PER_ASSET:     c.ISIN_FEE_PER_ASSET,
+        BROKER_FEE_RATE:        c.BROKER_FEE_RATE,
+        TRANSACTION_FEE_RATE:   c.TRANSACTION_FEE_RATE,
+        EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
+        CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
+        REB_BROKERAGE_RATE:     c.REB_BROKERAGE_RATE,
+        REB_CUSTODY_FEE:        c.REB_CUSTODY_FEE,
+      },
+    });
+  } catch (err) {
+    console.error('[fees-config]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Global Express error middleware — catches any next(err) or async throws
 app.use((err, req, res, next) => {
   console.error("[GLOBAL_ERROR]", req.method, req.path, err?.message, err?.stack?.split("\n")[1]);
