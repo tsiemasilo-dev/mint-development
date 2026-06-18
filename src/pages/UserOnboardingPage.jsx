@@ -1380,6 +1380,10 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                             address_details: { address: finalAddress, savedAt: new Date().toISOString(), ...details },
                           });
 
+                          // Refresh the cached profile so the mandate step reads the new
+                          // address (and extracts its postal code → skips the postal prompt).
+                          window.dispatchEvent(new Event("profile-updated"));
+
                           setAddressDone(true);
                           goToStep(getNextIncompleteStep(3));
                         }
