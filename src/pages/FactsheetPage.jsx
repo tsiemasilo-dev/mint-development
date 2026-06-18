@@ -6,7 +6,7 @@ import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
-import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
+import { formatChangePct, getChangeColor, getStrategyPriceHistory } from "../lib/strategyData.js";
 import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import {
   Area,
@@ -253,78 +253,55 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
     };
   }, [currentStrategy]);
 
-  // Fetch cumulative chart data for selected timeframe
+  // Fetch cumulative chart data for selected timeframe using holdings price history
   useEffect(() => {
     let isMounted = true;
 
     const fetchCumulativeData = async () => {
-      if (!supabase || !strategyId) return;
+      if (!strategyId) return;
+
+      // Map factsheet timeframe keys to getStrategyPriceHistory timeframe strings
+      const tfMap = { "5D": "1W", "1M": "1M", "6M": "6M", "YTD": "YTD" };
+      const priceTf = tfMap[timeframe];
+      if (!priceTf) return;
 
       try {
-        let startDate;
-        const today = new Date();
+        const navPoints = await getStrategyPriceHistory(strategyId, priceTf);
 
-        switch (timeframe) {
-          case "5D":
-            startDate = new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000);
-            break;
-          case "1M":
-            startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-            break;
-          case "6M":
-            startDate = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000);
-            break;
-          case "YTD":
-            startDate = new Date(today.getFullYear(), 0, 1);
-            break;
-          default:
-            return;
-        }
-
-        const startDateStr = startDate.toISOString().split("T")[0];
-
-        const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
-          .select("strategy_id, as_of_date, \"1d_pct\"")
-          .eq("strategy_id", strategyId)
-          .gte("as_of_date", startDateStr)
-          .order("as_of_date", { ascending: true });
-
-        if (error) throw error;
-
-        if (!dailyReturns || dailyReturns.length === 0) {
+        if (!navPoints || navPoints.length === 0) {
           if (isMounted) {
             setAnalytics(prev => ({
               ...prev,
-              curves: {
-                ...prev?.curves,
-                [timeframe]: []
-              }
+              curves: { ...prev?.curves, [timeframe]: [] }
             }));
           }
           return;
         }
 
-        // Calculate cumulative returns
-        const cumulativeData = [];
-        let cumulative = 0;
+        // For 5D: keep only the last 5 unique trading days
+        let filtered = navPoints;
+        if (timeframe === "5D") {
+          const uniqueDates = [...new Set(navPoints.map(p => p.ts.split("T")[0]))];
+          const last5 = uniqueDates.slice(-5);
+          filtered = navPoints.filter(p => last5.includes(p.ts.split("T")[0]));
+        }
 
-        dailyReturns.forEach((day) => {
-          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0;
-          cumulative += dailyReturn;
-          cumulativeData.push({
-            d: day.as_of_date,
-            v: Number((cumulative * 100).toFixed(2))
-          });
-        });
+        // Convert NAV series → cumulative % return from first point
+        const baseNav = filtered[0]?.nav;
+        if (!baseNav) {
+          if (isMounted) setAnalytics(prev => ({ ...prev, curves: { ...prev?.curves, [timeframe]: [] } }));
+          return;
+        }
+
+        const cumulativeData = filtered.map(p => ({
+          d: p.ts.split("T")[0],
+          v: Number(((p.nav - baseNav) / baseNav * 100).toFixed(2)),
+        }));
 
         if (isMounted) {
           setAnalytics(prev => ({
             ...prev,
-            curves: {
-              ...prev?.curves,
-              [timeframe]: cumulativeData
-            }
+            curves: { ...prev?.curves, [timeframe]: cumulativeData }
           }));
         }
       } catch (error) {
