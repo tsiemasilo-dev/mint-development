@@ -307,27 +307,38 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   };
 
   // Upload the manual-fallback proof-of-address document (bank statement / utility
-  // bill). Stored in the existing "documents" bucket under a per-user prefix; the
-  // public URL is kept in component state and persisted with the address below.
+  // bill) to the PRIVATE "proof-of-address" bucket. The server issues a one-time
+  // signed upload URL (service role) and the file is uploaded straight to storage
+  // — no public access, no per-user storage RLS, and no serverless body-size limit
+  // (so phone photos work). We keep the storage path and persist it with the
+  // address below; admins read it via a signed download URL.
   const handlePoaUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPoaError("");
     if (file.size > 10 * 1024 * 1024) { setPoaError("File too large — max 10MB."); return; }
-    const okType = /pdf$/i.test(file.type) || /^image\//i.test(file.type) || /\.(pdf|png|jpe?g|webp|heic)$/i.test(file.name);
+    const okType = /pdf$/i.test(file.type) || /^image\//i.test(file.type) || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(file.name);
     if (!okType) { setPoaError("Please upload a PDF or image (bank statement / utility bill)."); return; }
     setPoaUploading(true);
     try {
       if (!supabase) throw new Error("Storage not available");
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) throw new Error("You need to be signed in.");
-      const safeName = file.name.trim().replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
-      const path = `proof-of-address/${userId}/${Date.now()}-${safeName || "proof-of-address"}`;
-      const { error: upErr } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+      const token = session?.access_token;
+      if (!token) throw new Error("You need to be signed in.");
+      // 1. Ask the server for a one-time signed upload URL.
+      const res = await fetch("/api/onboarding/poa-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || "application/octet-stream" }),
+      });
+      const info = await res.json().catch(() => ({}));
+      if (!res.ok || !info.success) throw new Error(info.error || "Upload failed. Please try again.");
+      // 2. Upload the file straight to private storage with the signed token.
+      const { error: upErr } = await supabase.storage
+        .from(info.bucket)
+        .uploadToSignedUrl(info.path, info.token, file, { contentType: file.type || undefined, upsert: true });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("documents").getPublicUrl(path);
-      setPoaUrl(pub?.publicUrl || path);
+      setPoaUrl(info.path);
       setPoaFileName(file.name);
     } catch (err) {
       console.error("[Onboarding] POA upload failed:", err);
@@ -632,7 +643,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
             if (ad.city) setAddrCity(ad.city);
             if (ad.street) setAddrStreet(ad.street);
             if (ad.postal_code) setAddrPostal(ad.postal_code);
-            if (ad.proof_of_address_url) setPoaUrl(ad.proof_of_address_url);
+            if (ad.proof_of_address_path) setPoaUrl(ad.proof_of_address_path);
             if (ad.proof_of_address_name) setPoaFileName(ad.proof_of_address_name);
           }
           if (raw.source_of_funds_details) {
@@ -1213,31 +1224,33 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                   <>
                     <div className="animate-fade-in delay-2">
                       <label htmlFor="addr-province">Residential Address</label>
-                      <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
+                      {/* Province on its own line; City · Street · Postal on one row below. */}
+                      <div className="glass-field" style={{ padding: 0, overflow: "hidden", marginBottom: "10px" }}>
                         <select
                           id="addr-province"
                           value={addrProvince}
                           onChange={(e) => setAddrProvince(e.target.value)}
-                          style={{ flex: "0 0 30%", minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "13px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
+                          style={{ width: "100%", border: "none", background: "transparent", padding: "12px 12px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
                         >
                           <option value="">Province</option>
                           {["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"].map((p) => (
                             <option key={p} value={p}>{p}</option>
                           ))}
                         </select>
-                        <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
+                      </div>
+                      <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
                         <input
                           value={addrCity}
                           onChange={(e) => setAddrCity(e.target.value)}
                           placeholder="City"
-                          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "13px", outline: "none", color: "hsl(270 30% 20%)" }}
+                          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
                         />
                         <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
                         <input
                           value={addrStreet}
                           onChange={(e) => setAddrStreet(e.target.value)}
                           placeholder="Street"
-                          style={{ flex: 1.3, minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "13px", outline: "none", color: "hsl(270 30% 20%)" }}
+                          style={{ flex: 1.4, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
                         />
                         <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
                         <input
@@ -1246,7 +1259,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                           placeholder="0000"
                           inputMode="numeric"
                           maxLength={4}
-                          style={{ flex: "0 0 58px", minWidth: 0, border: "none", background: "transparent", padding: "12px 6px", fontSize: "13px", outline: "none", color: "hsl(270 30% 20%)", letterSpacing: "1px" }}
+                          style={{ flex: "0 0 64px", minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)", letterSpacing: "1px" }}
                         />
                       </div>
                       <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
@@ -1342,7 +1355,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                           city: addrCity.trim(),
                           street: addrStreet.trim(),
                           postal_code: addrPostal,
-                          proof_of_address_url: poaUrl,
+                          proof_of_address_path: poaUrl,
                           proof_of_address_name: poaFileName,
                           manual_entry: true,
                         };
