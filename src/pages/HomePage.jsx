@@ -2426,7 +2426,17 @@ const HomePage = ({
                       {/* Top card */}
                       <button
                         type="button"
-                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap })}
+                        onClick={() => setExpandedStratStack({
+                          // For a MIXED strategy (filled + a pending re-buy) the server
+                          // strategy values disagree with the trusted hook/purple card.
+                          // Feed the modal the hook's POSITIONS-only values so the filled
+                          // batch's apportioned P&L matches the card header to the cent.
+                          // Other strategies keep their existing (server) values untouched.
+                          strategy: (hasMixed && hookStrat)
+                            ? { ...strategy, currentValue: hookStrat.positionsValue, investedAmount: Number((hookStrat.positionsValue - hookStrat.unrealizedPnl).toFixed(2)) }
+                            : strategy,
+                          batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap
+                        })}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
                       >
                         {cardInner}

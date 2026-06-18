@@ -382,10 +382,15 @@ export const useUserStrategies = (familyMemberId = null) => {
       }
       // ── end live price override ────────────────────────────────────────────
 
-      // Pending-only strategies are hidden from the portfolio strategies tab
-      // and dropdown — they appear only on the home tab via the purple
-      // SettlementBadge, matching the behaviour of a normal pending purchase.
-      const visibleStrategies = formattedStrategies.filter(s => !s.isPending && !s.hasPendingBatch);
+      // Pending-ONLY strategies (no filled holdings yet) are hidden — they appear
+      // on the home tab's Pending orders section until the broker fills them.
+      // MIXED strategies (existing filled holdings + a new pending re-buy) ARE kept:
+      // the filled portion is real and is valued filled-only (positionsByStrategy /
+      // costBasisByStrategy already exclude the pending batch, and the buffer is
+      // computed from filled holdings' transactions only). This keeps the home
+      // "best performing" card and the portfolio tab in agreement with the purple
+      // balance card. The pending batch still shows separately in Pending orders.
+      const visibleStrategies = formattedStrategies.filter(s => !s.isPending);
       const nextData = {
         strategies: visibleStrategies,
         selectedStrategy: visibleStrategies[0] || null,
