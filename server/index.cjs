@@ -11608,6 +11608,10 @@ function isJseTradingDay(dateStr) {
   return true;
 }
 
+// Module-level cache for Dec-31-2025 anchor prices (never changes — fetch once per server lifetime).
+// Keys are base symbols (e.g. "NED"), values are closing prices in ZAp (cents).
+const _ytdAnchorCache = {};
+
 async function computeAndSaveStrategyReturns() {
   const db = supabaseAdmin || supabase;
   if (!db) { console.warn('[strategy-returns] No Supabase client'); return; }
@@ -11676,12 +11680,42 @@ async function computeAndSaveStrategyReturns() {
 
     const toBase = (sym) => sym.split('.')[0].toUpperCase();
 
-    // 3. Fetch securities_c for YTD calculation
-    //    ytd_performance is the authoritative YTD field maintained by the price feed.
-    //    We back-compute the implied Jan 1 price:
-    //      jan1Price = last_price / (1 + ytd_performance / 100)
-    //    This avoids relying on stock_intraday_c having data going back to Jan 1
-    //    (that table is periodically pruned and would give wrong anchors).
+    // 2b. Populate Dec-31-2025 YTD anchor prices from Yahoo Finance (cached per server lifetime).
+    //     Walk back up to 7 calendar days to find the last JSE trading close on or before Dec 31.
+    const missingAnchorSymbols = baseSymbolList.filter(s => !_ytdAnchorCache[s]);
+    if (missingAnchorSymbols.length) {
+      console.log(`[strategy-returns] Fetching Dec-31-2025 anchor prices for ${missingAnchorSymbols.length} symbol(s)…`);
+      const DEC31 = '2025-12-31';
+      const p1 = Math.floor(new Date('2025-12-24T00:00:00Z').getTime() / 1000);
+      const p2 = Math.floor(new Date('2026-01-02T23:59:59Z').getTime() / 1000);
+      await Promise.all(missingAnchorSymbols.map(async (base) => {
+        try {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${base}.JO?interval=1d&period1=${p1}&period2=${p2}`;
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find the last close on or before Dec 31 2025
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= DEC31 && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) {
+            _ytdAnchorCache[base] = bestPrice;
+            console.log(`[strategy-returns] Anchor ${base}: ${bestPrice}c`);
+          } else {
+            console.warn(`[strategy-returns] No Dec-31 anchor for ${base}`);
+          }
+        } catch (e) {
+          console.warn(`[strategy-returns] Anchor fetch failed for ${base}: ${e.message}`);
+        }
+      }));
+    }
+
+    // 3. Fetch securities_c for current last_price (used for YTD current value + period calcs)
     const { data: securitiesRows } = await db
       .from('securities_c')
       .select('symbol, last_price, ytd_performance')
@@ -11785,25 +11819,22 @@ async function computeAndSaveStrategyReturns() {
       return ((endVal - startVal) / startVal) * 100;
     };
 
-    // 6b. YTD basket return using securities_c.ytd_performance (reliable Jan 1 anchor)
-    //    Formula mirrors calculateYtdReturn() in src/lib/strategyUtils.js:
-    //      ytd = (Σ shares × last_price) / (Σ shares × jan1Price) − 1
-    //    where jan1Price = last_price / (1 + ytd_performance / 100)
+    // 6b. YTD basket return using real Dec-31-2025 closes from Yahoo Finance as anchor.
+    //    Formula: ytd = (Σ shares × last_price) / (Σ shares × dec31Price) − 1
+    //    Anchor prices are fetched once and cached in _ytdAnchorCache for the server lifetime.
+    //    Current prices come from securities_c.last_price (kept live by the price feed).
     const basketYtdReturn = (holdings) => {
-      let todayVal = 0, jan1Val = 0, matched = 0;
+      let todayVal = 0, anchorVal = 0, matched = 0;
       for (const { symbol, shares } of holdings) {
-        const sec = securitiesMap[symbol];
-        if (!sec || !sec.last_price) continue;
-        const ytdPerf = sec.ytd_performance;
-        // Guard against garbage data or division by zero
-        if (isNaN(ytdPerf) || ytdPerf <= -99 || ytdPerf > 500) continue;
-        const jan1Price = sec.last_price / (1 + ytdPerf / 100);
-        todayVal += shares * sec.last_price;
-        jan1Val  += shares * jan1Price;
+        const anchorPrice   = _ytdAnchorCache[symbol];
+        const sec           = securitiesMap[symbol];
+        if (!anchorPrice || !sec?.last_price) continue;
+        anchorVal += shares * anchorPrice;
+        todayVal  += shares * sec.last_price;
         matched++;
       }
-      if (!jan1Val || !matched) return null;
-      return ((todayVal / jan1Val) - 1) * 100;
+      if (!anchorVal || !matched) return null;
+      return ((todayVal / anchorVal) - 1) * 100;
     };
 
     // 7. Compute + write per strategy
