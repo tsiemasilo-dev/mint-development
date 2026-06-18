@@ -4,41 +4,79 @@ import { useSyncExternalStore } from "react";
 // authoritative for what's charged; this just makes the UI show the same numbers
 // the CTO set in the CRM, instead of hardcoding them in every screen.
 //
-// Usage inside a component:
-//   const { ISIN_FEE_PER_ASSET, CASH_BUFFER_RATE, ... } = useFees();
-// It returns the defaults immediately, then re-renders once /api/fees-config
-// resolves (one fetch, shared across all consumers).
+// Fetch strategy (in priority order):
+//   1. GET /api/fees-config  — works in production (Vercel)
+//   2. Supabase app_settings — fallback for dev (Express server has no fees route)
+//   3. FEE_DEFAULTS          — hardcoded last resort
 
 export const FEE_DEFAULTS = {
   ISIN_FEE_PER_ASSET:   69,
   BROKER_FEE_RATE:      0.0025,
   TRANSACTION_FEE_RATE: 0.038,
-  CASH_BUFFER_RATE:     0.08,   // a.k.a. execution reserve
+  CASH_BUFFER_RATE:     0.08,
 };
 
 const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
+
+function mapFees(f) {
+  return {
+    ISIN_FEE_PER_ASSET:   num(f.ISIN_FEE_PER_ASSET   ?? f.isinFeePerAsset,                       FEE_DEFAULTS.ISIN_FEE_PER_ASSET),
+    BROKER_FEE_RATE:      num(f.BROKER_FEE_RATE       ?? f.brokerFeeRate,                          FEE_DEFAULTS.BROKER_FEE_RATE),
+    TRANSACTION_FEE_RATE: num(f.TRANSACTION_FEE_RATE  ?? f.transactionFeeRate,                     FEE_DEFAULTS.TRANSACTION_FEE_RATE),
+    CASH_BUFFER_RATE:     num(f.CASH_BUFFER_RATE       ?? f.EXECUTION_RESERVE_RATE ?? f.executionReserveRate, FEE_DEFAULTS.CASH_BUFFER_RATE),
+  };
+}
 
 let _fees = { ...FEE_DEFAULTS };
 const listeners = new Set();
 let _fetchStarted = false;
 
+async function trySupabaseFees() {
+  try {
+    const { supabase } = await import("./supabase.js");
+    if (!supabase) return null;
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "fees")
+      .maybeSingle();
+    if (!data?.value || typeof data.value !== "object") return null;
+    return mapFees(data.value);
+  } catch {
+    return null;
+  }
+}
+
+function notify() {
+  listeners.forEach((l) => l());
+}
+
 function ensureFetch() {
   if (_fetchStarted) return;
   _fetchStarted = true;
+
   fetch("/api/fees-config")
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => {
-      if (!j || !j.success || !j.fees) return;
-      const f = j.fees;
-      _fees = {
-        ISIN_FEE_PER_ASSET:   num(f.ISIN_FEE_PER_ASSET,   FEE_DEFAULTS.ISIN_FEE_PER_ASSET),
-        BROKER_FEE_RATE:      num(f.BROKER_FEE_RATE,      FEE_DEFAULTS.BROKER_FEE_RATE),
-        TRANSACTION_FEE_RATE: num(f.TRANSACTION_FEE_RATE, FEE_DEFAULTS.TRANSACTION_FEE_RATE),
-        CASH_BUFFER_RATE:     num(f.CASH_BUFFER_RATE ?? f.EXECUTION_RESERVE_RATE, FEE_DEFAULTS.CASH_BUFFER_RATE),
-      };
-      listeners.forEach((l) => l());
+    .then(async (j) => {
+      if (j && j.success && j.fees) {
+        _fees = mapFees(j.fees);
+        notify();
+        return;
+      }
+      // API route not available in Express dev — fall back to Supabase
+      const sb = await trySupabaseFees();
+      if (sb) {
+        _fees = sb;
+        notify();
+      }
     })
-    .catch(() => { /* keep defaults */ });
+    .catch(async () => {
+      const sb = await trySupabaseFees();
+      if (sb) {
+        _fees = sb;
+        notify();
+      }
+    });
 }
 
 function subscribe(cb) {

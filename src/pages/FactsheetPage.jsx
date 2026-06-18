@@ -1061,9 +1061,10 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
             {currentStrategy?.management_fee_bps != null && Number(currentStrategy.management_fee_bps) > 0 && (
               <li>• Management fee: {(Number(currentStrategy.management_fee_bps) / 100).toFixed(2)}% per annum</li>
             )}
-            <li>• Broker fee ({(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}%)</li>
-            <li>• Custody fee: R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
-            <li>• Transaction fee ({(feeRates.TRANSACTION_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 2 })}%)</li>
+            <li>• Broker fee ({+(feeRates.BROKER_FEE_RATE * 100).toFixed(3)}%)</li>
+            <li>• Custody (R{+Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset)</li>
+            <li>• Transaction fee ({+(feeRates.TRANSACTION_FEE_RATE * 100).toFixed(2)}%)</li>
+            <li>• Execution reserve ({+(feeRates.CASH_BUFFER_RATE * 100).toFixed(2)}% cash buffer)</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
