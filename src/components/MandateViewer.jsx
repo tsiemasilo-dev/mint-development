@@ -186,9 +186,11 @@ const MandateViewer = ({ profile = {}, onValidChange, onDataChange, savedData, r
     if (signKey === "initials") {
       const ex = [];
       if (!idFilled) ex.push("idNumber");
-      // Postal code + phone are always confirmed in the sign-off: prefilled from
-      // the bureau/address on record so the user can keep them or enter others.
-      ex.push("postalCode");
+      // Postal code: only ask when it couldn't be resolved from the address/bureau.
+      // A structured manual address ends in the 4-digit code (parseAddr extracts it),
+      // so this step is skipped — no duplicate postal-code request at final sign-off.
+      if (!postalFilled) ex.push("postalCode");
+      // Phone is always confirmed in the sign-off — prefilled from the number on record.
       ex.push("phone");
       setSignExtras(ex);
     }
