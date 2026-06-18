@@ -1784,10 +1784,27 @@ const HomePage = ({
             return batches.some(b => !b.filled);
           });
 
-          // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
+          // Build a set of transaction IDs that correspond to UNFILLED batches.
+          // A filled transaction's ID will be in filledTxIds — we skip those so
+          // a re-buy doesn't drag the old filled purchase into the pending section.
+          const pendingTxIds = new Set();
+          const filledTxIds = new Set();
+          Object.values(purchaseBatchesByStrategy).forEach(batches => {
+            batches.forEach(b => {
+              if (!b.transactionId) return;
+              if (b.filled) filledTxIds.add(b.transactionId);
+              else pendingTxIds.add(b.transactionId);
+            });
+          });
+
+          // Build one entry per PENDING TRANSACTION for strategies.
           // Each transaction "Strategy Investment: X" = one purchase event.
+          // Skip transactions that belong to a filled batch so a re-buy doesn't
+          // pull the already-settled purchase into the pending section.
           const stratTxMap = {};
           (Array.isArray(transactions) ? transactions : []).forEach(tx => {
+            // If we have batch data and this tx belongs only to a filled batch, skip it.
+            if (filledTxIds.has(tx.id) && !pendingTxIds.has(tx.id)) return;
             const name = (tx.name || "").trim();
             let stratName = null;
             if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
