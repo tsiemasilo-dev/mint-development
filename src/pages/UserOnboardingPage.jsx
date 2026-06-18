@@ -71,6 +71,26 @@ const CheckCircleIcon = (props) => (
   </svg>
 );
 
+// Country list for the residential-address fallback. South Africa first (drives
+// the province dropdown); a curated set of common countries follows. Flag emojis
+// render natively on iOS/Android (the PWA's audience).
+const ADDRESS_COUNTRIES = [
+  { name: "South Africa", flag: "🇿🇦" },
+  { name: "Botswana", flag: "🇧🇼" },
+  { name: "Eswatini", flag: "🇸🇿" },
+  { name: "Lesotho", flag: "🇱🇸" },
+  { name: "Mozambique", flag: "🇲🇿" },
+  { name: "Namibia", flag: "🇳🇦" },
+  { name: "Zambia", flag: "🇿🇲" },
+  { name: "Zimbabwe", flag: "🇿🇼" },
+  { name: "Ghana", flag: "🇬🇭" },
+  { name: "Kenya", flag: "🇰🇪" },
+  { name: "Nigeria", flag: "🇳🇬" },
+  { name: "United Kingdom", flag: "🇬🇧" },
+  { name: "United States", flag: "🇺🇸" },
+  { name: "Other", flag: "🌍" },
+];
+
 const southAfricanBanks = [
   { value: "", label: "Select your bank", logo: null, branchCode: "" },
   { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za", branchCode: "632005" },
@@ -199,6 +219,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   // Structured manual-fallback address (only used when no bureau address is on
   // record). Captured as separate fields so the format — and the postal code —
   // are guaranteed, then combined into "Province, City, Street, 0000".
+  const [addrCountry, setAddrCountry] = useState("South Africa");
   const [addrProvince, setAddrProvince] = useState("");
   const [addrCity, setAddrCity] = useState("");
   const [addrStreet, setAddrStreet] = useState("");
@@ -639,6 +660,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
           // returning user with partial progress doesn't lose what they entered.
           if (raw.address_details?.manual_entry) {
             const ad = raw.address_details;
+            if (ad.country) setAddrCountry(ad.country);
             if (ad.province) setAddrProvince(ad.province);
             if (ad.city) setAddrCity(ad.city);
             if (ad.street) setAddrStreet(ad.street);
@@ -1222,22 +1244,43 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                      so the format + postal code are guaranteed, plus a required
                      proof-of-address document. */
                   <>
+                    <style>{"@keyframes poaspin{to{transform:rotate(360deg)}}"}</style>
                     <div className="animate-fade-in delay-2">
-                      <label htmlFor="addr-province">Residential Address</label>
-                      {/* Province on its own line; City · Street · Postal on one row below. */}
-                      <div className="glass-field" style={{ padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                      <label htmlFor="addr-country">Residential Address</label>
+                      {/* Country (with flag) → drives whether the province dropdown shows. */}
+                      <div className="glass-field" style={{ display: "flex", alignItems: "center", padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                        <span style={{ fontSize: "18px", padding: "0 2px 0 12px", lineHeight: 1 }} aria-hidden="true">
+                          {(ADDRESS_COUNTRIES.find((c) => c.name === addrCountry) || ADDRESS_COUNTRIES[0]).flag}
+                        </span>
                         <select
-                          id="addr-province"
-                          value={addrProvince}
-                          onChange={(e) => setAddrProvince(e.target.value)}
-                          style={{ width: "100%", border: "none", background: "transparent", padding: "12px 12px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
+                          id="addr-country"
+                          value={addrCountry}
+                          onChange={(e) => { setAddrCountry(e.target.value); if (e.target.value !== "South Africa") setAddrProvince(""); }}
+                          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
                         >
-                          <option value="">Province</option>
-                          {["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"].map((p) => (
-                            <option key={p} value={p}>{p}</option>
+                          {ADDRESS_COUNTRIES.map((c) => (
+                            <option key={c.name} value={c.name}>{c.name}</option>
                           ))}
                         </select>
                       </div>
+
+                      {/* Province only for South Africa. */}
+                      {addrCountry === "South Africa" && (
+                        <div className="glass-field" style={{ padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                          <select
+                            id="addr-province"
+                            value={addrProvince}
+                            onChange={(e) => setAddrProvince(e.target.value)}
+                            style={{ width: "100%", border: "none", background: "transparent", padding: "12px 12px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
+                          >
+                            <option value="">Province</option>
+                            {["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"].map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
                         <input
                           value={addrCity}
@@ -1255,45 +1298,65 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                         <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
                         <input
                           value={addrPostal}
-                          onChange={(e) => setAddrPostal(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                          placeholder="0000"
-                          inputMode="numeric"
-                          maxLength={4}
-                          style={{ flex: "0 0 64px", minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)", letterSpacing: "1px" }}
+                          onChange={(e) => setAddrPostal(addrCountry === "South Africa" ? e.target.value.replace(/\D/g, "").slice(0, 4) : e.target.value.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 10))}
+                          placeholder={addrCountry === "South Africa" ? "0000" : "Postal"}
+                          inputMode={addrCountry === "South Africa" ? "numeric" : "text"}
+                          maxLength={addrCountry === "South Africa" ? 4 : 10}
+                          style={{ flex: addrCountry === "South Africa" ? "0 0 64px" : "0 0 84px", minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)", letterSpacing: addrCountry === "South Africa" ? "1px" : "0" }}
                         />
                       </div>
                       <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                        Enter your full address — province, city, street and 4-digit postal code.
+                        {addrCountry === "South Africa"
+                          ? "Enter your full address — province, city, street and 4-digit postal code."
+                          : "Enter your full address — city, street and postal code."}
                       </p>
                     </div>
 
+                    {/* Proof of address — upload drop-zone */}
                     <div className="animate-fade-in delay-2">
                       <label htmlFor="poa-upload">Proof of address</label>
                       <label
                         htmlFor="poa-upload"
-                        className="glass-field"
-                        style={{ display: "flex", alignItems: "center", gap: "10px", cursor: poaUploading ? "wait" : "pointer" }}
+                        style={{
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          gap: "8px", textAlign: "center", padding: "20px 16px", borderRadius: "16px",
+                          cursor: poaUploading ? "wait" : "pointer",
+                          border: poaUrl ? "1.5px solid hsl(160 50% 75%)" : "1.5px dashed hsl(270 35% 80%)",
+                          background: poaUrl ? "hsl(160 60% 97%)" : "hsl(270 60% 99%)",
+                          transition: "border-color 0.2s ease, background 0.2s ease",
+                        }}
                       >
-                        {poaUrl ? (
-                          <CheckCircleIcon width={18} height={18} style={{ color: "hsl(160 50% 40%)", flexShrink: 0 }} />
-                        ) : (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "hsl(270 25% 55%)", flexShrink: 0 }}>
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="17 8 12 3 7 8" />
-                            <line x1="12" y1="3" x2="12" y2="15" />
-                          </svg>
-                        )}
-                        <span style={{ fontSize: "13px", color: poaUrl ? "hsl(160 50% 35%)" : "hsl(270 15% 55%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload bank statement or utility bill"}
-                        </span>
+                        <div style={{
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          width: "44px", height: "44px", borderRadius: "999px",
+                          background: poaUrl ? "hsl(160 55% 90%)" : "hsl(270 60% 95%)",
+                        }}>
+                          {poaUploading ? (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2.2" strokeLinecap="round" style={{ animation: "poaspin 0.8s linear infinite" }}>
+                              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                            </svg>
+                          ) : poaUrl ? (
+                            <CheckCircleIcon width={24} height={24} style={{ color: "hsl(160 55% 40%)" }} />
+                          ) : (
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                          )}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: "13.5px", fontWeight: 600, color: poaUrl ? "hsl(160 45% 32%)" : "hsl(270 35% 35%)", margin: 0, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload proof of address"}
+                          </p>
+                          <p style={{ fontSize: "11px", color: poaUrl ? "hsl(160 30% 45%)" : "hsl(270 15% 60%)", margin: "3px 0 0" }}>
+                            {poaUrl ? "Tap to replace" : "Bank statement or utility bill · PDF or photo"}
+                          </p>
+                        </div>
                       </label>
                       <input id="poa-upload" type="file" accept=".pdf,image/*" style={{ display: "none" }} disabled={poaUploading} onChange={handlePoaUpload} />
-                      {poaError ? (
+                      {poaError && (
                         <p className="text-xs mt-2" style={{ color: "hsl(0 60% 50%)" }}>{poaError}</p>
-                      ) : (
-                        <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                          A recent bank statement or utility bill (PDF or photo) showing your name and address.
-                        </p>
                       )}
                     </div>
                   </>
@@ -1348,13 +1411,20 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                       let details = {};
                       if (fallback) {
                         // Structured manual entry — all fields + proof of address required.
-                        if (!(addrProvince && addrCity.trim() && addrStreet.trim() && /^\d{4}$/.test(addrPostal) && poaUrl)) return;
-                        finalAddress = `${addrProvince}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal}`;
+                        // Province + 4-digit postal only enforced for South Africa.
+                        const isSA = addrCountry === "South Africa";
+                        const valid = addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (isSA ? (addrProvince && /^\d{4}$/.test(addrPostal)) : true);
+                        if (!valid) return;
+                        finalAddress = isSA
+                          ? `${addrProvince}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal}`
+                          : `${addrCountry}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal.trim()}`;
                         details = {
-                          province: addrProvince,
+                          country: addrCountry,
+                          province: isSA ? addrProvince : "",
                           city: addrCity.trim(),
                           street: addrStreet.trim(),
-                          postal_code: addrPostal,
+                          postal_code: addrPostal.trim(),
                           proof_of_address_path: poaUrl,
                           proof_of_address_name: poaFileName,
                           manual_entry: true,
@@ -1395,7 +1465,8 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                     }}
                     disabled={addressLoading || ((experianAddresses && experianAddresses.length > 0)
                       ? (!address || address.length < 5)
-                      : !(addrProvince && addrCity.trim() && addrStreet.trim() && /^\d{4}$/.test(addrPostal) && poaUrl))}
+                      : !(addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (addrCountry === "South Africa" ? (addrProvince && /^\d{4}$/.test(addrPostal)) : true)))}
                   >
                     {addressLoading ? "Saving..." : "Continue"}
                   </button>
