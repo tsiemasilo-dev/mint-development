@@ -2121,11 +2121,11 @@ const HomePage = ({
           ) : hasAssets ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {assetsToDisplay.filter(a => !a.isPending).slice(0, 5).map((asset) => {
-                const batches = Array.isArray(asset.batches) ? asset.batches : [];
+                // FILLED purchases only — pending buys live in the Pending orders
+                // section. Count, stack and modal all use filled batches only.
+                const allBatches = Array.isArray(asset.batches) ? asset.batches : [];
+                const batches = allBatches.filter(b => Number(b.avg_fill) > 0);
                 const isStack = batches.length > 1;
-                const pendingCount = batches.filter(b => !b.avg_fill || Number(b.avg_fill) === 0).length;
-                const filledCount = batches.length - pendingCount;
-                const hasMixed = pendingCount > 0 && filledCount > 0;
                 // Purchase date hint for single-purchase cards. Stack cards already
                 // show the "Nx" badge; the per-batch dates appear in the stacked modal.
                 const latestBatchDate = batches
@@ -2164,9 +2164,7 @@ const HomePage = ({
                       </div>
                       <p className="text-xs text-slate-500 line-clamp-1">
                         {isStack
-                          ? (hasMixed
-                              ? `${filledCount} filled · ${pendingCount} pending · tap to see`
-                              : `${batches.length} purchases · tap to see each`)
+                          ? `${batches.length} purchases · tap to see each`
                           : asset.name}
                       </p>
                     </div>
@@ -2197,33 +2195,22 @@ const HomePage = ({
                 if (isStack) {
                   return (
                     <div key={asset.symbol} className="flex-shrink-0 min-w-[260px] snap-start relative">
-                      {/* Stack shadow layers — purple if any pending batch, white otherwise */}
-                      {pendingCount > 0 ? (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
-                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
-                      ) : (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      )}
+                      {/* Stack shadow layers — always white (filled-only section) */}
+                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
                       {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
                       <button
                         type="button"
-                        onClick={() => setExpandedStockStack({ asset })}
+                        onClick={() => setExpandedStockStack({ asset: { ...asset, batches } })}
                         className="relative w-full rounded-3xl bg-white p-4 text-left shadow-md transition-all active:scale-[0.97]"
                       >
                         {cardInner}
                       </button>
-                      {/* Purchase count badge */}
+                      {/* Filled purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
                         {batches.length}×
                       </div>
-                      {/* Pending indicator if mixed */}
-                      {hasMixed && (
-                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
-                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
-                        </div>
-                      )}
                     </div>
                   );
                 }
@@ -2333,12 +2320,14 @@ const HomePage = ({
                   ? (hookStrat.investedAmount > 0 ? (hookStrat.totalPnl / hookStrat.investedAmount) * 100 : 0)
                   : strategy.pnlPct;
 
-                // Use purchase batches (one per minute) instead of transactions for accuracy
-                const batches = purchaseBatchesByStrategy[strategy.id] || [];
-                const pendingCount = batches.filter(b => !b.filled).length;
-                const filledCount = batches.filter(b => b.filled).length;
+                // "Your best performing strategies" shows FILLED purchases only.
+                // Pending re-buys live exclusively in the Pending orders section, so
+                // the count, stack and modal here all use filled batches only — a
+                // strategy with 1 filled + 1 pending shows as a single filled card
+                // (not "2×"), and 2 filled + 1 pending shows "2×".
+                const allBatches = purchaseBatchesByStrategy[strategy.id] || [];
+                const batches = allBatches.filter(b => b.filled);
                 const isStack = batches.length > 1;
-                const hasMixed = pendingCount > 0 && filledCount > 0;
 
                 const fmtBatchDate = (b) => {
                   if (b.minute === "unknown") return null;
@@ -2354,9 +2343,7 @@ const HomePage = ({
                           <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
                           <p className="text-xs text-slate-600 line-clamp-1">
                             {isStack
-                              ? hasMixed
-                                ? `${filledCount} filled · ${pendingCount} pending · tap to see`
-                                : `${batches.length} purchases · tap to see each`
+                              ? `${batches.length} purchases · tap to see each`
                               : `${strategy.risk_level || 'Balanced'}${strategy.objective ? ` • ${strategy.objective}` : ''}`}
                           </p>
                         </div>
@@ -2413,13 +2400,8 @@ const HomePage = ({
                 if (isStack) {
                   return (
                     <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
-                      {/* Stack shadow layers — purple if pending batch exists, white otherwise */}
-                      {pendingCount > 0 ? (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
-                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
-                      ) : (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      )}
+                      {/* Stack shadow layers — always white (filled-only section) */}
+                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
                       {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
@@ -2427,12 +2409,10 @@ const HomePage = ({
                       <button
                         type="button"
                         onClick={() => setExpandedStratStack({
-                          // For a MIXED strategy (filled + a pending re-buy) the server
-                          // strategy values disagree with the trusted hook/purple card.
-                          // Feed the modal the hook's POSITIONS-only values so the filled
-                          // batch's apportioned P&L matches the card header to the cent.
-                          // Other strategies keep their existing (server) values untouched.
-                          strategy: (hasMixed && hookStrat)
+                          // Feed the modal the hook's POSITIONS-only values so each filled
+                          // batch's apportioned P&L matches the card header. batches is
+                          // already filtered to filled-only, so no pending card appears.
+                          strategy: hookStrat
                             ? { ...strategy, currentValue: hookStrat.positionsValue, investedAmount: Number((hookStrat.positionsValue - hookStrat.unrealizedPnl).toFixed(2)) }
                             : strategy,
                           batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap
@@ -2441,16 +2421,10 @@ const HomePage = ({
                       >
                         {cardInner}
                       </button>
-                      {/* Purchase count badge */}
+                      {/* Filled purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
                         {batches.length}×
                       </div>
-                      {/* Pending indicator if mixed */}
-                      {hasMixed && (
-                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
-                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
-                        </div>
-                      )}
                     </div>
                   );
                 }
