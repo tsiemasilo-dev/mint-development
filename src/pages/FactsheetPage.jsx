@@ -1058,13 +1058,12 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
-            {currentStrategy?.management_fee_bps != null && Number(currentStrategy.management_fee_bps) > 0 ? (
+            {currentStrategy?.management_fee_bps != null && Number(currentStrategy.management_fee_bps) > 0 && (
               <li>• Management fee: {(Number(currentStrategy.management_fee_bps) / 100).toFixed(2)}% per annum</li>
-            ) : currentStrategy?.fee_type === "performance" ? (
-              <li>• Performance fee: 20% of profits</li>
-            ) : null}
-            <li>• Brokerage fee: {(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}% of investment amount</li>
+            )}
+            <li>• Broker fee ({(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}%)</li>
             <li>• Custody fee: R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
+            <li>• Transaction fee ({(feeRates.TRANSACTION_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 2 })}%)</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
