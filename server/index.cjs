@@ -11568,6 +11568,234 @@ setTimeout(() => {
   saveAllParentReturnsEOD();
 }, 90 * 1000);
 
+// ── Strategy Returns Auto-Compute ─────────────────────────────────────────────
+// Computes YTD, 5d, 1m, 6m returns for every active strategy using live prices
+// from stock_intraday_c (Yahoo data — refreshed every 15s during JSE hours).
+//
+// YTD anchor per strategy:
+//   • Strategy created BEFORE this year → anchor = earliest price since Jan 1
+//   • Strategy created THIS year        → anchor = earliest price since created_at
+//   This means a newly-launched strategy shows returns from its own launch date.
+//
+// Runs twice per JSE trading day (Mon–Fri):
+//   Market open:  09:00 SAST (07:00 UTC)
+//   Market close: 17:30 SAST (15:30 UTC)
+// Also fires 60 s after server start so today's records are always seeded.
+
+async function computeAndSaveStrategyReturns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) { console.warn('[strategy-returns] No Supabase client'); return; }
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const currentYear = now.getUTCFullYear();
+  const yearStart   = `${currentYear}-01-01`;
+
+  const daysAgo = (n) => {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().split('T')[0];
+  };
+
+  const periods = { '5d': daysAgo(5), '1m': daysAgo(30), '6m': daysAgo(180) };
+
+  try {
+    console.log(`[strategy-returns] ${todayStr} — computing strategy returns...`);
+
+    // 1. Fetch all active strategies with holdings + creation date
+    const { data: strategies, error: stratErr } = await db
+      .from('strategies_c')
+      .select('id, name, holdings, created_at')
+      .eq('status', 'active');
+
+    if (stratErr || !strategies?.length) {
+      if (stratErr) console.error('[strategy-returns] Fetch error:', stratErr.message);
+      else console.warn('[strategy-returns] No active strategies found');
+      return;
+    }
+
+    // 2. Parse holdings for each strategy; collect all unique base symbols.
+    //    Holdings may store "SHP" or "SHP.JO" — we keep the base key for lookup
+    //    but also build a .JO variant so we can match stock_intraday_c either way.
+    const allBaseSymbols = new Set();
+    const strategyHoldingsMap = {};
+
+    for (const strategy of strategies) {
+      const parsed = [];
+      for (const h of (strategy.holdings || [])) {
+        const raw  = (h.symbol || h.ticker || '').trim().toUpperCase();
+        const base = raw.split('.')[0]; // "SHP.JO" → "SHP", "SHP" → "SHP"
+        if (!base) continue;
+        const shares = Number(h.shares || h.quantity || 1);
+        allBaseSymbols.add(base);
+        parsed.push({ symbol: base, shares });
+      }
+      strategyHoldingsMap[strategy.id] = parsed;
+    }
+
+    if (!allBaseSymbols.size) {
+      console.warn('[strategy-returns] No symbols in strategy holdings'); return;
+    }
+
+    const baseSymbolList = Array.from(allBaseSymbols);
+    // Query both bare ("SHP") and JSE Yahoo format ("SHP.JO") to cover whatever
+    // format securities_c / stock_intraday_c uses.
+    const querySymbolList = [
+      ...baseSymbolList,
+      ...baseSymbolList.map(s => `${s}.JO`),
+    ];
+
+    // Normalise a raw DB symbol to its base key for map lookups
+    const toBase = (sym) => sym.split('.')[0].toUpperCase();
+
+    // 3. Latest price per base-symbol (most recent intraday record)
+    const { data: latestRows } = await db
+      .from('stock_intraday_c')
+      .select('symbol, current_price')
+      .in('symbol', querySymbolList)
+      .order('timestamp', { ascending: false });
+
+    const latestPriceMap = {}; // base → price in cents
+    for (const row of (latestRows || [])) {
+      const base = toBase(row.symbol);
+      if (!latestPriceMap[base] && row.current_price > 0)
+        latestPriceMap[base] = row.current_price;
+    }
+
+    // 4. Period anchor prices (5d, 1m, 6m) — shared across all strategies
+    const periodAnchorMaps = {};
+    for (const [period, anchorDate] of Object.entries(periods)) {
+      const { data: rows } = await db
+        .from('stock_intraday_c')
+        .select('symbol, current_price')
+        .in('symbol', querySymbolList)
+        .gte('timestamp', anchorDate)
+        .order('timestamp', { ascending: true });
+
+      periodAnchorMaps[period] = {};
+      for (const row of (rows || [])) {
+        const base = toBase(row.symbol);
+        if (!periodAnchorMaps[period][base] && row.current_price > 0)
+          periodAnchorMaps[period][base] = row.current_price;
+      }
+    }
+
+    // 5. Helper — weighted basket return between anchor map and current prices
+    const basketReturn = (holdings, anchorMap) => {
+      let startVal = 0, endVal = 0, matched = 0;
+      for (const { symbol, shares } of holdings) {
+        const anchorPrice  = anchorMap[symbol];
+        const currentPrice = latestPriceMap[symbol];
+        if (!anchorPrice || !currentPrice) continue;
+        startVal += shares * anchorPrice;
+        endVal   += shares * currentPrice;
+        matched++;
+      }
+      if (!startVal || !matched) return null;
+      return ((endVal - startVal) / startVal) * 100;
+    };
+
+    // 6. Compute + write per strategy
+    let saved = 0, failed = 0;
+
+    for (const strategy of strategies) {
+      try {
+        const holdings = strategyHoldingsMap[strategy.id];
+        if (!holdings?.length) continue;
+
+        const symbols = holdings.map(h => h.symbol); // base symbols
+        // Both bare and .JO for per-strategy YTD query
+        const ytdQuerySymbols = [...symbols, ...symbols.map(s => `${s}.JO`)];
+
+        // YTD anchor: strategy's own launch date if created this year, else Jan 1
+        const createdDate   = strategy.created_at ? strategy.created_at.split('T')[0] : yearStart;
+        const ytdAnchorDate = createdDate >= yearStart ? createdDate : yearStart;
+
+        // Fetch earliest intraday price on or after the YTD anchor date
+        const { data: ytdRows } = await db
+          .from('stock_intraday_c')
+          .select('symbol, current_price')
+          .in('symbol', ytdQuerySymbols)
+          .gte('timestamp', ytdAnchorDate)
+          .order('timestamp', { ascending: true });
+
+        const ytdAnchorMap = {};
+        for (const row of (ytdRows || [])) {
+          const base = toBase(row.symbol);
+          if (!ytdAnchorMap[base] && row.current_price > 0)
+            ytdAnchorMap[base] = row.current_price;
+        }
+
+        const ytd = basketReturn(holdings, ytdAnchorMap);
+        const r5d = basketReturn(holdings, periodAnchorMaps['5d']);
+        const r1m = basketReturn(holdings, periodAnchorMaps['1m']);
+        const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
+
+        const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
+
+        // Delete any existing row for this strategy + today, then insert fresh.
+        // Avoids needing a unique constraint on (strategy_id, as_of_date).
+        await db
+          .from('strategies_returns_c')
+          .delete()
+          .eq('strategy_id', strategy.id)
+          .eq('as_of_date', todayStr);
+
+        const { error: insertErr } = await db
+          .from('strategies_returns_c')
+          .insert({
+            strategy_id: strategy.id,
+            as_of_date:  todayStr,
+            ytd_pct:     fmt(ytd),
+            '5d_pct':    fmt(r5d),
+            '1m_pct':    fmt(r1m),
+            '6m_pct':    fmt(r6m),
+          });
+
+        if (insertErr) {
+          console.error(`[strategy-returns] Insert failed for "${strategy.name}":`, insertErr.message);
+          failed++;
+        } else {
+          console.log(
+            `[strategy-returns] ${strategy.name}: ` +
+            `YTD=${ytd != null ? ytd.toFixed(2)+'%' : 'n/a'} ` +
+            `5d=${r5d != null ? r5d.toFixed(2)+'%' : 'n/a'} ` +
+            `1m=${r1m != null ? r1m.toFixed(2)+'%' : 'n/a'} ` +
+            `6m=${r6m != null ? r6m.toFixed(2)+'%' : 'n/a'} ` +
+            `(anchor: ${ytdAnchorDate})`
+          );
+          saved++;
+        }
+      } catch (strategyErr) {
+        console.error(`[strategy-returns] Error for "${strategy.name}":`, strategyErr.message);
+        failed++;
+      }
+    }
+
+    console.log(`[strategy-returns] Done — saved: ${saved}, failed: ${failed} / ${strategies.length}`);
+  } catch (err) {
+    console.error('[strategy-returns] Unexpected error:', err.message);
+  }
+}
+
+// Market open  — 09:00 SAST (07:00 UTC) Mon–Fri
+cron.schedule('0 7 * * 1-5', () => {
+  console.log('[strategy-returns-cron] Market open — computing strategy returns');
+  computeAndSaveStrategyReturns();
+});
+
+// Market close — 17:30 SAST (15:30 UTC) Mon–Fri
+cron.schedule('30 15 * * 1-5', () => {
+  console.log('[strategy-returns-cron] Market close — computing strategy returns');
+  computeAndSaveStrategyReturns();
+});
+
+// Startup seed — runs 60 s after server start so today's records are always current
+setTimeout(() => {
+  console.log('[strategy-returns-cron] Startup — seeding today\'s strategy returns');
+  computeAndSaveStrategyReturns();
+}, 60 * 1000);
+
 // ── IT Incident Register API ──────────────────────────────────────────────────
 // Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
 
