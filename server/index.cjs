@@ -680,11 +680,6 @@ try {
   console.warn('Supabase client not available:', e.message);
 }
 
-const { startMintMorningsListener, sendTestEmail } = require('./mintMorningsCron.cjs');
-if (supabaseAdmin) {
-  // startMintMorningsListener(supabaseAdmin);
-}
-
 function getAuthenticatedDb(token) {
   if (supabaseAdmin) return supabaseAdmin;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return supabase;
@@ -7685,49 +7680,6 @@ app.post("/api/webhooks/broker", async (req, res) => {
     res.json({ received: true, processed: true });
   } catch (error) {
     console.error("[Broker Webhook] Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/test-mint-mornings-single', async (req, res) => {
-  try {
-    const { email, titleSearch } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-    const db = supabaseAdmin || supabase;
-    if (!db) return res.status(500).json({ error: 'No database connection' });
-    const result = await sendTestEmail(db, email, titleSearch);
-    res.json(result);
-  } catch (error) {
-    console.error('[MINT MORNINGS] Test single error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/test-mint-mornings', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const db = supabaseAdmin || supabase;
-    if (!db) return res.status(500).json({ error: 'No database connection' });
-
-    const { data: { user }, error: authError } = await db.auth.getUser(token);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const { data: profile } = await db.from('profiles').select('role').eq('id', user.id).single();
-    if (!profile || profile.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    console.log(`[MINT MORNINGS] Manual test trigger by admin ${user.email}`);
-    const result = await sendTestEmail(db, user.email);
-    res.json({ success: true, message: 'MINT MORNINGS test email sent to admin', result });
-  } catch (error) {
-    console.error('[MINT MORNINGS] Test trigger error:', error);
     res.status(500).json({ error: error.message });
   }
 });
