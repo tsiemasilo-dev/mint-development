@@ -11569,18 +11569,48 @@ setTimeout(() => {
 }, 90 * 1000);
 
 // ── Strategy Returns Auto-Compute ─────────────────────────────────────────────
-// Computes YTD, 5d, 1m, 6m returns for every active strategy using live prices
-// from stock_intraday_c (Yahoo data — refreshed every 15s during JSE hours).
+// Computes YTD, 5d, 1m, 6m returns for every active strategy.
 //
-// YTD anchor per strategy:
-//   • Strategy created BEFORE this year → anchor = earliest price since Jan 1
-//   • Strategy created THIS year        → anchor = earliest price since created_at
-//   This means a newly-launched strategy shows returns from its own launch date.
+// YTD method: uses securities_c.ytd_performance (the authoritative field
+// maintained by the price feed) to back-compute each stock's implied Jan 1
+// price: jan1Price = last_price / (1 + ytd_performance/100).
+// This is reliable regardless of how far back stock_intraday_c retains data.
 //
-// Runs twice per JSE trading day (Mon–Fri):
+// 5d / 1m / 6m: sourced from stock_intraday_c historical rows with a slightly
+// widened lookback window (+2 days) to skip weekends/holidays cleanly.
+//
+// Runs twice per JSE trading day (Mon–Fri, non-holiday):
 //   Market open:  09:00 SAST (07:00 UTC)
 //   Market close: 17:30 SAST (15:30 UTC)
-// Also fires 60 s after server start so today's records are always seeded.
+// Also fires 60 s after server start (trading days only).
+
+// JSE public holidays — skip these even on weekdays
+const JSE_HOLIDAYS = new Set([
+  // 2025
+  '2025-01-01','2025-03-21','2025-04-18','2025-04-21','2025-04-28',
+  '2025-05-01','2025-06-16','2025-08-09','2025-09-24','2025-12-16',
+  '2025-12-25','2025-12-26',
+  // 2026
+  '2026-01-01','2026-03-21','2026-04-03','2026-04-06','2026-04-27',
+  '2026-05-01','2026-06-16','2026-08-10','2026-09-24','2026-12-16',
+  '2026-12-25','2026-12-26',
+  // 2027
+  '2027-01-01','2027-03-21','2027-03-26','2027-03-29','2027-04-27',
+  '2027-05-01','2027-06-16','2027-08-09','2027-09-24','2027-12-16',
+  '2027-12-25','2027-12-27',
+]);
+
+function isJseTradingDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return false;
+  if (JSE_HOLIDAYS.has(dateStr)) return false;
+  return true;
+}
+
+// Module-level cache for Dec-31-2025 anchor prices (never changes — fetch once per server lifetime).
+// Keys are base symbols (e.g. "NED"), values are closing prices in ZAp (cents).
+const _ytdAnchorCache = {};
 
 async function computeAndSaveStrategyReturns() {
   const db = supabaseAdmin || supabase;
@@ -11588,8 +11618,12 @@ async function computeAndSaveStrategyReturns() {
 
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
-  const currentYear = now.getUTCFullYear();
-  const yearStart   = `${currentYear}-01-01`;
+
+  // Skip weekends and JSE public holidays — no market data, no point running
+  if (!isJseTradingDay(todayStr)) {
+    console.log(`[strategy-returns] ${todayStr} is not a JSE trading day — skipping`);
+    return;
+  }
 
   const daysAgo = (n) => {
     const d = new Date(now);
@@ -11597,15 +11631,17 @@ async function computeAndSaveStrategyReturns() {
     return d.toISOString().split('T')[0];
   };
 
-  const periods = { '5d': daysAgo(5), '1m': daysAgo(30), '6m': daysAgo(180) };
+  // Use slightly wider windows (+2 days) so the anchor lands on a trading day
+  // even when the nominal boundary falls on a weekend or public holiday.
+  const periods = { '5d': daysAgo(7), '1m': daysAgo(32), '6m': daysAgo(182) };
 
   try {
     console.log(`[strategy-returns] ${todayStr} — computing strategy returns...`);
 
-    // 1. Fetch all active strategies with holdings + creation date
+    // 1. Fetch all active strategies with holdings
     const { data: strategies, error: stratErr } = await db
       .from('strategies_c')
-      .select('id, name, holdings, created_at')
+      .select('id, name, holdings')
       .eq('status', 'active');
 
     if (stratErr || !strategies?.length) {
@@ -11614,9 +11650,7 @@ async function computeAndSaveStrategyReturns() {
       return;
     }
 
-    // 2. Parse holdings for each strategy; collect all unique base symbols.
-    //    Holdings may store "SHP" or "SHP.JO" — we keep the base key for lookup
-    //    but also build a .JO variant so we can match stock_intraday_c either way.
+    // 2. Parse holdings — normalise all symbols to base form (no ".JO" suffix)
     const allBaseSymbols = new Set();
     const strategyHoldingsMap = {};
 
@@ -11624,7 +11658,7 @@ async function computeAndSaveStrategyReturns() {
       const parsed = [];
       for (const h of (strategy.holdings || [])) {
         const raw  = (h.symbol || h.ticker || '').trim().toUpperCase();
-        const base = raw.split('.')[0]; // "SHP.JO" → "SHP", "SHP" → "SHP"
+        const base = raw.split('.')[0]; // "NED.JO" → "NED"
         if (!base) continue;
         const shares = Number(h.shares || h.quantity || 1);
         allBaseSymbols.add(base);
@@ -11638,33 +11672,88 @@ async function computeAndSaveStrategyReturns() {
     }
 
     const baseSymbolList = Array.from(allBaseSymbols);
-    // Query both bare ("SHP") and JSE Yahoo format ("SHP.JO") to cover whatever
-    // format securities_c / stock_intraday_c uses.
+    // Query both bare ("NED") and JSE format ("NED.JO") — DB may use either
     const querySymbolList = [
       ...baseSymbolList,
       ...baseSymbolList.map(s => `${s}.JO`),
     ];
 
-    // Normalise a raw DB symbol to its base key for map lookups
     const toBase = (sym) => sym.split('.')[0].toUpperCase();
 
-    // 3. Latest price per base-symbol (most recent intraday record)
+    // 2b. Populate Dec-31-2025 YTD anchor prices from Yahoo Finance (cached per server lifetime).
+    //     Walk back up to 7 calendar days to find the last JSE trading close on or before Dec 31.
+    const missingAnchorSymbols = baseSymbolList.filter(s => !_ytdAnchorCache[s]);
+    if (missingAnchorSymbols.length) {
+      console.log(`[strategy-returns] Fetching Dec-31-2025 anchor prices for ${missingAnchorSymbols.length} symbol(s)…`);
+      const DEC31 = '2025-12-31';
+      const p1 = Math.floor(new Date('2025-12-24T00:00:00Z').getTime() / 1000);
+      const p2 = Math.floor(new Date('2026-01-02T23:59:59Z').getTime() / 1000);
+      await Promise.all(missingAnchorSymbols.map(async (base) => {
+        try {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${base}.JO?interval=1d&period1=${p1}&period2=${p2}`;
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find the last close on or before Dec 31 2025
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= DEC31 && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) {
+            _ytdAnchorCache[base] = bestPrice;
+            console.log(`[strategy-returns] Anchor ${base}: ${bestPrice}c`);
+          } else {
+            console.warn(`[strategy-returns] No Dec-31 anchor for ${base}`);
+          }
+        } catch (e) {
+          console.warn(`[strategy-returns] Anchor fetch failed for ${base}: ${e.message}`);
+        }
+      }));
+    }
+
+    // 3. Fetch securities_c for current last_price (used for YTD current value + period calcs)
+    const { data: securitiesRows } = await db
+      .from('securities_c')
+      .select('symbol, last_price, ytd_performance')
+      .in('symbol', querySymbolList);
+
+    const securitiesMap = {}; // base → { last_price (cents), ytd_performance (%) }
+    for (const row of (securitiesRows || [])) {
+      const base = toBase(row.symbol);
+      if (!securitiesMap[base] && row.last_price > 0) {
+        securitiesMap[base] = {
+          last_price:      Number(row.last_price),
+          ytd_performance: Number(row.ytd_performance ?? 0),
+        };
+      }
+    }
+
+    // 4. Latest intraday price per base-symbol (used for 5d / 1m / 6m current value)
     const { data: latestRows } = await db
       .from('stock_intraday_c')
       .select('symbol, current_price')
       .in('symbol', querySymbolList)
       .order('timestamp', { ascending: false });
 
-    const latestPriceMap = {}; // base → price in cents
+    const latestPriceMap = {}; // base → cents
     for (const row of (latestRows || [])) {
       const base = toBase(row.symbol);
       if (!latestPriceMap[base] && row.current_price > 0)
         latestPriceMap[base] = row.current_price;
     }
 
-    // 4. Period anchor prices (5d, 1m, 6m) — shared across all strategies
+    // 5. Period anchor prices (5d, 1m) from stock_intraday_c historical rows.
+    //    We take the FIRST record on or after the anchor date so we get the opening
+    //    price of the nearest trading day — no weekend/holiday data needed.
+    //    6m uses Yahoo Finance (stock_intraday_c is periodically pruned; 6m needs ~182 days of history).
     const periodAnchorMaps = {};
     for (const [period, anchorDate] of Object.entries(periods)) {
+      if (period === '6m') continue; // handled separately via Yahoo Finance
+
       const { data: rows } = await db
         .from('stock_intraday_c')
         .select('symbol, current_price')
@@ -11680,7 +11769,42 @@ async function computeAndSaveStrategyReturns() {
       }
     }
 
-    // 5. Helper — weighted basket return between anchor map and current prices
+    // 5b. 6m anchor prices from Yahoo Finance (reliable historical data back 6+ months).
+    //     Yahoo Finance returns JSE prices in ZAp (South African cents), same unit as securities_c.last_price.
+    const yahoo6mAnchorDate = periods['6m']; // daysAgo(182) e.g. "2025-12-18"
+    const yahoo6mAnchorMap = {};
+    try {
+      const yahoo6mFetches = baseSymbolList.map(async (base) => {
+        const yahooSym = `${base}.JO`;
+        const p1 = Math.floor(new Date(yahoo6mAnchorDate + 'T00:00:00Z').getTime() / 1000) - 7 * 86400;
+        const p2 = Math.floor(new Date(yahoo6mAnchorDate + 'T23:59:59Z').getTime() / 1000) + 86400;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&period1=${p1}&period2=${p2}`;
+        try {
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find last close on or before yahoo6mAnchorDate
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= yahoo6mAnchorDate && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) yahoo6mAnchorMap[base] = bestPrice;
+        } catch (e) {
+          console.warn(`[strategy-returns] Yahoo 6m fetch failed for ${yahooSym}: ${e.message}`);
+        }
+      });
+      await Promise.all(yahoo6mFetches);
+    } catch (e) {
+      console.warn('[strategy-returns] Yahoo 6m anchor fetch error:', e.message);
+    }
+    periodAnchorMaps['6m'] = yahoo6mAnchorMap;
+    console.log(`[strategy-returns] 6m anchor (${yahoo6mAnchorDate}) via Yahoo: ${Object.keys(yahoo6mAnchorMap).length}/${baseSymbolList.length} symbols resolved`);
+
+    // 6a. Helper — period basket return (5d/1m/6m) using intraday anchor → latest price
     const basketReturn = (holdings, anchorMap) => {
       let startVal = 0, endVal = 0, matched = 0;
       for (const { symbol, shares } of holdings) {
@@ -11695,7 +11819,25 @@ async function computeAndSaveStrategyReturns() {
       return ((endVal - startVal) / startVal) * 100;
     };
 
-    // 6. Compute + write per strategy
+    // 6b. YTD basket return using real Dec-31-2025 closes from Yahoo Finance as anchor.
+    //    Formula: ytd = (Σ shares × last_price) / (Σ shares × dec31Price) − 1
+    //    Anchor prices are fetched once and cached in _ytdAnchorCache for the server lifetime.
+    //    Current prices come from securities_c.last_price (kept live by the price feed).
+    const basketYtdReturn = (holdings) => {
+      let todayVal = 0, anchorVal = 0, matched = 0;
+      for (const { symbol, shares } of holdings) {
+        const anchorPrice   = _ytdAnchorCache[symbol];
+        const sec           = securitiesMap[symbol];
+        if (!anchorPrice || !sec?.last_price) continue;
+        anchorVal += shares * anchorPrice;
+        todayVal  += shares * sec.last_price;
+        matched++;
+      }
+      if (!anchorVal || !matched) return null;
+      return ((todayVal / anchorVal) - 1) * 100;
+    };
+
+    // 7. Compute + write per strategy
     let saved = 0, failed = 0;
 
     for (const strategy of strategies) {
@@ -11703,38 +11845,14 @@ async function computeAndSaveStrategyReturns() {
         const holdings = strategyHoldingsMap[strategy.id];
         if (!holdings?.length) continue;
 
-        const symbols = holdings.map(h => h.symbol); // base symbols
-        // Both bare and .JO for per-strategy YTD query
-        const ytdQuerySymbols = [...symbols, ...symbols.map(s => `${s}.JO`)];
-
-        // YTD anchor: strategy's own launch date if created this year, else Jan 1
-        const createdDate   = strategy.created_at ? strategy.created_at.split('T')[0] : yearStart;
-        const ytdAnchorDate = createdDate >= yearStart ? createdDate : yearStart;
-
-        // Fetch earliest intraday price on or after the YTD anchor date
-        const { data: ytdRows } = await db
-          .from('stock_intraday_c')
-          .select('symbol, current_price')
-          .in('symbol', ytdQuerySymbols)
-          .gte('timestamp', ytdAnchorDate)
-          .order('timestamp', { ascending: true });
-
-        const ytdAnchorMap = {};
-        for (const row of (ytdRows || [])) {
-          const base = toBase(row.symbol);
-          if (!ytdAnchorMap[base] && row.current_price > 0)
-            ytdAnchorMap[base] = row.current_price;
-        }
-
-        const ytd = basketReturn(holdings, ytdAnchorMap);
+        const ytd = basketYtdReturn(holdings);
         const r5d = basketReturn(holdings, periodAnchorMaps['5d']);
         const r1m = basketReturn(holdings, periodAnchorMaps['1m']);
         const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
 
         const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
 
-        // Delete any existing row for this strategy + today, then insert fresh.
-        // Avoids needing a unique constraint on (strategy_id, as_of_date).
+        // Delete any existing row for today first (avoids duplicates)
         await db
           .from('strategies_returns_c')
           .delete()
@@ -11761,8 +11879,7 @@ async function computeAndSaveStrategyReturns() {
             `YTD=${ytd != null ? ytd.toFixed(2)+'%' : 'n/a'} ` +
             `5d=${r5d != null ? r5d.toFixed(2)+'%' : 'n/a'} ` +
             `1m=${r1m != null ? r1m.toFixed(2)+'%' : 'n/a'} ` +
-            `6m=${r6m != null ? r6m.toFixed(2)+'%' : 'n/a'} ` +
-            `(anchor: ${ytdAnchorDate})`
+            `6m=${r6m != null ? r6m.toFixed(2)+'%' : 'n/a'}`
           );
           saved++;
         }
@@ -11790,7 +11907,7 @@ cron.schedule('30 15 * * 1-5', () => {
   computeAndSaveStrategyReturns();
 });
 
-// Startup seed — runs 60 s after server start so today's records are always current
+// Startup seed — runs 60 s after server start (trading days only)
 setTimeout(() => {
   console.log('[strategy-returns-cron] Startup — seeding today\'s strategy returns');
   computeAndSaveStrategyReturns();
