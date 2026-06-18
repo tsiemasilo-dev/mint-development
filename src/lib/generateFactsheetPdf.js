@@ -200,7 +200,7 @@ async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate, feeRates
   const reservePct = +((feeRates.CASH_BUFFER_RATE       ?? 0.08)   * 100).toFixed(2);
   // override the hardcoded "Fees & Charges" section body with live values
   function buildFeesChargesBody() {
-    return `Transaction fee: ${txnPct}% per trade executed within the portfolio. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. Execution reserve: ${reservePct}% cash buffer held for settlement. A full schedule of fees is available on request from MINT.`;
+    return `Transaction fee: ${txnPct}% per trade executed within the portfolio. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. Execution reserve: ${reservePct}% cash buffer held for settlement. No management, AUM, or performance fee is charged. A full schedule of fees is available on request from MINT.`;
   }
   // Re-declare sections here so we can inject dynamic fee text
   doc.addPage();
@@ -570,7 +570,7 @@ export default async function generateFactsheetPdf({
     { title: "Custody & Asset Segregation", body: "Client assets are held via an appointed Central Securities Depository Participant (CSDP) through its appointed nominee custodian. Assets are fully segregated from MINT's own assets at all times." },
     { title: "Performance Disclosure", body: "Performance may include historical or back-tested results. Back-tested performance does not represent actual trading and is constructed with hindsight. Performance is gross of fees unless stated. Individual returns may differ based on timing, costs, and taxes." },
     { title: "Risk Warning", body: "Past performance does not guarantee future results. Capital is not guaranteed. Strategies are subject to Market, Equity, Volatility, Leverage, Liquidity, Counterparty, Concentration, and Foreign Market risks. See Page 2 for full risk factor disclosures." },
-    { title: "Fees Summary", body: `Transaction fee: ${_txnPct}% per trade. Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). Execution reserve: ${_reservePct}% cash buffer. No management or AUM fee. Full fee schedule available on request.` },
+    { title: "Fees Summary", body: `Transaction fee: ${_txnPct}% per trade. Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). Execution reserve: ${_reservePct}% cash buffer. No management, AUM, or performance fee. Full fee schedule available on request.` },
     { title: "Full Disclosures", body: "Complete regulatory disclosures, risk factors, legal notices, and the full disclaimer are contained on Page 2 of this factsheet. Please read all disclosures carefully before investing." },
   ];
 
