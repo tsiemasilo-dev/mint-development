@@ -1246,40 +1246,47 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                   <>
                     <style>{"@keyframes poaspin{to{transform:rotate(360deg)}}"}</style>
                     <div className="animate-fade-in delay-2">
-                      <label htmlFor="addr-country">Residential Address</label>
-                      {/* Country (with flag) → drives whether the province dropdown shows. */}
-                      <div className="glass-field" style={{ display: "flex", alignItems: "center", padding: 0, overflow: "hidden", marginBottom: "10px" }}>
-                        <span style={{ fontSize: "18px", padding: "0 2px 0 12px", lineHeight: 1 }} aria-hidden="true">
-                          {(ADDRESS_COUNTRIES.find((c) => c.name === addrCountry) || ADDRESS_COUNTRIES[0]).flag}
-                        </span>
-                        <select
-                          id="addr-country"
-                          value={addrCountry}
-                          onChange={(e) => { setAddrCountry(e.target.value); if (e.target.value !== "South Africa") setAddrProvince(""); }}
-                          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
-                        >
-                          {ADDRESS_COUNTRIES.map((c) => (
-                            <option key={c.name} value={c.name}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Province only for South Africa. */}
-                      {addrCountry === "South Africa" && (
-                        <div className="glass-field" style={{ padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                      <label htmlFor="addr-province">Residential Address</label>
+                      {/* Province bar with a small flag country picker tucked in the left
+                         corner (mirrors postal on the right of the next bar). South Africa
+                         shows the province dropdown; other countries show the country name. */}
+                      <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                        <div style={{ position: "relative", flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: "18px", lineHeight: 1, pointerEvents: "none" }} aria-hidden="true">
+                            {(ADDRESS_COUNTRIES.find((c) => c.name === addrCountry) || ADDRESS_COUNTRIES[0]).flag}
+                          </span>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 60%)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", right: 5, bottom: 9, pointerEvents: "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+                          <select
+                            id="addr-country"
+                            aria-label="Country"
+                            value={addrCountry}
+                            onChange={(e) => { setAddrCountry(e.target.value); if (e.target.value !== "South Africa") setAddrProvince(""); }}
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                          >
+                            {ADDRESS_COUNTRIES.map((c) => (
+                              <option key={c.name} value={c.name}>{c.flag}  {c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
+                        {addrCountry === "South Africa" ? (
                           <select
                             id="addr-province"
                             value={addrProvince}
                             onChange={(e) => setAddrProvince(e.target.value)}
-                            style={{ width: "100%", border: "none", background: "transparent", padding: "12px 12px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
+                            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
                           >
                             <option value="">Province</option>
                             {["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"].map((p) => (
                               <option key={p} value={p}>{p}</option>
                             ))}
                           </select>
-                        </div>
-                      )}
+                        ) : (
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", padding: "12px 10px", fontSize: "14px", color: "hsl(270 30% 30%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {addrCountry}
+                          </div>
+                        )}
+                      </div>
 
                       <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
                         <input
@@ -1312,47 +1319,40 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                       </p>
                     </div>
 
-                    {/* Proof of address — upload drop-zone */}
+                    {/* Proof of address — compact single-line upload */}
                     <div className="animate-fade-in delay-2">
                       <label htmlFor="poa-upload">Proof of address</label>
                       <label
                         htmlFor="poa-upload"
+                        className="glass-field"
                         style={{
-                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                          gap: "8px", textAlign: "center", padding: "20px 16px", borderRadius: "16px",
+                          display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px",
                           cursor: poaUploading ? "wait" : "pointer",
-                          border: poaUrl ? "1.5px solid hsl(160 50% 75%)" : "1.5px dashed hsl(270 35% 80%)",
-                          background: poaUrl ? "hsl(160 60% 97%)" : "hsl(270 60% 99%)",
-                          transition: "border-color 0.2s ease, background 0.2s ease",
+                          border: poaUrl ? "1px solid hsl(160 50% 80%)" : undefined,
+                          background: poaUrl ? "hsl(160 60% 98%)" : undefined,
                         }}
                       >
-                        <div style={{
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          width: "44px", height: "44px", borderRadius: "999px",
-                          background: poaUrl ? "hsl(160 55% 90%)" : "hsl(270 60% 95%)",
-                        }}>
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "999px", flexShrink: 0, background: poaUrl ? "hsl(160 55% 91%)" : "hsl(270 60% 95%)" }}>
                           {poaUploading ? (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2.2" strokeLinecap="round" style={{ animation: "poaspin 0.8s linear infinite" }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2.4" strokeLinecap="round" style={{ animation: "poaspin 0.8s linear infinite" }}>
                               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                             </svg>
                           ) : poaUrl ? (
-                            <CheckCircleIcon width={24} height={24} style={{ color: "hsl(160 55% 40%)" }} />
+                            <CheckCircleIcon width={16} height={16} style={{ color: "hsl(160 55% 40%)" }} />
                           ) : (
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                               <polyline points="17 8 12 3 7 8" />
                               <line x1="12" y1="3" x2="12" y2="15" />
                             </svg>
                           )}
-                        </div>
-                        <div>
-                          <p style={{ fontSize: "13.5px", fontWeight: 600, color: poaUrl ? "hsl(160 45% 32%)" : "hsl(270 35% 35%)", margin: 0, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload proof of address"}
-                          </p>
-                          <p style={{ fontSize: "11px", color: poaUrl ? "hsl(160 30% 45%)" : "hsl(270 15% 60%)", margin: "3px 0 0" }}>
-                            {poaUrl ? "Tap to replace" : "Bank statement or utility bill · PDF or photo"}
-                          </p>
-                        </div>
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: "13px", fontWeight: 500, color: poaUrl ? "hsl(160 45% 33%)" : "hsl(270 30% 40%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload proof of address"}
+                        </span>
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: poaUrl ? "hsl(160 40% 45%)" : "hsl(270 40% 58%)", flexShrink: 0 }}>
+                          {poaUrl ? "Replace" : "PDF · photo"}
+                        </span>
                       </label>
                       <input id="poa-upload" type="file" accept=".pdf,image/*" style={{ display: "none" }} disabled={poaUploading} onChange={handlePoaUpload} />
                       {poaError && (
