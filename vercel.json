@@ -1,10 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/mint-mornings",
-      "schedule": "0 5 * * *"
-    },
-    {
       "path": "/api/gift/expire",
       "schedule": "*/15 * * * *"
     }

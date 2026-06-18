@@ -29,7 +29,6 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **Minimum Investment Enforcement**: Calculates sums raw `shares × (last_price/100)`.
 - **Notification System**: Centralized real-time notifications via Supabase subscriptions, grouped by date, with swipe-to-delete and "mark all as read" functionality.
 - **Settlement Config**: `fullyIntegrated: true` from `/api/settlement/config.js`. Portfolio data based on `stock_holdings` records and strategy matching.
-- **MINT MORNINGS Scheduled Email**: Daily newsletter sender using `server/mintMorningsCron.cjs` and Vercel Cron.
 - **Filter Persistence**: `src/lib/usePersistedFilters.js` for localStorage-based filter save/restore across `marketsInvest`, `marketsStrategies`, and `openStrategies` contexts.
 - **Portfolio Equity Curve Chart**: Displays P&L equity curve on the home page balance card (`SwipeableBalanceCard.jsx`) with various timeframes. Charts show gain/loss starting from R0 and can be anchored to the user's purchase date.
 - **PDF Factsheet Generation**: Client-side PDF generation (`generateFactsheetPdf.js`) for strategy factsheets, including personalized investment details.
@@ -55,5 +54,5 @@ Mint Auth is a React authentication application built with Vite, Tailwind CSS, a
 - **TruID Connect**: Identity verification and bank linking service.
 - **Sumsub**: KYC (Know Your Customer) verification service.
 - **Yahoo Finance (via custom proxy)**: For fetching live stock market data.
-- **Resend**: Email service for transactional emails (Mint Mornings, order notifications).
+- **Resend**: Email service for transactional emails (order notifications).
 - **jsPDF + jspdf-autotable**: For client-side PDF generation (factsheets).

@@ -72,7 +72,7 @@ Mint is a wealth and investment platform targeting South African retail investor
 | **Express** | 5.2 | REST API server |
 | **Supabase JS** | 2.106 | Database queries, auth, realtime |
 | **Resend** | 6.12 | Transactional email delivery |
-| **node-cron** | 4.2 | Scheduled jobs (Mint Mornings newsletter, gift expiry) |
+| **node-cron** | 4.2 | Scheduled jobs (gift expiry) |
 | **Multer** | 2.1 | File upload handling |
 | **xml2js** | 0.6 | XML parsing (broker webhook payloads) |
 | **ws** | 8.20 | WebSocket transport for Supabase realtime |
@@ -234,7 +234,6 @@ Child accounts have fully isolated portfolios, wallets, and strategy returns —
 ### Scheduled Jobs (Cron)
 | Job | Schedule | Description |
 |---|---|---|
-| Mint Mornings | Daily 06:00 SAST | Curated financial newsletter to all subscribers |
 | Gift Expiry | Every 15 min | Automatically expires unclaimed gifts past their deadline |
 
 ---
@@ -484,7 +483,6 @@ aggregateHoldings(rows) → aggregatedRows
 ### Resend (Email)
 - Order confirmation emails on investment purchase
 - Fill notification emails when broker confirms
-- Mint Mornings daily newsletter (cron-driven)
 - Loan agreement emails
 - Funeral cover policy emails
 - All emails logged to the `order_emails` table
@@ -502,7 +500,6 @@ aggregateHoldings(rows) → aggregatedRows
 mint/
 ├── server/
 │   ├── index.cjs                        # Express API server (all routes)
-│   ├── mintMorningsCron.cjs             # Daily newsletter cron job
 │   ├── truidClient.cjs                  # TruID API client
 │   ├── funeralCoverMigration.cjs        # DB migration script
 │   └── strategySubscriptionMigration.cjs
