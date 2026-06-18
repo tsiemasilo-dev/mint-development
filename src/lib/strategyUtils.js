@@ -103,6 +103,8 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
   if (!holdings.length) {
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
+  // Price map not loaded yet — return null so callers show nothing instead of a stale DB fallback
+  if (!holdingsBySymbol || holdingsBySymbol.size === 0) return null;
   let total = 0;
   let foundAny = false;
   for (const holding of holdings) {
@@ -118,6 +120,7 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     total += shares * pricePerShare;
   }
   if (!foundAny) {
+    // Price map is populated but none matched this strategy's symbols — fall back to DB value
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
   return Math.round(total);
