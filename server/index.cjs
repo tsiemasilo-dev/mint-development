@@ -11712,11 +11712,14 @@ async function computeAndSaveStrategyReturns() {
         latestPriceMap[base] = row.current_price;
     }
 
-    // 5. Period anchor prices (5d, 1m, 6m) from stock_intraday_c historical rows.
+    // 5. Period anchor prices (5d, 1m) from stock_intraday_c historical rows.
     //    We take the FIRST record on or after the anchor date so we get the opening
     //    price of the nearest trading day — no weekend/holiday data needed.
+    //    6m uses Yahoo Finance (stock_intraday_c is periodically pruned; 6m needs ~182 days of history).
     const periodAnchorMaps = {};
     for (const [period, anchorDate] of Object.entries(periods)) {
+      if (period === '6m') continue; // handled separately via Yahoo Finance
+
       const { data: rows } = await db
         .from('stock_intraday_c')
         .select('symbol, current_price')
@@ -11731,6 +11734,41 @@ async function computeAndSaveStrategyReturns() {
           periodAnchorMaps[period][base] = row.current_price;
       }
     }
+
+    // 5b. 6m anchor prices from Yahoo Finance (reliable historical data back 6+ months).
+    //     Yahoo Finance returns JSE prices in ZAp (South African cents), same unit as securities_c.last_price.
+    const yahoo6mAnchorDate = periods['6m']; // daysAgo(182) e.g. "2025-12-18"
+    const yahoo6mAnchorMap = {};
+    try {
+      const yahoo6mFetches = baseSymbolList.map(async (base) => {
+        const yahooSym = `${base}.JO`;
+        const p1 = Math.floor(new Date(yahoo6mAnchorDate + 'T00:00:00Z').getTime() / 1000) - 7 * 86400;
+        const p2 = Math.floor(new Date(yahoo6mAnchorDate + 'T23:59:59Z').getTime() / 1000) + 86400;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&period1=${p1}&period2=${p2}`;
+        try {
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find last close on or before yahoo6mAnchorDate
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= yahoo6mAnchorDate && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) yahoo6mAnchorMap[base] = bestPrice;
+        } catch (e) {
+          console.warn(`[strategy-returns] Yahoo 6m fetch failed for ${yahooSym}: ${e.message}`);
+        }
+      });
+      await Promise.all(yahoo6mFetches);
+    } catch (e) {
+      console.warn('[strategy-returns] Yahoo 6m anchor fetch error:', e.message);
+    }
+    periodAnchorMaps['6m'] = yahoo6mAnchorMap;
+    console.log(`[strategy-returns] 6m anchor (${yahoo6mAnchorDate}) via Yahoo: ${Object.keys(yahoo6mAnchorMap).length}/${baseSymbolList.length} symbols resolved`);
 
     // 6a. Helper — period basket return (5d/1m/6m) using intraday anchor → latest price
     const basketReturn = (holdings, anchorMap) => {
