@@ -1260,7 +1260,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                             id="addr-country"
                             aria-label="Country"
                             value={addrCountry}
-                            onChange={(e) => { setAddrCountry(e.target.value); if (e.target.value !== "South Africa") setAddrProvince(""); }}
+                            onChange={(e) => { setAddrCountry(e.target.value); setAddrProvince(""); }}
                             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", background: "transparent", cursor: "pointer" }}
                           >
                             {ADDRESS_COUNTRIES.map((c) => (
@@ -1282,9 +1282,13 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                             ))}
                           </select>
                         ) : (
-                          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", padding: "12px 10px", fontSize: "14px", color: "hsl(270 30% 30%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {addrCountry}
-                          </div>
+                          <input
+                            id="addr-province"
+                            value={addrProvince}
+                            onChange={(e) => setAddrProvince(e.target.value)}
+                            placeholder="Province / State / Region"
+                            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
+                          />
                         )}
                       </div>
 
@@ -1413,15 +1417,15 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                         // Structured manual entry — all fields + proof of address required.
                         // Province + 4-digit postal only enforced for South Africa.
                         const isSA = addrCountry === "South Africa";
-                        const valid = addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
-                          && (isSA ? (addrProvince && /^\d{4}$/.test(addrPostal)) : true);
+                        const valid = addrProvince.trim() && addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (isSA ? /^\d{4}$/.test(addrPostal) : true);
                         if (!valid) return;
                         finalAddress = isSA
                           ? `${addrProvince}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal}`
-                          : `${addrCountry}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal.trim()}`;
+                          : `${addrProvince.trim()}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal.trim()}, ${addrCountry}`;
                         details = {
                           country: addrCountry,
-                          province: isSA ? addrProvince : "",
+                          province: addrProvince.trim(),
                           city: addrCity.trim(),
                           street: addrStreet.trim(),
                           postal_code: addrPostal.trim(),
@@ -1465,8 +1469,8 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                     }}
                     disabled={addressLoading || ((experianAddresses && experianAddresses.length > 0)
                       ? (!address || address.length < 5)
-                      : !(addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
-                          && (addrCountry === "South Africa" ? (addrProvince && /^\d{4}$/.test(addrPostal)) : true)))}
+                      : !(addrProvince.trim() && addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (addrCountry === "South Africa" ? /^\d{4}$/.test(addrPostal) : true)))}
                   >
                     {addressLoading ? "Saving..." : "Continue"}
                   </button>
