@@ -609,7 +609,7 @@ const WD_CSS = `
 .wd-empty { text-align:center; color:#9a8fc0; font-size:13px; padding:48px 16px; }
 .wd-error { border-radius:14px; background:rgba(212,83,126,0.08); border:0.5px solid rgba(212,83,126,0.3); color:#B23A63; font-size:12.5px; padding:11px 14px; }
 .wd-spin { animation:wd-spin 0.9s linear infinite; }
-.wd-sheet-wrap { position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; }
+.wd-sheet-wrap { position:fixed; inset:0; z-index:2000; display:flex; align-items:flex-end; justify-content:center; }
 .wd-backdrop { position:absolute; inset:0; background:rgba(26,10,58,0.55); backdrop-filter:blur(3px); }
 .wd-sheet { position:relative; display:flex; flex-direction:column; width:100%; max-width:480px; max-height:90vh; max-height:90dvh; border-radius:26px 26px 0 0; background:#fff; padding:20px 20px 0; animation:wd-slideUp 0.26s cubic-bezier(0.34,1.3,0.64,1); box-shadow:0 -8px 40px rgba(26,10,58,0.2); }
 .wd-sheet-scroll { flex:1 1 auto; min-height:0; max-height:60vh; overflow-y:auto; overflow-y:overlay; -webkit-overflow-scrolling:touch; }
