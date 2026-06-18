@@ -635,6 +635,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
                     calculatedMinInvestment: minimumInvestmentAmount,
                     performanceData,
                     timeframeReturns,
+                    feeRates,
                   });
                 } catch (e) {
                   console.error("PDF generation error:", e?.message || e?.toString?.() || e, e?.stack);

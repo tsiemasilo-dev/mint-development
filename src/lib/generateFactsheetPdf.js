@@ -193,7 +193,16 @@ function drawPieChart(doc, slices, cx, cy, r) {
   return legY + 3;
 }
 
-async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
+async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate, feeRates = {}) {
+  const brokerPct  = +((feeRates.BROKER_FEE_RATE      ?? 0.0025) * 100).toFixed(3);
+  const txnPct     = +((feeRates.TRANSACTION_FEE_RATE  ?? 0.038)  * 100).toFixed(2);
+  const custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET     ?? 69);
+  const reservePct = +((feeRates.CASH_BUFFER_RATE       ?? 0.08)   * 100).toFixed(2);
+  // override the hardcoded "Fees & Charges" section body with live values
+  function buildFeesChargesBody() {
+    return `Transaction fee: ${txnPct}% per trade executed within the portfolio. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. Execution reserve: ${reservePct}% cash buffer held for settlement. A full schedule of fees is available on request from MINT.`;
+  }
+  // Re-declare sections here so we can inject dynamic fee text
   doc.addPage();
   fc(doc, C.P); doc.rect(0, 0, PW, HDR, "F");
   fc(doc, C.P_MID); doc.rect(0, 0, PW, 1.8, "F");
@@ -220,7 +229,7 @@ async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate) {
     { title: "Custody & Asset Safekeeping", isDiamond: false, body: "Client assets are held in custody through an appointed Central Securities Depository Participant (CSDP), via its appointed nominee custodian. Client assets remain fully segregated from MINT's own operating assets at all times." },
     { title: "Nature of Investment Strategies", isDiamond: false, body: "Investment strategies are actively managed portfolios where MINT may rebalance, adjust or change portfolio allocations in accordance with the stated strategy mandate. Rebalancing may occur at any time in response to strategic reallocation, tactical positioning, risk management adjustments, or optimisation of portfolio exposures. These strategies are designed to align with defined investment objectives and risk parameters." },
     { title: "Performance Disclosure", isDiamond: false, body: "Performance information may include historical realised performance and back-tested or simulated results. Back-tested performance is hypothetical, constructed with hindsight, and does not represent actual trading results. It may not reflect real-world liquidity constraints, slippage, or execution costs. Past performance, whether actual or simulated, is not a reliable indicator of future performance. Performance shown is gross of fees unless stated. Individual investor returns may differ based on timing, deposits, withdrawals, costs, and applicable taxes." },
-    { title: "Fees & Charges", isDiamond: false, body: "Performance fee: 20% of investment profits. No management or AUM-based fee is charged. Transaction fee: 0.25% per trade executed within the portfolio. Custody and administrative fees are charged per asset and displayed transparently at checkout prior to investment confirmation. A full schedule of fees is available on request from MINT." },
+    { title: "Fees & Charges", isDiamond: false, body: buildFeesChargesBody() },
     { title: "Investment Risk Disclosure", isDiamond: false, body: "The value of investments may increase or decrease and investors may lose part or all of their invested capital. Strategies are subject to: Market Risk, Equity Risk, Volatility Risk, Derivative Risk, Leverage Risk, Liquidity Risk, Counterparty Risk, Concentration Risk, Correlation Risk, Foreign Market Risk, Strategy Risk, Rebalancing Risk, and Model & Back-Test Risk. Where strategies include foreign investments, performance may also be affected by foreign exchange movements, political and regulatory risk, and settlement risk." },
     { title: "Market & Equity Risk", isDiamond: true, body: "Investment strategies are exposed to general market movements. Share prices may fluctuate due to company-specific factors, earnings performance, competitive pressures, or broader macroeconomic and sector conditions. Equity investments may experience periods of significant volatility." },
     { title: "Liquidity & Concentration Risk", isDiamond: true, body: "Liquidity risk arises when securities cannot be bought or sold quickly enough to prevent or minimise losses. In certain market environments, liquidity may deteriorate and trades may execute at prices that differ from expected levels. Concentration risk arises from holding large positions in specific securities, sectors, or regions, increasing sensitivity to adverse events affecting those positions." },
@@ -308,8 +317,14 @@ export default async function generateFactsheetPdf({
   calculatedMinInvestment,
   performanceData,
   timeframeReturns,
+  feeRates = {},
   preOpenedWindow = null,
 }) {
+  // Resolve live fee values — fall back to conservative defaults only if not provided
+  const _brokerPct  = +((feeRates.BROKER_FEE_RATE      ?? 0.0025) * 100).toFixed(3);
+  const _txnPct     = +((feeRates.TRANSACTION_FEE_RATE  ?? 0.038)  * 100).toFixed(2);
+  const _custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET     ?? 69);
+  const _reservePct = +((feeRates.CASH_BUFFER_RATE       ?? 0.08)   * 100).toFixed(2);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   doc.setProperties({ title: `${strategy?.name || "Strategy"} Factsheet`, subject: "MINT Strategy Factsheet", author: "MINT Platforms (Pty) Ltd" });
 
@@ -464,10 +479,12 @@ export default async function generateFactsheetPdf({
   ry += 8;
 
   const feesData = [
-    ["Performance Fee",    "20% of profits"],
-    ["Transaction Fee",    "0.25% / trade"],
-    ["Management Fee",     "None"],
-    ["Custody fee (per asset)", "R69 / asset"],
+    ["Performance Fee",         "20% of profits"],
+    ["Transaction Fee",         `${_txnPct}% / trade`],
+    ["Broker Fee",              `${_brokerPct}% / trade`],
+    ["Management Fee",          "None"],
+    ["Custody fee (per asset)", `R${_custodyAmt} / asset`],
+    ["Execution Reserve",       `${_reservePct}% cash buffer`],
   ];
 
   const feesCardH = 5 + 6 + feesData.length * ROW + 3;
@@ -554,7 +571,7 @@ export default async function generateFactsheetPdf({
     { title: "Custody & Asset Segregation", body: "Client assets are held via an appointed Central Securities Depository Participant (CSDP) through its appointed nominee custodian. Assets are fully segregated from MINT's own assets at all times." },
     { title: "Performance Disclosure", body: "Performance may include historical or back-tested results. Back-tested performance does not represent actual trading and is constructed with hindsight. Performance is gross of fees unless stated. Individual returns may differ based on timing, costs, and taxes." },
     { title: "Risk Warning", body: "Past performance does not guarantee future results. Capital is not guaranteed. Strategies are subject to Market, Equity, Volatility, Leverage, Liquidity, Counterparty, Concentration, and Foreign Market risks. See Page 2 for full risk factor disclosures." },
-    { title: "Fees Summary", body: "Performance fee: 20% of profits. No management or AUM fee. Transaction fee: 0.25% per trade. Custody fees per asset are displayed at checkout. Full fee schedule available on request." },
+    { title: "Fees Summary", body: `Transaction fee: ${_txnPct}% per trade. Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). Execution reserve: ${_reservePct}% cash buffer. No management or AUM fee. Full fee schedule available on request.` },
     { title: "Full Disclosures", body: "Complete regulatory disclosures, risk factors, legal notices, and the full disclaimer are contained on Page 2 of this factsheet. Please read all disclosures carefully before investing." },
   ];
 
@@ -601,7 +618,7 @@ export default async function generateFactsheetPdf({
   doc.text("Page 1 of 2", PW - MR, FOOTER_TOP + 4.2, { align: "right" });
   doc.text(`Generated ${isoDate}`, PW - MR, FOOTER_TOP + 9.8, { align: "right" });
 
-  await addDisclosurePage(doc, name, dateStr, monthStr, isoDate);
+  await addDisclosurePage(doc, name, dateStr, monthStr, isoDate, feeRates);
 
   // ── OUTPUT ───────────────────────────────────────────────────────────────────
 
