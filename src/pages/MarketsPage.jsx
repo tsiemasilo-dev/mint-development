@@ -1961,7 +1961,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   {strategy.risk_level || 'Balanced'} {strategy.objective && `• ${strategy.objective}`}
                                 </p>
                                 <p className="text-[11px] text-slate-400 line-clamp-1">
-                                  {formattedMinInvestment}
+                                  {holdingsBySymbol.size === 0
+                                    ? <span className="inline-block h-2.5 w-20 rounded-full bg-slate-200 animate-pulse align-middle" />
+                                    : formattedMinInvestment}
                                 </p>
                               </div>
                             </div>
@@ -2162,7 +2164,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <div>
                     <h2 className="text-[15px] font-bold text-slate-900">{selectedStrategy.name}</h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {(() => { const _m = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol); return _m ? `Min. ${formatCurrency(_m * 1.08, "R")}` : "Calculating..."; })()}
+                      {(() => {
+                        const _m = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
+                        if (_m) return `Min. ${formatCurrency(_m * 1.08, "R")}`;
+                        if (holdingsBySymbol.size === 0) return <span className="inline-block h-2.5 w-24 rounded-full bg-slate-200 animate-pulse align-middle" />;
+                        return "Calculating...";
+                      })()}
                     </p>
                   </div>
                   <button
@@ -2181,7 +2188,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <div className="flex items-center gap-3 mb-6">
                 {(() => {
                   const minInvest = calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol);
-                  return minInvest ? (
+                  if (minInvest) return (
                     <>
                       <p className="text-2xl font-semibold text-slate-900">
                         {formatCurrency(minInvest * 1.08, selectedStrategy.currency || 'R')}
@@ -2190,7 +2197,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         Min. investment
                       </span>
                     </>
-                  ) : selectedStrategy.last_close !== null && selectedStrategy.last_close !== undefined ? (
+                  );
+                  if (holdingsBySymbol.size === 0) return (
+                    <div className="flex items-center gap-3">
+                      <span className="inline-block h-7 w-28 rounded-xl bg-slate-200 animate-pulse" />
+                      <span className="inline-block h-6 w-24 rounded-full bg-slate-100 animate-pulse" />
+                    </div>
+                  );
+                  if (selectedStrategy.last_close !== null && selectedStrategy.last_close !== undefined) return (
                     <>
                       <p className="text-2xl font-semibold text-slate-900">
                         {formatCurrency(Math.max(selectedStrategy.last_close, MIN_ASSET_VALUE_DISPLAY), selectedStrategy.currency || 'R')}
@@ -2199,7 +2213,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         Min. investment
                       </span>
                     </>
-                  ) : null;
+                  );
+                  return null;
                 })()}
               </div>
 
