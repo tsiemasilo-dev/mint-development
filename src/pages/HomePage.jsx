@@ -751,10 +751,13 @@ const HomePage = ({
 
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
-        // Keep pending entries available (the "Pending orders" section reads them
-        // off assetsToDisplay) but rank profitable ones first so they dominate
-        // the "best performing assets" carousel.
-        const sorted = [...profitable, ...pending].slice(0, 5);
+        // Rank profitable assets first so they dominate the "best performing assets"
+        // carousel (capped at 5 there). Then always retain any asset that has a
+        // pending batch — including partial fills that didn't make the top 5 — so
+        // the Pending orders section can surface them. Fully-pending ones last.
+        const carousel = profitable.slice(0, 5);
+        const extraPending = formatted.filter(a => a.hasPendingBatch && !carousel.includes(a) && !pending.includes(a));
+        const sorted = [...carousel, ...extraPending, ...pending];
         _cachedBestAssets = sorted;
         setLocalBestAssets(sorted);
         return;
@@ -1771,7 +1774,10 @@ const HomePage = ({
         {(() => {
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
-          const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          // Include fully-pending assets AND mixed assets (some batches filled, some
+          // pending) so a re-buy of a security you already hold surfaces its pending
+          // batch here while the filled portion stays in the portfolio carousel.
+          const pendingAssets = safeAssets.filter(a => a && (a.isPending || a.hasPendingBatch));
           // A strategy goes in the pending section if:
           //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
           //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
@@ -1848,7 +1854,11 @@ const HomePage = ({
           }));
 
           const pendingAssetItems = pendingAssets.map(a => {
-            const batches = Array.isArray(a.batches) ? a.batches : [];
+            const allBatches = Array.isArray(a.batches) ? a.batches : [];
+            // Only the UNFILLED batches belong in Pending orders — filled batches
+            // live in the portfolio carousel. For a mixed security this drops the
+            // already-settled buys and keeps just the pending one(s).
+            const batches = allBatches.filter(b => !(Number(b?.avg_fill) > 0));
             // Sort newest-first so the top of the stack is the most recent buy.
             const sortedBatches = [...batches].sort((b1, b2) => {
               const t1 = b1?.created_at ? new Date(b1.created_at).getTime() : 0;
@@ -2306,7 +2316,10 @@ const HomePage = ({
               {bestStrategies.filter(s => {
                 if (!s || s.isPending) return false;
                 const batches = purchaseBatchesByStrategy[s.id] || [];
-                return !batches.some(b => !b.filled);
+                // Show the strategy here if it has at least one FILLED batch. A re-buy
+                // adds a pending batch (which shows in Pending orders) but the original
+                // filled holding still belongs in the portfolio carousel.
+                return batches.length === 0 || batches.some(b => b.filled);
               }).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
