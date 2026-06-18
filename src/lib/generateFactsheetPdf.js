@@ -479,7 +479,6 @@ export default async function generateFactsheetPdf({
   ry += 8;
 
   const feesData = [
-    ["Performance Fee",         "20% of profits"],
     ["Transaction Fee",         `${_txnPct}% / trade`],
     ["Broker Fee",              `${_brokerPct}% / trade`],
     ["Management Fee",          "None"],
