@@ -24,6 +24,17 @@ const PaymentMethodModal = ({
   const [showThankYou, setShowThankYou] = useState(false);
   const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
   const [showEFTPopup, setShowEFTPopup] = useState(false);
+  const [ozowLoading, setOzowLoading] = useState(false);
+
+  const handleOzow = async () => {
+    if (ozowLoading) return;
+    setOzowLoading(true);
+    try {
+      await onSelectOzow?.();
+    } finally {
+      setOzowLoading(false);
+    }
+  };
   const { profile, loading: profileLoading } = useProfile();
 
   // ── FIX 1: Mint number pulled directly from profile ──────────────────────
@@ -209,23 +220,32 @@ const PaymentMethodModal = ({
                 {/* ── Ozow ── */}
                 <button
                   type="button"
-                  onClick={() => onSelectOzow?.()}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40"
+                  onClick={handleOzow}
+                  disabled={ozowLoading}
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm flex-shrink-0 overflow-hidden p-1">
-                    <img
-                      src="/ozow-logo.png"
-                      alt="Ozow"
-                      className="w-full h-full object-contain"
-                    />
+                    {ozowLoading ? (
+                      <Loader2 className="h-5 w-5 text-violet-500 animate-spin" />
+                    ) : (
+                      <img
+                        src="/ozow-logo.png"
+                        alt="Ozow"
+                        className="w-full h-full object-contain"
+                      />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900">Ozow</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Instant bank-to-bank payment
+                      {ozowLoading ? "Connecting to Ozow…" : "Instant bank-to-bank payment"}
                     </p>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">Instant</span>
+                  {ozowLoading ? (
+                    <Loader2 className="h-4 w-4 text-violet-400 animate-spin flex-shrink-0" />
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">Instant</span>
+                  )}
                 </button>
 
                 {/* ── Direct EFT ── */}
