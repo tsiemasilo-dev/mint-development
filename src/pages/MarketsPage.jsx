@@ -18,6 +18,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip,
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
+import MintBasketsExplainer, { BASKETS_EXPLAINER_KEY } from "../components/MintBasketsExplainer.jsx";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -393,6 +394,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   useEffect(() => {
     onViewModeChange?.(viewMode);
   }, [viewMode]);
+
+  const [showBasketsExplainer, setShowBasketsExplainer] = useState(false);
+  useEffect(() => {
+    if (viewMode === "openstrategies" && !childFilter) {
+      if (!localStorage.getItem(BASKETS_EXPLAINER_KEY)) {
+        setShowBasketsExplainer(true);
+      }
+    }
+  }, [viewMode, childFilter]);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
@@ -1379,6 +1389,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+      {showBasketsExplainer && (
+        <MintBasketsExplainer onDone={() => setShowBasketsExplainer(false)} />
+      )}
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
