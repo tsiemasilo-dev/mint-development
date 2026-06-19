@@ -1,5 +1,8 @@
 import React, { useState } from "react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { supabase } from "../lib/supabase";
+
+const CANCEL_LOTTIE = "https://lottie.host/f315768c-a29b-41fd-b5a8-a1c1dfb36cd2/CRiiNg8fqQ.lottie";
 
 const PaymentCancelledPage = ({ onBack, isError = false }) => {
   const [retrying, setRetrying] = useState(false);
@@ -67,11 +70,12 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
-        <div className="flex justify-center mb-2">
-          <img
-            src="/cancel-payment.gif"
-            alt="Payment cancelled"
-            className="w-28 h-28 object-contain"
+        <div className="flex justify-center mb-2" style={{ height: 140 }}>
+          <DotLottieReact
+            src={CANCEL_LOTTIE}
+            loop
+            autoplay
+            style={{ width: 140, height: 140 }}
           />
         </div>
 
@@ -81,7 +85,7 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
 
         <p className="text-sm text-slate-500 mb-1">
           {pending?.strategyName
-            ? `Your ${isError ? "payment" : "payment"} for ${pending.strategyName} was not completed.`
+            ? `Your payment for ${pending.strategyName} was not completed.`
             : isError
             ? "Something went wrong with your payment."
             : "Your payment was not completed."}

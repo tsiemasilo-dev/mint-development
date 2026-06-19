@@ -175,8 +175,18 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news', 'deposit', 'more', 'welcome', 'auth'];
 
+// Read ozow param synchronously at module level so initialPage is always correct,
+// eliminating any flash through home/welcome before the async session check resolves.
+const initialOzowParam = new URLSearchParams(window.location.search).get("ozow");
+
 const App = () => {
-  const initialPage = hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"));
+  const initialPage = hasError ? "linkExpired"
+    : initialGiftToken ? "giftClaim"
+    : isRecoveryMode ? "auth"
+    : storedSession && initialOzowParam === "success" ? "paymentSuccess"
+    : storedSession && (initialOzowParam === "cancel" || initialOzowParam === "error") ? "paymentCancelled"
+    : storedSession ? "home"
+    : "welcome";
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [mountedTabs, setMountedTabs] = useState(() => {
     const initial = new Set(['home']);
