@@ -1412,14 +1412,12 @@ const HomePage = ({
           {homeTab === "balance" || homeTab === "invest" ? (
             <div className="relative select-none -mx-2 md:mx-0">
               <div className="relative w-full touch-pan-y h-auto">
+                {/* Withdrawals temporarily disabled (CEO): the purple card no longer
+                    navigates to the withdraw page. Restore by re-adding the
+                    cursor-pointer / role="button" / onClick that dispatched
+                    navigate-within-app → "withdraw". */}
                 <div
-                  className="relative h-auto rounded-[28px] border border-white/10 cursor-pointer"
-                  role="button"
-                  onClick={(e) => {
-                    const hit = e.target.closest('button, a, input, select, svg, [role="button"]');
-                    if (hit && hit !== e.currentTarget) return;
-                    window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "withdraw" } }));
-                  }}
+                  className="relative h-auto rounded-[28px] border border-white/10"
                 >
                   <SwipeableBalanceCard
                     userId={userId}
