@@ -183,8 +183,8 @@ const App = () => {
   const initialPage = hasError ? "linkExpired"
     : initialGiftToken ? "giftClaim"
     : isRecoveryMode ? "auth"
-    : storedSession && initialOzowParam === "success" ? "paymentSuccess"
-    : storedSession && (initialOzowParam === "cancel" || initialOzowParam === "error" || initialOzowParam === "abandoned" || initialOzowParam === "pending" || initialOzowParam === "pendinginvestigation") ? "paymentCancelled"
+    : initialOzowParam === "success" ? "paymentSuccess"
+    : (initialOzowParam === "cancel" || initialOzowParam === "error" || initialOzowParam === "abandoned" || initialOzowParam === "pending" || initialOzowParam === "pendinginvestigation") ? "paymentCancelled"
     : storedSession ? "home"
     : "welcome";
   const [currentPage, setCurrentPage] = useState(initialPage);
@@ -198,7 +198,7 @@ const App = () => {
   const [pageParams, setPageParams] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError && !initialOzowParam);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
