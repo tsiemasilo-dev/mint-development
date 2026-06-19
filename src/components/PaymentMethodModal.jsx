@@ -235,7 +235,7 @@ const PaymentMethodModal = ({
                     onClick={() => setEftExpanded(!eftExpanded)}
                     className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-slate-50"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0033a1]/5 border border-[#0033a1]/10 flex-shrink-0 overflow-hidden p-1">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm flex-shrink-0 overflow-hidden p-1">
                       <img
                         src={STANDARD_BANK_LOGO}
                         alt="Standard Bank"
