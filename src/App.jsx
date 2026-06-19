@@ -26,6 +26,7 @@ const InvestPage = lazy(() => import("./pages/InvestPage.jsx"));
 const InvestAmountPage = lazy(() => import("./pages/InvestAmountPage.jsx"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage.jsx"));
 const PaymentSuccessPage = lazy(() => import("./pages/PaymentSuccessPage.jsx"));
+const PaymentCancelledPage = lazy(() => import("./pages/PaymentCancelledPage.jsx"));
 const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
 const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
 const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
@@ -616,6 +617,8 @@ const App = () => {
           if (session) {
             if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
+            } else if (ozowReturnParam.current === "cancel" || ozowReturnParam.current === "error") {
+              setCurrentPage("paymentCancelled");
             } else {
               setCurrentPage("home");
             }
@@ -792,6 +795,7 @@ const App = () => {
       import("./pages/InvestPage.jsx");
       import("./pages/PaymentPage.jsx");
       import("./pages/PaymentSuccessPage.jsx");
+      import("./pages/PaymentCancelledPage.jsx");
       // Fire-and-forget: warm the markets data cache before the user navigates there
       getMarketsSecuritiesWithMetrics().catch(() => {});
     };
@@ -1826,6 +1830,7 @@ const App = () => {
                   transactionRef: data.TransactionReference,
                   strategyId: data.Optional1,
                   amount: data.Amount,
+                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
                 }));
                 const form = document.createElement("form");
                 form.method = "POST";
@@ -2149,6 +2154,7 @@ const App = () => {
                   transactionRef: data.TransactionReference,
                   strategyId: data.Optional1,
                   amount: data.Amount,
+                  strategyName: selectedStrategy?.name || "Investment",
                 }));
                 const form = document.createElement("form");
                 form.method = "POST";
@@ -2279,6 +2285,15 @@ const App = () => {
 
   if (currentPage === "paymentSuccess") {
     return <PaymentSuccessPage onDone={() => setCurrentPage("home")} />;
+  }
+
+  if (currentPage === "paymentCancelled") {
+    return (
+      <PaymentCancelledPage
+        isError={ozowReturnParam.current === "error"}
+        onBack={() => { sessionStorage.removeItem("ozow_pending"); setCurrentPage("home"); }}
+      />
+    );
   }
 
   if (currentPage === "paymentPending") {

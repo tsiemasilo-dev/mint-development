@@ -433,6 +433,7 @@ const PaymentPage = ({
                   transactionRef: data.TransactionReference,
                   strategyId: strategy?.id || null,
                   amount,
+                  strategyName: strategy?.name || "",
                 }));
                 const form = document.createElement("form");
                 form.method = "POST";
