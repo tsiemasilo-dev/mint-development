@@ -184,7 +184,7 @@ const App = () => {
     : initialGiftToken ? "giftClaim"
     : isRecoveryMode ? "auth"
     : storedSession && initialOzowParam === "success" ? "paymentSuccess"
-    : storedSession && (initialOzowParam === "cancel" || initialOzowParam === "error") ? "paymentCancelled"
+    : storedSession && (initialOzowParam === "cancel" || initialOzowParam === "error" || initialOzowParam === "abandoned" || initialOzowParam === "pending" || initialOzowParam === "pendinginvestigation") ? "paymentCancelled"
     : storedSession ? "home"
     : "welcome";
   const [currentPage, setCurrentPage] = useState(initialPage);
@@ -627,7 +627,7 @@ const App = () => {
           if (session) {
             if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
-            } else if (ozowReturnParam.current === "cancel" || ozowReturnParam.current === "error") {
+            } else if (["cancel", "error", "abandoned", "pending", "pendinginvestigation"].includes(ozowReturnParam.current)) {
               setCurrentPage("paymentCancelled");
             } else {
               setCurrentPage("home");
@@ -1720,6 +1720,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -1832,6 +1833,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -2156,6 +2158,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -2315,8 +2318,8 @@ const App = () => {
   if (currentPage === "paymentCancelled") {
     return (
       <PaymentCancelledPage
-        isError={ozowReturnParam.current === "error"}
-        onBack={() => { sessionStorage.removeItem("ozow_pending"); setCurrentPage("home"); }}
+        status={ozowReturnParam.current || "cancel"}
+        onBack={() => setCurrentPage("home")}
       />
     );
   }

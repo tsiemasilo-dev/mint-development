@@ -2,9 +2,49 @@ import React, { useState } from "react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { supabase } from "../lib/supabase";
 
-const PaymentCancelledPage = ({ onBack, isError = false }) => {
+const STATUS_CONFIG = {
+  cancel: {
+    src: "https://lottie.host/140d688d-535a-4e83-a337-6ef7272f847b/G1sOcOAtvL.json",
+    title: "Payment Cancelled",
+    body: "You cancelled the payment before it was completed.",
+    sub: "No charges were made to your account.",
+    canRetry: true,
+  },
+  error: {
+    src: "https://lottie.host/00908e50-da90-4027-9d5a-3ad4174f589d/FyuUtG0DL6.json",
+    title: "Payment Failed",
+    body: "Something went wrong while processing your payment.",
+    sub: "Please try again or contact support if the issue persists.",
+    canRetry: true,
+  },
+  abandoned: {
+    src: "https://lottie.host/00908e50-da90-4027-9d5a-3ad4174f589d/FyuUtG0DL6.json",
+    title: "Payment Abandoned",
+    body: "Your payment session expired before it was completed.",
+    sub: "No charges were made. You can try again whenever you're ready.",
+    canRetry: true,
+  },
+  pending: {
+    src: "https://lottie.host/203cd577-a8f7-431d-9a46-3c21646ac976/HTfOgovXbh.json",
+    title: "Payment Pending",
+    body: "Your payment is being processed and will be confirmed shortly.",
+    sub: "We'll notify you once the payment is verified.",
+    canRetry: false,
+  },
+  pendinginvestigation: {
+    src: "https://lottie.host/9d327ff1-2237-452e-be47-f28e052c79e4/CLUvfA74Ph.json",
+    title: "Under Review",
+    body: "Your payment has been flagged for additional verification.",
+    sub: "Our team is reviewing it and will follow up with you via email.",
+    canRetry: false,
+  },
+};
+
+const PaymentCancelledPage = ({ onBack, status = "cancel" }) => {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
+
+  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.cancel;
 
   let pending = null;
   try {
@@ -32,6 +72,8 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
           successUrl: `${baseUrl}/?ozow=success`,
           cancelUrl: `${baseUrl}/?ozow=cancel`,
           errorUrl: `${baseUrl}/?ozow=error`,
+          abandonedUrl: `${baseUrl}/?ozow=abandoned`,
+          notifyUrl: `${baseUrl}/api/ozow/notify`,
         }),
       });
       const data = await resp.json();
@@ -70,7 +112,7 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
         <div className="flex justify-center mb-2" style={{ height: 160 }}>
           <DotLottieReact
-            src="https://lottie.host/b6a7114d-33c4-4e34-ad32-6414f46dbfbd/CoInDc7qSX.json"
+            src={config.src}
             loop
             autoplay
             style={{ width: 160, height: 160 }}
@@ -78,25 +120,21 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
         </div>
 
         <h1 className="text-xl font-semibold text-slate-900 mb-2">
-          {isError ? "Payment Failed" : "Payment Cancelled"}
+          {config.title}
         </h1>
 
         <p className="text-sm text-slate-500 mb-1">
           {pending?.strategyName
-            ? `Your payment for ${pending.strategyName} was not completed.`
-            : isError
-            ? "Something went wrong with your payment."
-            : "Your payment was not completed."}
+            ? `${config.body.replace("Your payment", `Your payment for ${pending.strategyName}`)}`
+            : config.body}
         </p>
-        <p className="text-sm text-slate-400 mb-6">
-          No charges were made to your account.
-        </p>
+        <p className="text-sm text-slate-400 mb-6">{config.sub}</p>
 
         {retryError && (
           <p className="text-xs text-rose-500 mb-4 px-2">{retryError}</p>
         )}
 
-        {pending && (
+        {config.canRetry && pending && (
           <button
             type="button"
             onClick={handleRetry}
@@ -112,14 +150,14 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
                 Connecting to Ozow...
               </>
             ) : (
-              "Try Ozow Again"
+              "Try Again"
             )}
           </button>
         )}
 
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => { sessionStorage.removeItem("ozow_pending"); onBack(); }}
           className="w-full rounded-2xl border border-slate-200 py-3.5 text-sm font-medium text-slate-600 transition-all active:scale-95"
         >
           Back to Home
