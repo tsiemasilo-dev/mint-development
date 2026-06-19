@@ -937,7 +937,9 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 
-runFuneralCoverMigration(pgPool);
+runFuneralCoverMigration(pgPool).catch(err => {
+  console.warn("[funeral-cover] Migration skipped — DB unreachable:", err.message);
+});
 
 // ── Request a sell ────────────────────────────────────────────────────────────
 // Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
