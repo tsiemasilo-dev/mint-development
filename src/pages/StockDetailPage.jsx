@@ -16,7 +16,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const { profile } = useProfile();
-  const [selectedPeriod, setSelectedPeriod] = useState("YTD");
+  const [selectedPeriod, setSelectedPeriod] = useState(() => localStorage.getItem("stockDetailPeriod") || "YTD");
   const [security, setSecurity] = useState(initialSecurity);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [buyChecking, setBuyChecking] = useState(false);
@@ -32,6 +32,9 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
+  const svgContainerRef = useRef(null);
+  const [scrubIndex, setScrubIndex] = useState(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   useEffect(() => {
     if (profile?.watchlist && Array.isArray(profile.watchlist)) {
@@ -130,6 +133,27 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     fetchPriceHistory();
   }, [security?.id, selectedPeriod]);
 
+  useEffect(() => {
+    localStorage.setItem("stockDetailPeriod", selectedPeriod);
+  }, [selectedPeriod]);
+
+  const getScrubIndex = (clientX) => {
+    if (!svgContainerRef.current || chartData.length === 0) return null;
+    const rect = svgContainerRef.current.getBoundingClientRect();
+    const rel = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(rel * (chartData.length - 1));
+  };
+  const handleChartMouseMove = (e) => {
+    const idx = getScrubIndex(e.clientX);
+    if (idx !== null) { setScrubIndex(idx); setIsScrubbing(true); }
+  };
+  const handleChartMouseLeave = () => { setScrubIndex(null); setIsScrubbing(false); };
+  const handleChartTouchMove = (e) => {
+    const idx = getScrubIndex(e.touches[0].clientX);
+    if (idx !== null) { setScrubIndex(idx); setIsScrubbing(true); }
+  };
+  const handleChartTouchEnd = () => { setScrubIndex(null); setIsScrubbing(false); };
+
   // Always prefer fetched security data, fallback to initialSecurity for display
   const displaySecurity = security?.id ? security : initialSecurity;
   
@@ -171,7 +195,17 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
     : 0;
   const isChartPositive = chartReturn >= 0;
-  
+
+  // Scrub computed values for crosshair tooltip (#13)
+  const scrubPrice = isScrubbing && scrubIndex != null ? chartData[scrubIndex] : null;
+  const scrubDate = isScrubbing && scrubIndex != null && priceHistory[scrubIndex]
+    ? new Date(priceHistory[scrubIndex].ts).toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  const scrubXPct = isScrubbing && scrubIndex != null && chartData.length > 1
+    ? (scrubIndex / (chartData.length - 1)) * 100
+    : null;
+  const scrubYPct = scrubXPct != null && scrubPrice != null ? getYPosition(scrubPrice) : null;
+
   // Get return from security metrics for selected period
   const getSelectedPeriodReturn = () => {
     if (!displaySecurity?.returns) return null;
@@ -421,11 +455,28 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
             })()}
           </div>
 
-          {/* Chart */}
-          <div className="relative mt-6 h-64">
+          {/* Chart — #1 fade animation, #5 shimmer skeleton, #13 scrub crosshair */}
+          <div
+            ref={svgContainerRef}
+            className="relative mt-6 h-64 select-none"
+            onMouseMove={handleChartMouseMove}
+            onMouseLeave={handleChartMouseLeave}
+            onTouchMove={handleChartTouchMove}
+            onTouchEnd={handleChartTouchEnd}
+            style={{ touchAction: isScrubbing ? "none" : "pan-y" }}
+          >
             {loading ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-sm text-slate-400">Loading chart...</div>
+              <div className="h-full flex flex-col justify-end">
+                <div className="flex items-end gap-[3px] h-52">
+                  {[38, 52, 44, 63, 48, 70, 58, 75, 53, 80, 63, 68, 55, 72, 60].map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-t bg-slate-200 animate-pulse"
+                      style={{ height: `${h}%`, animationDelay: `${i * 50}ms` }}
+                    />
+                  ))}
+                </div>
+                <div className="h-px bg-slate-200 mt-2" />
               </div>
             ) : chartData.length < 2 ? (
               <div className="flex h-full items-center justify-center">
@@ -434,58 +485,43 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
                 </div>
               </div>
             ) : (
-              <svg 
-                width="100%" 
-                height="100%" 
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                className="overflow-visible"
-              >
-                {/* Grid lines (horizontal only) */}
-                {[0, 0.25, 0.5, 0.75, 1].map((y) => (
-                  <line
-                    key={y}
-                    x1="0"
-                    y1={y * 100}
-                    x2="100"
-                    y2={y * 100}
-                    stroke="#e2e8f0"
-                    strokeWidth="0.3"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-
-                {/* Area fill */}
-                <defs>
-                  <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Chart line and area */}
-                <g>
-                  {/* Area path */}
+              <>
+                {isScrubbing && scrubPrice != null && (
+                  <div
+                    className="pointer-events-none absolute z-10 -top-1 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-1.5 shadow-lg"
+                    style={{ left: `${Math.min(88, Math.max(12, scrubXPct))}%` }}
+                  >
+                    <p className="text-xs font-bold text-white whitespace-nowrap">R {scrubPrice.toFixed(2)}</p>
+                    {scrubDate && <p className="mt-0.5 text-[10px] font-normal text-white/60">{scrubDate}</p>}
+                  </div>
+                )}
+                <motion.svg
+                  key={selectedPeriod}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  width="100%"
+                  height="100%"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  className="overflow-visible"
+                >
+                  {[0, 0.25, 0.5, 0.75, 1].map((y) => (
+                    <line key={y} x1="0" y1={y * 100} x2="100" y2={y * 100} stroke="#e2e8f0" strokeWidth="0.3" vectorEffect="non-scaling-stroke" />
+                  ))}
+                  <defs>
+                    <linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                      <stop offset="100%" stopColor={isChartPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
                   <path
-                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
-                      .map((value, i) => {
-                        const x = (i / Math.max(1, chartData.length - 1)) * 100;
-                        const y = getYPosition(value);
-                        return `L ${x} ${y}`;
-                      })
-                      .join(' ')} L 100 100 L 0 100 Z`}
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData.map((v, i) => `L ${(i / Math.max(1, chartData.length - 1)) * 100} ${getYPosition(v)}`).join(' ')} L 100 100 L 0 100 Z`}
                     fill="url(#areaGradient)"
                     vectorEffect="non-scaling-stroke"
                   />
-                  {/* Line path */}
                   <path
-                    d={`M 0 ${getYPosition(chartData[0])} ${chartData
-                      .map((value, i) => {
-                        const x = (i / Math.max(1, chartData.length - 1)) * 100;
-                        const y = getYPosition(value);
-                        return `L ${x} ${y}`;
-                      })
-                      .join(' ')}`}
+                    d={`M 0 ${getYPosition(chartData[0])} ${chartData.map((v, i) => `L ${(i / Math.max(1, chartData.length - 1)) * 100} ${getYPosition(v)}`).join(' ')}`}
                     fill="none"
                     stroke={isChartPositive ? "#10b981" : "#ef4444"}
                     strokeWidth="2"
@@ -493,8 +529,14 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
                     strokeLinejoin="round"
                     vectorEffect="non-scaling-stroke"
                   />
-                </g>
-              </svg>
+                  {isScrubbing && scrubXPct != null && scrubYPct != null && (
+                    <>
+                      <line x1={scrubXPct} y1="0" x2={scrubXPct} y2="100" stroke="#94a3b8" strokeWidth="0.6" strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
+                      <circle cx={scrubXPct} cy={scrubYPct} r="2" fill="white" stroke={isChartPositive ? "#10b981" : "#ef4444"} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                    </>
+                  )}
+                </motion.svg>
+              </>
             )}
           </div>
         </section>

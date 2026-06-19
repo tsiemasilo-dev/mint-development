@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion, useMotionValue } from "framer-motion";
 import {
   ArrowLeft,
   Settings,
@@ -130,44 +131,21 @@ const formatDate = (dateString) => {
 };
 
 const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, onNavigate }) => {
-  const [touchStart, setTouchStart] = useState(null);
-  const [touchEnd, setTouchEnd] = useState(null);
-  const [swiped, setSwiped] = useState(false);
-  const itemRef = useRef(null);
-
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    if (isLeftSwipe) {
-      setSwiped(true);
-    } else if (distance < -minSwipeDistance) {
-      setSwiped(false);
-    }
-  };
-
+  const x = useMotionValue(0);
+  const [dismissed, setDismissed] = useState(false);
   const isGiftNotification = notification.payload?.action === "gift_received";
 
-  const handleClick = () => {
-    if (swiped) return;
-    if (!notification.read_at) {
-      onMarkRead(notification.id);
+  const handleDragEnd = (_, info) => {
+    if (info.offset.x < -80) {
+      setDismissed(true);
+      setTimeout(() => onDelete(notification.id), 220);
     }
-    if (isGiftNotification) {
-      onNavigate?.("sentGifts");
-      return;
-    }
+  };
+
+  const handleTap = () => {
+    if (Math.abs(x.get()) > 8) return;
+    if (!notification.read_at) onMarkRead(notification.id);
+    if (isGiftNotification) { onNavigate?.("sentGifts"); return; }
     onOpenDetail(notification);
   };
 
@@ -175,31 +153,24 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, on
   const IconComponent = iconComponents[icon] || Info;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl">
-      <div
-        className={`absolute inset-y-0 right-0 flex items-center justify-end bg-red-500 px-4 transition-all ${
-          swiped ? "w-20" : "w-0"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => onDelete(notification.id)}
-          className="text-white"
-          aria-label="Delete notification"
-        >
-          <Trash2 className="h-5 w-5" />
-        </button>
+    <motion.div
+      className="relative overflow-hidden rounded-3xl"
+      animate={dismissed ? { height: 0, opacity: 0, marginBottom: 0, paddingTop: 0 } : {}}
+      transition={{ duration: 0.22, ease: "easeInOut" }}
+    >
+      <div className="absolute inset-0 flex items-center justify-end rounded-3xl bg-red-500 px-5">
+        <Trash2 className="h-5 w-5 text-white" />
       </div>
-
-      <div
-        ref={itemRef}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onClick={handleClick}
-        className={`relative flex gap-3 bg-white p-4 shadow-sm transition-transform cursor-pointer ${
-          swiped ? "-translate-x-20" : "translate-x-0"
-        } ${isGiftNotification ? "border-l-4 border-violet-400" : ""}`}
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -110, right: 0 }}
+        dragElastic={{ left: 0.05, right: 0 }}
+        style={{ x }}
+        onDragEnd={handleDragEnd}
+        onClick={handleTap}
+        className={`relative flex gap-3 bg-white p-4 shadow-sm cursor-pointer ${
+          isGiftNotification ? "border-l-4 border-violet-400" : ""
+        }`}
       >
         <div className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
           <IconComponent className="h-5 w-5" />
@@ -218,8 +189,8 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, on
           </div>
           <p className="text-xs text-slate-500">{notification.body}</p>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -72,6 +72,27 @@ const truncateDecimal = (num, decimals) => {
   return Math.floor(num * factor) / factor;
 };
 
+function useAnimatedNumber(target, duration = 900) {
+  const [value, setValue] = React.useState(target);
+  const rafRef = React.useRef(null);
+  const prevRef = React.useRef(target);
+  React.useEffect(() => {
+    const prev = prevRef.current;
+    if (Math.abs(target - prev) < 0.01 || prev === 0) { prevRef.current = target; setValue(target); return; }
+    const startTime = performance.now();
+    const animate = (now) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(prev + (target - prev) * eased);
+      if (t < 1) rafRef.current = requestAnimationFrame(animate);
+      else prevRef.current = target;
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target]);
+  return value;
+}
+
 const formatFull = (value) => {
   const num = Number(value);
   const truncated = truncateDecimal(num, 2);
@@ -1528,6 +1549,8 @@ const SwipeableBalanceCard = ({
     ? overrideBalance
     : displayMarketValue;
 
+  const animatedBalance = useAnimatedNumber(displayBalance || 0);
+
   // For child accounts: derive a locked label when the active tab needs more data
   const _childLockedLabels = { "5d": "Available after 5 trading days", m: "Available after 1 month", ytd: "Available after first full year" };
   const childLockedLabel = (() => {
@@ -1660,7 +1683,7 @@ const SwipeableBalanceCard = ({
             <Skeleton className="h-8 w-36 bg-white/15 rounded mb-2 animate-pulse" />
           ) : (
             <h2 className="text-3xl font-bold tracking-tight text-white leading-none">
-              {isVisible ? formatFull(displayBalance) : masked}
+              {isVisible ? formatFull(animatedBalance) : masked}
             </h2>
           )}
           <div className="flex items-center gap-2 mt-1.5">
