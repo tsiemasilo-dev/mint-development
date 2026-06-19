@@ -125,11 +125,12 @@ function GiftAuditTrail({ events, variant = "light" }) {
   );
 }
 
-function ActiveGiftCard({ gift, onCancel, onRefund }) {
+function ActiveGiftCard({ gift, onCancel, onRefund, onRetry }) {
   const [copied, setCopied] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const { isExpired } = useCountdown(gift.expires_at);
   const refunded = !!gift.refunded_at;
 
@@ -144,6 +145,12 @@ function ActiveGiftCard({ gift, onCancel, onRefund }) {
     setRefunding(true);
     const ok = await onRefund?.(gift.id);
     if (!ok) setRefunding(false);
+  }
+
+  async function handleRetryClick() {
+    setRetrying(true);
+    const ok = await onRetry?.(gift.id);
+    if (!ok) setRetrying(false);
   }
 
   async function handleCancelConfirm() {
@@ -214,19 +221,28 @@ function ActiveGiftCard({ gift, onCancel, onRefund }) {
           )}
         </div>
 
-        {/* Expired → manual refund (no time extension, per CEO) */}
-        {isExpired && !refunded && (
-          <button
-            onClick={handleRefundClick}
-            disabled={refunding}
-            className="w-full py-4 text-sm font-bold text-white text-center active:opacity-80 transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 disabled:opacity-60"
-          >
-            {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
-          </button>
-        )}
-        {isExpired && refunded && (
-          <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/60">
-            <p className="text-[11px] text-slate-500 font-medium text-center">Refunded to your wallet · send again anytime</p>
+        {/* Expired → manual refund + try again (no time extension, per CEO) */}
+        {isExpired && (
+          <div className="px-5 pb-4 pt-1 space-y-2">
+            {!refunded && (
+              <button
+                onClick={handleRefundClick}
+                disabled={refunding || retrying}
+                className="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
+              >
+                {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
+              </button>
+            )}
+            {refunded && (
+              <p className="text-[11px] text-slate-500 font-medium text-center py-0.5">Refunded to your wallet</p>
+            )}
+            <button
+              onClick={handleRetryClick}
+              disabled={retrying || refunding}
+              className={`w-full py-3 rounded-2xl text-xs font-bold transition-all active:scale-95 disabled:opacity-60 ${refunded ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
+            >
+              {retrying ? "Resending…" : "Try again"}
+            </button>
           </div>
         )}
 
@@ -276,21 +292,31 @@ const HISTORY_META = {
   cancelled: { label: "Cancelled", color: "text-red-600 bg-red-50", icon: XCircle },
 };
 
-function HistoryCard({ gift, onRefund }) {
+function HistoryCard({ gift, onRefund, onRetry }) {
   const meta = HISTORY_META[gift.status] || HISTORY_META.expired;
   const Icon = meta.icon;
   const sentDate = gift.created_at ? new Date(gift.created_at).toLocaleDateString("en-ZA") : null;
   const claimedDate = gift.claimed_at ? new Date(gift.claimed_at).toLocaleDateString("en-ZA") : null;
   const [refunding, setRefunding] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isClaimed = gift.status === "claimed";
   const refunded = !!gift.refunded_at;
   // Expired + funds reserved at send + not yet refunded → sender can refund.
   const canRefund = gift.status === "expired" && !!gift.reserved_at && !refunded;
+  // Any expired gift can be resent ("Try again") — reuses this same card/row,
+  // so one recipient never stacks multiple history cards.
+  const canRetry = gift.status === "expired";
 
   async function handleRefundClick() {
     setRefunding(true);
     const ok = await onRefund?.(gift.id);
     if (!ok) setRefunding(false);
+  }
+
+  async function handleRetryClick() {
+    setRetrying(true);
+    const ok = await onRetry?.(gift.id);
+    if (!ok) setRetrying(false);
   }
 
   const accentBar = isClaimed
@@ -332,19 +358,32 @@ function HistoryCard({ gift, onRefund }) {
           </div>
         )}
 
-        {canRefund && (
-          <button
-            onClick={handleRefundClick}
-            disabled={refunding}
-            className="mt-3 w-full py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
-          >
-            {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
-          </button>
-        )}
         {refunded && (
           <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
             <CheckCircle2 size={13} className="text-violet-500 shrink-0" />
-            <p className="text-xs text-slate-500">Refunded to your wallet · send again anytime</p>
+            <p className="text-xs text-slate-500">Refunded to your wallet</p>
+          </div>
+        )}
+        {(canRefund || canRetry) && (
+          <div className="mt-3 space-y-2">
+            {canRefund && (
+              <button
+                onClick={handleRefundClick}
+                disabled={refunding || retrying}
+                className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
+              >
+                {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
+              </button>
+            )}
+            {canRetry && (
+              <button
+                onClick={handleRetryClick}
+                disabled={retrying || refunding}
+                className={`w-full py-3 rounded-2xl text-xs font-bold transition-all active:scale-95 disabled:opacity-60 ${refunded ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
+              >
+                {retrying ? "Resending…" : "Try again"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -546,6 +585,29 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
     } catch { alert("Something went wrong. Please try again."); return false; }
   }
 
+  async function handleRetry(giftId) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch("/api/gift/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({ gift_id: giftId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { alert(data.error || "Failed to resend."); return false; }
+      // Resending re-debits the wallet when the gift had been refunded — refresh the
+      // balance and reload so the SAME card flips back to active (no new history card).
+      try {
+        window.dispatchEvent(new Event("wallet-updated"));
+        window.dispatchEvent(new Event("profile-updated"));
+        window.dispatchEvent(new Event("financial-data-updated"));
+      } catch {}
+      await fetchGiftData().catch(() => {});
+      return true;
+    } catch { alert("Something went wrong. Please try again."); return false; }
+  }
+
   async function handleCancel(giftId) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -646,7 +708,7 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sent — Active</p>
             {sentActive.map(g => (
-              <ActiveGiftCard key={g.id} gift={g} onCancel={handleCancel} onRefund={handleRefund} />
+              <ActiveGiftCard key={g.id} gift={g} onCancel={handleCancel} onRefund={handleRefund} onRetry={handleRetry} />
             ))}
           </div>
         )}
@@ -659,7 +721,7 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
             {visibleHistory.map(g =>
               g.sender_name !== undefined
                 ? <ReceivedHistoryCard key={g.id} gift={g} />
-                : <HistoryCard key={g.id} gift={g} onRefund={handleRefund} />
+                : <HistoryCard key={g.id} gift={g} onRefund={handleRefund} onRetry={handleRetry} />
             )}
             {hasMoreHistory && (
               <button
