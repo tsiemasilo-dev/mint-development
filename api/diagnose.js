@@ -4,11 +4,10 @@ const REQUIRED_VARS = [
   { key: "VITE_SUPABASE_URL", label: "Supabase URL" },
   { key: "VITE_SUPABASE_ANON_KEY", label: "Supabase Anon Key" },
   { key: "SUPABASE_SERVICE_ROLE_KEY", label: "Supabase Service Role Key" },
-  { key: "RESEND_API_KEY", label: "Resend API Key (for Mint Mornings emails)" },
+  { key: "RESEND_API_KEY", label: "Resend API Key" },
 ];
 
 const OPTIONAL_VARS = [
-  { key: "CRON_SECRET", label: "Cron Secret (protects /api/mint-mornings)" },
   { key: "SUMSUB_APP_TOKEN", label: "Sumsub App Token (KYC)" },
   { key: "SUMSUB_SECRET_KEY", label: "Sumsub Secret Key (KYC)" },
   { key: "TRUID_CLIENT_ID", label: "TruID Client ID (bank linking)" },
@@ -32,12 +31,6 @@ export default async function handler(req, res) {
     },
     resend: {
       configured: false,
-    },
-    mint_mornings_cron: {
-      schedule: "0 5 * * * (UTC) = 07:00 SAST daily",
-      vercel_json_configured: true,
-      will_fire: false,
-      reason: null,
     },
   };
 
@@ -97,19 +90,6 @@ export default async function handler(req, res) {
         };
       }
 
-      // Last cron send from mint_mornings_log
-      try {
-        const { data: cronLog } = await db
-          .from("mint_mornings_log")
-          .select("send_date, articles_sent, users_sent")
-          .order("send_date", { ascending: false })
-          .limit(1);
-
-        if (cronLog && cronLog.length > 0) {
-          report.supabase.last_cron_sent = cronLog[0];
-        }
-      } catch (_) {}
-
       // Write test
       const testId = Date.now();
       const { error: writeErr } = await db
@@ -140,30 +120,15 @@ export default async function handler(req, res) {
   // 3. Resend check
   report.resend.configured = !!process.env.RESEND_API_KEY;
 
-  // 4. Mint Mornings readiness
-  const missing = REQUIRED_VARS.filter((v) => !process.env[v.key]);
-  if (missing.length === 0 && report.supabase.news_articles_readable) {
-    report.mint_mornings_cron.will_fire = true;
-    report.mint_mornings_cron.reason = "All required variables set and Supabase readable.";
-  } else {
-    report.mint_mornings_cron.will_fire = false;
-    const reasons = [];
-    if (!report.resend.configured) reasons.push("RESEND_API_KEY not set — emails cannot be sent");
-    if (!report.supabase.connected) reasons.push("Supabase not connected — cannot fetch articles");
-    if (!report.supabase.news_articles_readable) reasons.push("News_articles table not readable");
-    report.mint_mornings_cron.reason = reasons.length ? reasons.join("; ") : "Missing required env vars: " + missing.map((v) => v.key).join(", ");
-  }
-
   // Summary for quick reading
   const allRequiredSet = REQUIRED_VARS.every((v) => !!process.env[v.key]);
   report.summary = {
-    status: report.mint_mornings_cron.will_fire ? "READY" : "NOT READY",
+    status: allRequiredSet && report.supabase.news_articles_readable ? "READY" : "NOT READY",
     missing_required_vars: REQUIRED_VARS.filter((v) => !process.env[v.key]).map((v) => v.key),
     supabase_ok: report.supabase.news_articles_readable,
     resend_ok: report.resend.configured,
-    mint_mornings_will_send: report.mint_mornings_cron.will_fire,
   };
 
-  const httpStatus = report.mint_mornings_cron.will_fire ? 200 : 503;
+  const httpStatus = allRequiredSet && report.supabase.news_articles_readable ? 200 : 503;
   return res.status(httpStatus).json(report);
 }

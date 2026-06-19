@@ -258,7 +258,7 @@ Cash left over from strategy rebalancing events (fractional amounts that couldn'
 ---
 
 ### `subscriptions`
-Manages recurring fee-based services (e.g. management fees, Mint Mornings premium).
+Manages recurring fee-based services (e.g. management fees).
 
 | Column | Type | Description |
 |---|---|---|
@@ -383,17 +383,6 @@ Market news and editorial content shown in the app's news feed.
 | `published_at` | timestamptz | Publication timestamp |
 | `category` | text | Topic tag (e.g. `markets`, `economy`) |
 | `image_url` | text | Cover image URL |
-
----
-
-### `mint_mornings_log`
-Prevents the daily "Mint Mornings" newsletter from being sent more than once per day.
-
-| Column | Type | Description |
-|---|---|---|
-| `sent_date` | date | Date the newsletter was sent |
-| `sent_at` | timestamptz | Exact send timestamp |
-| `recipient_count` | integer | Number of emails dispatched |
 
 ---
 
