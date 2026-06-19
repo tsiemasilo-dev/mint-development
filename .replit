@@ -91,10 +91,13 @@ API_PORT = "3001"
 NODE_ENV = "development"
 EXPERIAN_MOCK = "true"
 EXPERIAN_MOCK_MODE = "true"
-APP_URL = "https://mymint.co.za"
 
 [userenv.development]
 VITE_ENABLE_INSURE = "true"
+APP_URL = "https://mint-development.vercel.app"
+
+[userenv.production]
+APP_URL = "https://app.mymint.co.za"
 
 [postMerge]
 path = "scripts/post-merge.sh"

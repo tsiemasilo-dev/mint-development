@@ -7879,7 +7879,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
     const optional3 = userId || "";
     const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
 
-    const baseUrl = process.env.APP_URL || "https://mymint.co.za";
+    const baseUrl = process.env.APP_URL || "https://app.mymint.co.za";
     const resolvedSuccessUrl = successUrl || `${baseUrl}/?ozow=success`;
     const resolvedCancelUrl = cancelUrl || `${baseUrl}/?ozow=cancel`;
     const resolvedErrorUrl = errorUrl || `${baseUrl}/?ozow=error`;
