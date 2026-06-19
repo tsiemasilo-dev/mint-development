@@ -1,3 +1,11 @@
+// Prevent any unhandled promise rejection from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('[server] Unhandled promise rejection (server kept alive):', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.warn('[server] Uncaught exception (server kept alive):', err?.message || err);
+});
+
 const fs = require("fs");
 const path = require("path");
 

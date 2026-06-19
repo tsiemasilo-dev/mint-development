@@ -69,7 +69,7 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
         <div className="flex justify-center mb-2">
           <video
-            src="/cancel-animation.mov"
+            src="/cancel-animation.mp4"
             autoPlay
             loop
             muted

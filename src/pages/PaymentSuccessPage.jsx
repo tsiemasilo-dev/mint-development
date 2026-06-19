@@ -1,20 +1,38 @@
 import React from "react";
-import { CheckCircle2 } from "lucide-react";
 
-const PaymentSuccessPage = ({ onDone }) => (
-  <div className="min-h-screen bg-slate-50 text-slate-900">
-    <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-20 text-center md:max-w-md md:px-8">
-      <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-600" />
-      <h1 className="mt-6 text-2xl font-semibold">Payment successful</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Your investment is being processed. We will notify you once it is confirmed.
+const PaymentSuccessPage = ({ onDone, strategyName }) => (
+  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+    <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
+      <div className="flex justify-center mb-2">
+        <video
+          src="/verified-animation.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{ width: 160, height: 160, objectFit: "contain" }}
+        />
+      </div>
+
+      <h1 className="text-xl font-semibold text-slate-900 mb-2">
+        Purchase Successful!
+      </h1>
+
+      <p className="text-sm text-slate-500 mb-1">
+        {strategyName
+          ? `Your investment in ${strategyName} is being processed.`
+          : "Your investment is being processed."}
       </p>
+      <p className="text-sm text-slate-400 mb-6">
+        We'll notify you once it's confirmed.
+      </p>
+
       <button
         type="button"
         onClick={onDone}
-        className="mt-8 w-full rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95"
+        className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition-all active:scale-95"
       >
-        Back to home
+        Back to Home
       </button>
     </div>
   </div>

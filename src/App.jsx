@@ -1214,7 +1214,7 @@ const App = () => {
         );
       }
       case 'paymentSuccess':
-        return <PaymentSuccessPage onDone={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }} />;
+        return null;
       case 'userOnboarding':
         return <UserOnboardingPage onComplete={noOp} />;
       case 'familyDashboard':
@@ -2294,7 +2294,22 @@ const App = () => {
   }
 
   if (currentPage === "paymentSuccess") {
-    return <PaymentSuccessPage onDone={() => setCurrentPage("home")} />;
+    let successStrategyName = null;
+    try {
+      const raw = sessionStorage.getItem("ozow_pending");
+      if (raw) successStrategyName = JSON.parse(raw)?.strategyName || null;
+    } catch {}
+    return (
+      <PaymentSuccessPage
+        strategyName={successStrategyName}
+        onDone={() => {
+          sessionStorage.removeItem("ozow_pending");
+          navigationHistory.current = [];
+          setPreviousPageName(null);
+          setCurrentPage("home");
+        }}
+      />
+    );
   }
 
   if (currentPage === "paymentCancelled") {
