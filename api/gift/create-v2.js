@@ -209,7 +209,7 @@ export default async function handler(req, res) {
       </table>
     </div>
     <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:24px">
-      <p style="font-size:13px;color:#92400e;margin:0;line-height:1.5">⏱ This gift <strong>expires in 4 hours</strong>. You can extend or cancel it from your Sent Gifts page.</p>
+      <p style="font-size:13px;color:#92400e;margin:0;line-height:1.5">⏱ This gift <strong>expires in 4 hours</strong>. If it isn't claimed in time, just refund it to your wallet from your Sent Gifts page and try again. You can also cancel it there anytime.</p>
     </div>
     <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">View Sent Gifts</a>
     <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>

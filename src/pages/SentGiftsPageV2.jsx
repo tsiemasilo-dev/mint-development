@@ -125,103 +125,13 @@ function GiftAuditTrail({ events, variant = "light" }) {
   );
 }
 
-function ExtendConfirmSheet({ gift, extension, fee, walletBalance, walletLoading, extending, onConfirm, onClose }) {
-  const feeRands = fee / 100;
-  const balanceRands = walletBalance;
-  const newBalanceRands = balanceRands !== null ? balanceRands - feeRands : null;
-  const insufficient = balanceRands !== null && balanceRands < feeRands;
-  const label = extension === "10h" ? "+10 hours" : "+24 hours";
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50" />
-      <div
-        className="relative bg-white rounded-t-3xl px-5 pt-5 pb-8 shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
-            <Clock size={16} className="text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800">Extend gift expiry</p>
-            <p className="text-xs text-slate-400 mt-0.5">{gift.asset_name} · To {gift.recipient_name || "Recipient"}</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-50 rounded-2xl divide-y divide-slate-100 mb-4">
-          <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-sm text-slate-600">Extension</p>
-            <p className="text-sm font-semibold text-violet-700">{label}</p>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-sm text-slate-600">Extension fee</p>
-            <p className="text-sm font-bold text-red-600">− {fmt(fee)}</p>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-sm text-slate-600">Wallet balance</p>
-            {walletLoading ? (
-              <div className="w-16 h-4 bg-slate-200 rounded animate-pulse" />
-            ) : (
-              <p className={`text-sm font-semibold ${insufficient ? "text-red-600" : "text-slate-800"}`}>
-                {balanceRands !== null ? fmt(Math.round(balanceRands * 100)) : "—"}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-sm text-slate-600">Balance after</p>
-            {walletLoading ? (
-              <div className="w-16 h-4 bg-slate-200 rounded animate-pulse" />
-            ) : (
-              <p className={`text-sm font-bold ${insufficient ? "text-red-600" : "text-emerald-700"}`}>
-                {newBalanceRands !== null ? fmt(Math.round(newBalanceRands * 100)) : "—"}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {insufficient && (
-          <div className="bg-red-50 rounded-xl px-4 py-3 mb-4">
-            <p className="text-xs text-red-600 font-medium">Insufficient wallet balance. Please top up before extending.</p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-600 bg-white active:scale-95 transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={insufficient || walletLoading || extending}
-            className="flex-1 py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {extending ? "Extending…" : `Confirm ${label}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActiveGiftCard({ gift, onExtend, onCancel }) {
+function ActiveGiftCard({ gift, onCancel, onRefund }) {
   const [copied, setCopied] = useState(false);
-  const [extending, setExtending] = useState(null);
-  const [extendedKey, setExtendedKey] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [pendingExtend, setPendingExtend] = useState(null);
-  const [walletBalance, setWalletBalance] = useState(null);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const { isLow, isExpired } = useCountdown(gift.expires_at);
-
-  const fee10 = Math.round((gift.amount || 0) * 0.05);
-  const fee24 = Math.round((gift.amount || 0) * 0.09);
-  const pendingFee = pendingExtend === "10h" ? fee10 : fee24;
+  const [refunding, setRefunding] = useState(false);
+  const { isExpired } = useCountdown(gift.expires_at);
+  const refunded = !!gift.refunded_at;
 
   function handleCopy() {
     navigator.clipboard.writeText(gift.token).then(() => {
@@ -230,35 +140,10 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
     });
   }
 
-  async function openExtendSheet(ext) {
-    setPendingExtend(ext);
-    setWalletBalance(null);
-    setWalletLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data } = await supabase
-          .from("wallets")
-          .select("balance")
-          .eq("user_id", session.user.id)
-          .maybeSingle();
-        setWalletBalance(data?.balance ?? 0);
-      }
-    } catch { /* show sheet anyway, balance stays null */ }
-    finally { setWalletLoading(false); }
-  }
-
-  async function handleExtendConfirm() {
-    if (!pendingExtend) return;
-    setExtending(pendingExtend);
-    const ext = pendingExtend;
-    setPendingExtend(null);
-    const success = await onExtend(gift.id, ext);
-    setExtending(null);
-    if (success) {
-      setExtendedKey(ext);
-      setTimeout(() => setExtendedKey(null), 2500);
-    }
+  async function handleRefundClick() {
+    setRefunding(true);
+    const ok = await onRefund?.(gift.id);
+    if (!ok) setRefunding(false);
   }
 
   async function handleCancelConfirm() {
@@ -270,27 +155,14 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
 
   return (
     <>
-      {pendingExtend && (
-        <ExtendConfirmSheet
-          gift={gift}
-          extension={pendingExtend}
-          fee={pendingFee}
-          walletBalance={walletBalance}
-          walletLoading={walletLoading}
-          extending={!!extending}
-          onConfirm={handleExtendConfirm}
-          onClose={() => setPendingExtend(null)}
-        />
-      )}
-
       <div className="bg-white rounded-3xl overflow-hidden shadow-sm" style={{ border: "1px solid rgba(0,0,0,0.07)" }}>
-        <div className="h-[3px] bg-gradient-to-r from-violet-500 to-purple-500" />
+        <div className={`h-[3px] bg-gradient-to-r ${isExpired ? "from-slate-300 to-slate-400" : "from-violet-500 to-purple-500"}`} />
         <div className="p-5">
           {/* Status row */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Gift</span>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isExpired ? "bg-slate-300" : "bg-amber-400 animate-pulse"}`} />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isExpired ? "Expired Gift" : "Active Gift"}</span>
             </div>
             <CountdownBadge expiresAt={gift.expires_at} />
           </div>
@@ -307,60 +179,61 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
             <p className="text-2xl font-black text-slate-900 shrink-0">{fmt(gift.amount)}</p>
           </div>
 
-          {/* Awaiting + fees row */}
-          <div className="flex items-center gap-2 flex-wrap mb-4">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-100">
-              <Clock size={10} />Awaiting claim
-            </span>
-            {gift.extension_fees > 0 && (
-              <span className="text-[11px] text-slate-400">Fees: {fmt(gift.extension_fees)}</span>
-            )}
-          </div>
+          {!isExpired && (
+            <>
+              {/* Awaiting row */}
+              <div className="flex items-center gap-2 flex-wrap mb-4">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-100">
+                  <Clock size={10} />Awaiting claim
+                </span>
+              </div>
 
-          {/* Token box */}
-          <div className="bg-slate-900 rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] text-white/40 font-semibold uppercase tracking-widest mb-1.5">Gift Code</p>
-              <p className="text-xl font-black tracking-[0.3em] text-white font-mono">{gift.token}</p>
+              {/* Token box */}
+              <div className="bg-slate-900 rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] text-white/40 font-semibold uppercase tracking-widest mb-1.5">Gift Code</p>
+                  <p className="text-xl font-black tracking-[0.3em] text-white font-mono">{gift.token}</p>
+                </div>
+                <button
+                  onClick={handleCopy}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 ${copied ? "bg-emerald-500 text-white" : "bg-white/[0.12] text-white/70 hover:bg-white/20"}`}
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {isExpired && !refunded && (
+            <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                This gift wasn't claimed in time. Refund it to your wallet — then you can send it again whenever you like.
+              </p>
             </div>
-            <button
-              onClick={handleCopy}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 ${copied ? "bg-emerald-500 text-white" : "bg-white/[0.12] text-white/70 hover:bg-white/20"}`}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Extend buttons */}
-        {!isExpired && (
-          <div className="px-5 pb-5 space-y-2">
-            {isLow && (
-              <p className="text-[11px] font-semibold text-amber-600 text-center bg-amber-50 rounded-xl py-2 border border-amber-100">⚡ Expiring soon — extend to keep active</p>
-            )}
-            <div className="flex gap-2.5">
-              <button
-                onClick={() => openExtendSheet("10h")}
-                disabled={!!extending}
-                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${extendedKey === "10h" ? "bg-emerald-500 text-white shadow-sm" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
-              >
-                {extending === "10h" ? "Extending…" : extendedKey === "10h" ? "✓ Extended" : `+10h · ${fmt(fee10)}`}
-              </button>
-              <button
-                onClick={() => openExtendSheet("24h")}
-                disabled={!!extending}
-                className={`flex-1 rounded-2xl py-3 text-xs font-bold transition-all active:scale-95 disabled:opacity-50 ${extendedKey === "24h" ? "bg-emerald-500 text-white shadow-sm" : "bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100"}`}
-              >
-                {extending === "24h" ? "Extending…" : extendedKey === "24h" ? "✓ Extended" : `+24h · ${fmt(fee24)}`}
-              </button>
-            </div>
+        {/* Expired → manual refund (no time extension, per CEO) */}
+        {isExpired && !refunded && (
+          <button
+            onClick={handleRefundClick}
+            disabled={refunding}
+            className="w-full py-4 text-sm font-bold text-white text-center active:opacity-80 transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 disabled:opacity-60"
+          >
+            {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
+          </button>
+        )}
+        {isExpired && refunded && (
+          <div className="border-t border-slate-100 px-5 py-3 bg-slate-50/60">
+            <p className="text-[11px] text-slate-500 font-medium text-center">Refunded to your wallet · send again anytime</p>
           </div>
         )}
 
         <GiftAuditTrail events={gift.events} variant="light" />
 
-        {/* Cancel footer */}
+        {/* Cancel footer — only while the gift is still active */}
+        {!isExpired && (
         <div className="border-t border-slate-100 px-5 py-3">
           {showCancelConfirm ? (
             <div className="flex items-center gap-2">
@@ -391,6 +264,7 @@ function ActiveGiftCard({ gift, onExtend, onCancel }) {
             </div>
           )}
         </div>
+        )}
       </div>
     </>
   );
@@ -402,20 +276,21 @@ const HISTORY_META = {
   cancelled: { label: "Cancelled", color: "text-red-600 bg-red-50", icon: XCircle },
 };
 
-function HistoryCard({ gift, onClaimToSelf }) {
+function HistoryCard({ gift, onRefund }) {
   const meta = HISTORY_META[gift.status] || HISTORY_META.expired;
   const Icon = meta.icon;
   const sentDate = gift.created_at ? new Date(gift.created_at).toLocaleDateString("en-ZA") : null;
   const claimedDate = gift.claimed_at ? new Date(gift.claimed_at).toLocaleDateString("en-ZA") : null;
-  const [claiming, setClaiming] = useState(false);
-  const canClaimToSelf = gift.status === "expired" || gift.status === "cancelled";
+  const [refunding, setRefunding] = useState(false);
   const isClaimed = gift.status === "claimed";
+  const refunded = !!gift.refunded_at;
+  // Expired + funds reserved at send + not yet refunded → sender can refund.
+  const canRefund = gift.status === "expired" && !!gift.reserved_at && !refunded;
 
-  async function handleClaimToSelf() {
-    if (!window.confirm(`Add ${gift.asset_name} to your own portfolio? R${(gift.amount / 100).toFixed(2)} will be deducted from your wallet.`)) return;
-    setClaiming(true);
-    const success = await onClaimToSelf(gift.id);
-    if (!success) setClaiming(false);
+  async function handleRefundClick() {
+    setRefunding(true);
+    const ok = await onRefund?.(gift.id);
+    if (!ok) setRefunding(false);
   }
 
   const accentBar = isClaimed
@@ -454,6 +329,22 @@ function HistoryCard({ gift, onClaimToSelf }) {
               <span className="font-semibold text-slate-700">{gift.recipient_name || "Recipient"}</span> claimed this
               {claimedDate && <span className="text-slate-400"> · {claimedDate}</span>}
             </p>
+          </div>
+        )}
+
+        {canRefund && (
+          <button
+            onClick={handleRefundClick}
+            disabled={refunding}
+            className="mt-3 w-full py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
+          >
+            {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
+          </button>
+        )}
+        {refunded && (
+          <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
+            <CheckCircle2 size={13} className="text-violet-500 shrink-0" />
+            <p className="text-xs text-slate-500">Refunded to your wallet · send again anytime</p>
           </div>
         )}
       </div>
@@ -632,25 +523,25 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
     return () => clearInterval(pollRef.current);
   }, [loadGifts, fetchGiftData]);
 
-  async function handleExtend(giftId, extension) {
+  async function handleRefund(giftId) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const res = await fetch("/api/gift/extend", {
+      const res = await fetch("/api/gift/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
-        body: JSON.stringify({ gift_id: giftId, extension }),
+        body: JSON.stringify({ gift_id: giftId }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) { alert(data.error || "Failed to extend."); return false; }
-      const now = new Date().toISOString();
-      setSentActive(prev => prev.map(g => {
-        if (g.id !== giftId) return g;
-        const feeAdded = extension === "10h" ? Math.round((g.amount || 0) * 0.05) : Math.round((g.amount || 0) * 0.09);
-        const newEvent = { type: "extended", ext: extension, at: now, fee: feeAdded };
-        const prevEvents = g.events || [{ type: "created", at: g.created_at }];
-        return { ...g, expires_at: data.new_expires_at, extension_fees: (g.extension_fees || 0) + feeAdded, events: [...prevEvents, newEvent] };
-      }));
+      if (!res.ok || data.error) { alert(data.error || "Failed to refund."); return false; }
+      // Funds returned to the wallet — refresh the balance UI + reload the gift lists
+      // so the gift moves to its refunded state.
+      try {
+        window.dispatchEvent(new Event("wallet-updated"));
+        window.dispatchEvent(new Event("profile-updated"));
+        window.dispatchEvent(new Event("financial-data-updated"));
+      } catch {}
+      await fetchGiftData().catch(() => {});
       return true;
     } catch { alert("Something went wrong. Please try again."); return false; }
   }
@@ -755,7 +646,7 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Sent — Active</p>
             {sentActive.map(g => (
-              <ActiveGiftCard key={g.id} gift={g} onExtend={handleExtend} onCancel={handleCancel} />
+              <ActiveGiftCard key={g.id} gift={g} onCancel={handleCancel} onRefund={handleRefund} />
             ))}
           </div>
         )}
@@ -768,7 +659,7 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
             {visibleHistory.map(g =>
               g.sender_name !== undefined
                 ? <ReceivedHistoryCard key={g.id} gift={g} />
-                : <HistoryCard key={g.id} gift={g} />
+                : <HistoryCard key={g.id} gift={g} onRefund={handleRefund} />
             )}
             {hasMoreHistory && (
               <button
