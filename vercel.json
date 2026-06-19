@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install --legacy-peer-deps --no-audit --no-fund",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "crons": [
     {
       "path": "/api/gift/expire",

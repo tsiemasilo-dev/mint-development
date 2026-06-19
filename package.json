@@ -6,6 +6,7 @@
   "engines": {
     "node": "22.x"
   },
+  "packageManager": "pnpm@10.26.1",
   "scripts": {
     "dev": "node server/index.cjs & npx vite --port 5000",
     "server": "node server/index.cjs",
