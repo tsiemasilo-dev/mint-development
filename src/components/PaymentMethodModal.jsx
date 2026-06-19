@@ -356,7 +356,7 @@ const PaymentMethodModal = ({
 
                             <button
                               type="button"
-                              onClick={() => setShowThankYou(true)}
+                              onClick={() => { onClose(); setShowThankYou(true); }}
                               className="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-semibold transition active:scale-95"
                             >
                               I've sent the payment
@@ -475,7 +475,7 @@ const PaymentMethodModal = ({
 
                   <button
                     type="button"
-                    onClick={() => { setShowEFTPopup(false); setShowThankYou(true); }}
+                    onClick={() => { setShowEFTPopup(false); onClose(); setShowThankYou(true); }}
                     className="w-full py-3.5 rounded-xl bg-slate-900 text-white text-sm font-semibold transition active:scale-95"
                   >
                     I've sent the payment
