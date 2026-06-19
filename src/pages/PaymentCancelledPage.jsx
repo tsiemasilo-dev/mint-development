@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import { supabase } from "../lib/supabase";
 
 const PaymentCancelledPage = ({ onBack, isError = false }) => {
@@ -67,14 +68,12 @@ const PaymentCancelledPage = ({ onBack, isError = false }) => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
-        <div className="flex justify-center mb-2">
-          <video
-            src="/cancel-animation.mp4"
-            autoPlay
+        <div className="flex justify-center mb-2" style={{ height: 160 }}>
+          <DotLottieReact
+            src="https://lottie.host/b6a7114d-33c4-4e34-ad32-6414f46dbfbd/CoInDc7qSX.json"
             loop
-            muted
-            playsInline
-            style={{ width: 160, height: 160, objectFit: "contain" }}
+            autoplay
+            style={{ width: 160, height: 160 }}
           />
         </div>
 
