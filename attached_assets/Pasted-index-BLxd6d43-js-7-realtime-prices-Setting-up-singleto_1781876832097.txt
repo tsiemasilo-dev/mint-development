@@ -1,0 +1,168 @@
+index-BLxd6d43.js:7 [realtime-prices] Setting up singleton subscription
+index-BLxd6d43.js:7 [realtime-prices] Subscription status: SUBSCRIBED
+index-BLxd6d43.js:7 Setting up SINGLETON real-time subscription: required-actions-singleton
+index-BLxd6d43.js:7 Singleton subscription status: SUBSCRIBED
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 KYC status check: stored="verified" current="verified"
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+MarketsPage-CtHlQgQS.js:1 [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+index-BLxd6d43.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-BLxd6d43.js:7 🔍 Fetching strategies with metrics from Supabase...
+index-BLxd6d43.js:7 🔍 Fetching public strategies from Supabase...
+MarketsPage-CtHlQgQS.js:1 🔍 Fetching news articles from News_articles table...
+index-BLxd6d43.js:7 [useFinancialData] Updated balance from DB: 99888097.49
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+MarketsPage-CtHlQgQS.js:1 ✅ News articles fetched successfully!
+MarketsPage-CtHlQgQS.js:1 📊 Total count in DB: 5111
+MarketsPage-CtHlQgQS.js:1 📰 Articles returned: 50
+MarketsPage-CtHlQgQS.js:1 Sample article: Object
+index-BLxd6d43.js:7 ✅ Fetched 7 public strategies with dynamic metrics
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 ✅ Fetched 9 strategies with metrics
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+MarketsPage-CtHlQgQS.js:1 [Chart] TimeFrame: YTD, Base: -0.16, End: 17.28, Return: -10900.00%
+index-BLxd6d43.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-BLxd6d43.js:2
+index-BLxd6d43.js:2 ✅ Fetched 240 securities with intraday metrics
+index-BLxd6d43.js:2 ✅ Fetched 240 securities with intraday metrics
+index-BLxd6d43.js:2 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for edd5dd04-7274-48ce-8f92-5299cd231256, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 7ae14f0b-d897-451a-acd0-a746c23934fa, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for db9e9278-1d4b-40af-bda6-5ad1dc9dc735, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 91bf54ca-a7a3-4ea0-a274-f2225378b9c1, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 54539f26-2b28-416c-b9cf-25aecb9f2361, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 5bafe4a7-90ba-41bd-9836-606dfd20ff60, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 1867614b-28ae-46ae-b6b4-5a81f99acffe, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 27e45586-c932-4c52-a33e-d51bb86a8087, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 272dbf83-1191-4e51-8592-8d013cda8f64, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for d34b7a23-6892-4ffb-bf52-0ebf1070dda1, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 04088874-53ac-437c-af81-f521b77a7d6a, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 8d70ce58-bbea-4148-873b-ad099cea0705, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 2c772050-a977-42ea-9d71-6b3e5fab50db, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 42ced564-a61d-4353-8d1f-57eff7b3e8fc, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 9e722062-432a-4af0-b775-4932099bf7ca, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 20caa821-84c7-4764-b75d-d034e8b45e8b, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for fe7c325c-f1f1-42c3-9ce4-7dab640a9e64, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for f9c1b5a1-baee-48b4-97c0-c627a221f04c, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 8d590c7d-dcc1-428f-8155-0f422174b694, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 3b9db219-a1df-4686-9443-6e32808a9c4b, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for a6fa0333-e7f4-4772-bfe6-3ce25a41dd38, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 7c6b296f-9c3d-413a-96ae-8417dddb9209, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 8e4bde19-01cb-4203-91fa-9a13ca793e2e, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 69fb4977-df6a-4e3e-8bbb-074d81de4fac, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 2e089b95-babd-45c0-a878-44e0626584f5, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for b736127c-315e-4411-9372-00a14e3d54e2, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for 137aaa0c-0c04-45dc-b93e-157a2b13bcf1, timeframe 1M...
+index-BLxd6d43.js:2 🔍 Fetching price history for ee26cac6-c6dd-4ccf-8153-6e68c3df0efd, timeframe 1M...
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 23 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+index-BLxd6d43.js:2 ✅ Fetched 21 price points from stock_returns_c for 1M
+MarketsPage-CtHlQgQS.js:1 [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-BLxd6d43.js:7 [PERIOD_DEBUG parent] RENDER: Object
+pdf.worker.min.mjs:1 Failed to load module script: The server responded with a non-JavaScript MIME type of "text/html". Strict MIME type checking is enforced for module scripts per HTML spec.
+index-BLxd6d43.js:2 Warning: Setting up fake worker.
+console.warn @ index-BLxd6d43.js:2
+pdf.worker.min.mjs:1 Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html". Strict MIME type checking is enforced for module scripts per HTML spec.
+index-BLxd6d43.js:7 [realtime-prices] Tearing down subscription
+index-BLxd6d43.js:7 [realtime-prices] Subscription status: CLOSED
+/api/ozow/initiate:1  Failed to load resource: the server responded with a status of 404 ()
+index-BLxd6d43.js:91 Ozow error: SyntaxError: Unexpected token 'T', "The page c"... is not valid JSON
+onSelectOzow @ index-BLxd6d43.js:91
+/api/ozow/initiate:1  Failed to load resource: the server responded with a status of 404 ()
+index-BLxd6d43.js:91 Ozow error: SyntaxError: Unexpected token 'T', "The page c"... is not valid JSON
+onSelectOzow @ index-BLxd6d43.js:91
+index-BLxd6d43.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ {success: true, onboarding: {…}, onboarding_id: '865eb670-45b2-4baf-b3b6-69a57941de3b', is_fully_onboarded: true, flags: {…}}
