@@ -75,6 +75,8 @@ const AuthPage = ({ initialStep, onSignupComplete, onLoginComplete, onPreLogin }
 
     checkMaintenanceMode();
 
+    if (!supabase) return;
+
     const channel = supabase
       .channel('app_settings_maintenance')
       .on(
