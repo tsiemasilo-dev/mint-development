@@ -8012,40 +8012,25 @@ app.post("/api/ozow/record-success", async (req, res) => {
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) continue;
 
-        const holdingQty = rawQty * scalingRatio;
+        const holdingQty = Math.max(1, Math.round(rawQty * scalingRatio));
 
-        const { data: existing } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
-          const newQty = oldQty + holdingQty;
-          const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty : priceCents;
-          await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
-            updated_at: now,
-          }).eq("id", existing.id);
+        // Insert as pending (avg_fill: null) so it appears in pending orders
+        // just like the wallet/paystack flow via /api/record-investment.
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: userId,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+        });
+        if (insertErr) {
+          console.error(`[ozow/record-success] Failed to insert pending holding for ${holding.symbol}:`, insertErr.message);
         } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
-            unrealized_pnl: 0,
-            as_of_date: today,
-            Status: "active",
-          });
+          console.log(`[ozow/record-success] Inserted pending holding ${holding.symbol} qty=${holdingQty}`);
         }
       }
     }

@@ -329,6 +329,9 @@ const App = () => {
         const result = await resp.json();
         if (result.success) {
           console.log("[ozow] Investment recorded from success page", result.alreadyRecorded ? "(already done)" : "");
+          window.dispatchEvent(new Event("wallet-updated"));
+          window.dispatchEvent(new Event("profile-updated"));
+          window.dispatchEvent(new Event("financial-data-updated"));
         } else {
           console.error("[ozow] record-success failed:", result.error);
         }
