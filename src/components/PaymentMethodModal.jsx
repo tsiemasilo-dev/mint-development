@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 
-const STANDARD_BANK_LOGO = "/standard-bank-logo.jpg";
+const STANDARD_BANK_LOGO = "https://cdn.brandfetch.io/ids9vvzhtN/w/720/h/720/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1668518662439";
 
 const PaymentMethodModal = ({
   isOpen,
@@ -237,7 +237,7 @@ const PaymentMethodModal = ({
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0033a1]/5 border border-[#0033a1]/10 flex-shrink-0 overflow-hidden p-1">
                       <img
-                        src="/standard-bank-logo.png"
+                        src={STANDARD_BANK_LOGO}
                         alt="Standard Bank"
                         className="w-full h-full object-contain"
                       />
@@ -280,7 +280,7 @@ const PaymentMethodModal = ({
                               </p>
                             </div>
                             <img
-                              src="/standard-bank-logo.png"
+                              src={STANDARD_BANK_LOGO}
                               alt="Standard Bank"
                               className="h-9 w-auto object-contain"
                             />
@@ -423,7 +423,7 @@ const PaymentMethodModal = ({
                     <p className="text-[10px] uppercase tracking-widest text-white/50">Receiving Bank</p>
                     <p className="text-[11px] text-white/70 mt-0.5">EFT / Bank Transfer</p>
                   </div>
-                  <img src="/standard-bank-logo.png" alt="Standard Bank" className="h-9 w-auto object-contain" />
+                  <img src={STANDARD_BANK_LOGO} alt="Standard Bank" className="h-9 w-auto object-contain" />
                 </div>
 
                 <div className="px-5 py-4 space-y-2.5">
