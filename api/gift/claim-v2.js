@@ -187,20 +187,25 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Failed to allocate holdings. Please try again." });
   }
 
-  // Deduct from sender's wallet — funds were held at create time, now settle the debit.
+  // Settle the sender's side. Under the reserve model the wallet was already
+  // debited at SEND (gift.reserved_at is set), so do NOT debit again here. Only
+  // legacy gifts created before reserve-at-send (no reserved_at) still debit at
+  // claim — keeps both correct while old gifts drain out post-deploy.
   try {
-    const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
-    if (senderWallet) {
-      const amountRands = Number(gift.amount) / 100;
-      const newBalance = Math.max(0, Number(senderWallet.balance) - amountRands);
-      await db.from("wallets").update({ balance: newBalance }).eq("user_id", gift.sender_user_id);
-      // Settle the hold transaction to "posted" so it appears in the sender's history
-      await db.from("transactions")
-        .update({ status: "posted", description: "Gift claimed — investment transferred" })
-        .eq("store_reference", `GIFT2-HOLD-${gift.id}`)
-        .eq("user_id", gift.sender_user_id);
+    if (!gift.reserved_at) {
+      const { data: senderWallet } = await db.from("wallets").select("balance").eq("user_id", gift.sender_user_id).maybeSingle();
+      if (senderWallet) {
+        const amountRands = Number(gift.amount) / 100;
+        const newBalance = Math.max(0, Number(senderWallet.balance) - amountRands);
+        await db.from("wallets").update({ balance: newBalance }).eq("user_id", gift.sender_user_id);
+      }
     }
-  } catch (e) { console.warn("[gift/claim-v2] sender wallet debit:", e.message); }
+    // Mark the sender's reservation/hold tx as settled either way.
+    await db.from("transactions")
+      .update({ status: "posted", description: "Gift claimed — investment transferred" })
+      .eq("store_reference", `GIFT2-HOLD-${gift.id}`)
+      .eq("user_id", gift.sender_user_id);
+  } catch (e) { console.warn("[gift/claim-v2] sender settle:", e.message); }
 
   // Mark gift claimed — also store recipient_identifier if we have it
   const claimUpdate = {

@@ -62,7 +62,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // Verify balance — hold funds (no deduction until claimed)
+  // Reserve model: the sender's wallet is DEBITED now, at send time, so the
+  // funds genuinely leave their spendable balance (no double-spend). Claim does
+  // NOT debit again; expire/cancel refund. See gift_claims.reserved_at.
   const { data: wallet, error: walletQueryErr } = await db
     .from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
   if (walletQueryErr || !wallet) return res.status(400).json({ error: "Wallet not found." });
@@ -82,7 +84,17 @@ export default async function handler(req, res) {
   try { code = await generateUniqueCode(db); }
   catch (e) { return res.status(500).json({ error: "Failed to generate gift code. Please try again." }); }
 
+  const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+
+  // Debit the wallet FIRST, so a claimable gift can never exist without the money
+  // having been taken. If the gift row then fails to save, we roll the debit back.
+  const { error: debitErr } = await db
+    .from("wallets").update({ balance: originalBalance - amountRands }).eq("user_id", user.id);
+  if (debitErr) {
+    console.error("[gift/create-v2] wallet debit error:", debitErr.message);
+    return res.status(500).json({ error: "Failed to reserve gift funds." });
+  }
 
   const { data: gift, error: insertErr } = await db
     .from("gift_claims")
@@ -100,27 +112,31 @@ export default async function handler(req, res) {
       status: "pending_claim",
       message: messagePayload,
       expires_at: expiresAt,
+      reserved_at: now,
     })
     .select("id, token, expires_at")
     .single();
 
   if (insertErr) {
+    // Roll the debit back — the sender must not be charged for a gift that didn't save.
+    await db.from("wallets").update({ balance: originalBalance }).eq("user_id", user.id);
     console.error("[gift/create-v2] insert error:", insertErr.message, insertErr.details, insertErr.hint);
     return res.status(500).json({ error: "Failed to create gift.", detail: insertErr.message });
   }
 
-  // Record a pending hold transaction (no wallet debit — debit happens on claim)
-  const now = new Date().toISOString();
+  // Record the reservation as a posted debit in the sender's history. Claim
+  // transfers it to the recipient (no refund); expire/cancel post an offsetting
+  // credit back to the sender.
   try {
     await db.from("transactions").insert({
       user_id: user.id,
       direction: "debit",
-      name: `Investment Gift — ${asset_name} (held)`,
-      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — funds held until claimed`,
+      name: `Investment Gift — ${asset_name}`,
+      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — reserved until claimed`,
       amount,
       store_reference: `GIFT2-HOLD-${gift.id}`,
       currency: "ZAR",
-      status: "pending",
+      status: "posted",
       transaction_date: now,
       created_at: now,
     });

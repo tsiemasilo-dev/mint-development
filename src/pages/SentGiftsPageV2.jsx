@@ -666,6 +666,14 @@ export default function SentGiftsPageV2({ onBack, onNavigate }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) { alert(data.error || "Failed to cancel."); return; }
+      // Cancel refunds the wallet (reserve model) — refresh the balance UI.
+      if (data.refunded_amount) {
+        try {
+          window.dispatchEvent(new Event("wallet-updated"));
+          window.dispatchEvent(new Event("profile-updated"));
+          window.dispatchEvent(new Event("financial-data-updated"));
+        } catch {}
+      }
       const cancelled = sentActive.find(g => g.id === giftId);
       if (cancelled) {
         const cancelledAt = new Date().toISOString();
