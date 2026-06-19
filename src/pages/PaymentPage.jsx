@@ -273,7 +273,10 @@ const PaymentPage = ({
         setChildWalletBalance(finalNewBalance);
       }
       setPaymentStatus("wallet-done");
-      setWalletSuccessOpen(true);
+      try {
+        sessionStorage.setItem("ozow_pending", JSON.stringify({ strategyName: strategy?.name || "Investment" }));
+      } catch {}
+      onSuccess?.({ reference: `WALLET-${Date.now()}`, method: "wallet" });
     } catch (err) {
       console.error("Wallet payment error:", err);
       isSubmittingWallet.current = false;
