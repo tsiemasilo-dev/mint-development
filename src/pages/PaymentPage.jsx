@@ -273,7 +273,10 @@ const PaymentPage = ({
         setChildWalletBalance(finalNewBalance);
       }
       setPaymentStatus("wallet-done");
-      setWalletSuccessOpen(true);
+      try {
+        sessionStorage.setItem("ozow_pending", JSON.stringify({ strategyName: strategy?.name || "Investment" }));
+      } catch {}
+      onSuccess?.({ reference: `WALLET-${Date.now()}`, method: "wallet" });
     } catch (err) {
       console.error("Wallet payment error:", err);
       isSubmittingWallet.current = false;
@@ -406,6 +409,58 @@ const PaymentPage = ({
           onSelectPaystack={() => handleMethodSelection("paystack")}
           onSelectWallet={() => handleMethodSelection("wallet")}
           onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
+          onSelectOzow={async () => {
+            setIsMethodModalOpen(false);
+            setPaymentStatus("initializing");
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const user = session?.user;
+              const baseUrl = window.location.origin;
+              const resp = await fetch("/api/ozow/initiate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  amount,
+                  strategyName: strategy?.name || "",
+                  strategyId: strategy?.id || null,
+                  userId: user?.id || null,
+                  userEmail: user?.email || null,
+                  successUrl: `${baseUrl}/?ozow=success`,
+                  cancelUrl: `${baseUrl}/?ozow=cancel`,
+                  errorUrl: `${baseUrl}/?ozow=error`,
+                }),
+              });
+              const data = await resp.json();
+              if (data.success && data.action_url) {
+                sessionStorage.setItem("ozow_pending", JSON.stringify({
+                  transactionRef: data.TransactionReference,
+                  strategyId: strategy?.id || null,
+                  amount,
+                  strategyName: strategy?.name || "",
+                }));
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = data.action_url;
+                Object.entries(data).forEach(([key, value]) => {
+                  if (["success", "action_url"].includes(key)) return;
+                  const input = document.createElement("input");
+                  input.type = "hidden"; input.name = key; input.value = value;
+                  form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+              } else {
+                setPaymentStatus("failed");
+                setErrorMessage(data.error || "Failed to initiate Ozow payment.");
+                setIsMethodModalOpen(true);
+              }
+            } catch (err) {
+              console.error("[ozow] initiate error:", err);
+              setPaymentStatus("failed");
+              setErrorMessage("Could not connect to Ozow. Please try another payment method.");
+              setIsMethodModalOpen(true);
+            }
+          }}
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">

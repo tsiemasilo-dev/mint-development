@@ -751,10 +751,13 @@ const HomePage = ({
 
         const profitable = formatted.filter(a => !a.isPending && a.pnlPct > 0).sort((a, b) => b.pnlPct - a.pnlPct);
         const pending = formatted.filter(a => a.isPending);
-        // Keep pending entries available (the "Pending orders" section reads them
-        // off assetsToDisplay) but rank profitable ones first so they dominate
-        // the "best performing assets" carousel.
-        const sorted = [...profitable, ...pending].slice(0, 5);
+        // Rank profitable assets first so they dominate the "best performing assets"
+        // carousel (capped at 5 there). Then always retain any asset that has a
+        // pending batch — including partial fills that didn't make the top 5 — so
+        // the Pending orders section can surface them. Fully-pending ones last.
+        const carousel = profitable.slice(0, 5);
+        const extraPending = formatted.filter(a => a.hasPendingBatch && !carousel.includes(a) && !pending.includes(a));
+        const sorted = [...carousel, ...extraPending, ...pending];
         _cachedBestAssets = sorted;
         setLocalBestAssets(sorted);
         return;
@@ -1409,14 +1412,12 @@ const HomePage = ({
           {homeTab === "balance" || homeTab === "invest" ? (
             <div className="relative select-none -mx-2 md:mx-0">
               <div className="relative w-full touch-pan-y h-auto">
+                {/* Withdrawals temporarily disabled (CEO): the purple card no longer
+                    navigates to the withdraw page. Restore by re-adding the
+                    cursor-pointer / role="button" / onClick that dispatched
+                    navigate-within-app → "withdraw". */}
                 <div
-                  className="relative h-auto rounded-[28px] border border-white/10 cursor-pointer"
-                  role="button"
-                  onClick={(e) => {
-                    const hit = e.target.closest('button, a, input, select, svg, [role="button"]');
-                    if (hit && hit !== e.currentTarget) return;
-                    window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "withdraw" } }));
-                  }}
+                  className="relative h-auto rounded-[28px] border border-white/10"
                 >
                   <SwipeableBalanceCard
                     userId={userId}
@@ -1771,7 +1772,10 @@ const HomePage = ({
         {(() => {
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
-          const pendingAssets = safeAssets.filter(a => a && a.isPending);
+          // Include fully-pending assets AND mixed assets (some batches filled, some
+          // pending) so a re-buy of a security you already hold surfaces its pending
+          // batch here while the filled portion stays in the portfolio carousel.
+          const pendingAssets = safeAssets.filter(a => a && (a.isPending || a.hasPendingBatch));
           // A strategy goes in the pending section if:
           //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
           //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
@@ -1784,10 +1788,27 @@ const HomePage = ({
             return batches.some(b => !b.filled);
           });
 
-          // Build one entry per TRANSACTION for strategies so duplicate purchases show separately.
+          // Build a set of transaction IDs that correspond to UNFILLED batches.
+          // A filled transaction's ID will be in filledTxIds — we skip those so
+          // a re-buy doesn't drag the old filled purchase into the pending section.
+          const pendingTxIds = new Set();
+          const filledTxIds = new Set();
+          Object.values(purchaseBatchesByStrategy).forEach(batches => {
+            batches.forEach(b => {
+              if (!b.transactionId) return;
+              if (b.filled) filledTxIds.add(b.transactionId);
+              else pendingTxIds.add(b.transactionId);
+            });
+          });
+
+          // Build one entry per PENDING TRANSACTION for strategies.
           // Each transaction "Strategy Investment: X" = one purchase event.
+          // Skip transactions that belong to a filled batch so a re-buy doesn't
+          // pull the already-settled purchase into the pending section.
           const stratTxMap = {};
           (Array.isArray(transactions) ? transactions : []).forEach(tx => {
+            // If we have batch data and this tx belongs only to a filled batch, skip it.
+            if (filledTxIds.has(tx.id) && !pendingTxIds.has(tx.id)) return;
             const name = (tx.name || "").trim();
             let stratName = null;
             if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
@@ -1831,7 +1852,11 @@ const HomePage = ({
           }));
 
           const pendingAssetItems = pendingAssets.map(a => {
-            const batches = Array.isArray(a.batches) ? a.batches : [];
+            const allBatches = Array.isArray(a.batches) ? a.batches : [];
+            // Only the UNFILLED batches belong in Pending orders — filled batches
+            // live in the portfolio carousel. For a mixed security this drops the
+            // already-settled buys and keeps just the pending one(s).
+            const batches = allBatches.filter(b => !(Number(b?.avg_fill) > 0));
             // Sort newest-first so the top of the stack is the most recent buy.
             const sortedBatches = [...batches].sort((b1, b2) => {
               const t1 = b1?.created_at ? new Date(b1.created_at).getTime() : 0;
@@ -2094,11 +2119,11 @@ const HomePage = ({
           ) : hasAssets ? (
             <div className="-mx-4 flex gap-3 overflow-x-auto overflow-y-visible px-4 pb-1 pt-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {assetsToDisplay.filter(a => !a.isPending).slice(0, 5).map((asset) => {
-                const batches = Array.isArray(asset.batches) ? asset.batches : [];
+                // FILLED purchases only — pending buys live in the Pending orders
+                // section. Count, stack and modal all use filled batches only.
+                const allBatches = Array.isArray(asset.batches) ? asset.batches : [];
+                const batches = allBatches.filter(b => Number(b.avg_fill) > 0);
                 const isStack = batches.length > 1;
-                const pendingCount = batches.filter(b => !b.avg_fill || Number(b.avg_fill) === 0).length;
-                const filledCount = batches.length - pendingCount;
-                const hasMixed = pendingCount > 0 && filledCount > 0;
                 // Purchase date hint for single-purchase cards. Stack cards already
                 // show the "Nx" badge; the per-batch dates appear in the stacked modal.
                 const latestBatchDate = batches
@@ -2137,9 +2162,7 @@ const HomePage = ({
                       </div>
                       <p className="text-xs text-slate-500 line-clamp-1">
                         {isStack
-                          ? (hasMixed
-                              ? `${filledCount} filled · ${pendingCount} pending · tap to see`
-                              : `${batches.length} purchases · tap to see each`)
+                          ? `${batches.length} purchases · tap to see each`
                           : asset.name}
                       </p>
                     </div>
@@ -2170,33 +2193,22 @@ const HomePage = ({
                 if (isStack) {
                   return (
                     <div key={asset.symbol} className="flex-shrink-0 min-w-[260px] snap-start relative">
-                      {/* Stack shadow layers — purple if any pending batch, white otherwise */}
-                      {pendingCount > 0 ? (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
-                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
-                      ) : (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      )}
+                      {/* Stack shadow layers — always white (filled-only section) */}
+                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
                       {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
                       <button
                         type="button"
-                        onClick={() => setExpandedStockStack({ asset })}
+                        onClick={() => setExpandedStockStack({ asset: { ...asset, batches } })}
                         className="relative w-full rounded-3xl bg-white p-4 text-left shadow-md transition-all active:scale-[0.97]"
                       >
                         {cardInner}
                       </button>
-                      {/* Purchase count badge */}
+                      {/* Filled purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
                         {batches.length}×
                       </div>
-                      {/* Pending indicator if mixed */}
-                      {hasMixed && (
-                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
-                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
-                        </div>
-                      )}
                     </div>
                   );
                 }
@@ -2289,7 +2301,10 @@ const HomePage = ({
               {bestStrategies.filter(s => {
                 if (!s || s.isPending) return false;
                 const batches = purchaseBatchesByStrategy[s.id] || [];
-                return !batches.some(b => !b.filled);
+                // Show the strategy here if it has at least one FILLED batch. A re-buy
+                // adds a pending batch (which shows in Pending orders) but the original
+                // filled holding still belongs in the portfolio carousel.
+                return batches.length === 0 || batches.some(b => b.filled);
               }).slice(0, 5).map((strategy) => {
                 const holdingsSnapshot = getStrategyHoldingsSnapshot(strategy, holdingsBySymbol);
                 const pct = strategy.change_pct || 0;
@@ -2303,12 +2318,14 @@ const HomePage = ({
                   ? (hookStrat.investedAmount > 0 ? (hookStrat.totalPnl / hookStrat.investedAmount) * 100 : 0)
                   : strategy.pnlPct;
 
-                // Use purchase batches (one per minute) instead of transactions for accuracy
-                const batches = purchaseBatchesByStrategy[strategy.id] || [];
-                const pendingCount = batches.filter(b => !b.filled).length;
-                const filledCount = batches.filter(b => b.filled).length;
+                // "Your best performing strategies" shows FILLED purchases only.
+                // Pending re-buys live exclusively in the Pending orders section, so
+                // the count, stack and modal here all use filled batches only — a
+                // strategy with 1 filled + 1 pending shows as a single filled card
+                // (not "2×"), and 2 filled + 1 pending shows "2×".
+                const allBatches = purchaseBatchesByStrategy[strategy.id] || [];
+                const batches = allBatches.filter(b => b.filled);
                 const isStack = batches.length > 1;
-                const hasMixed = pendingCount > 0 && filledCount > 0;
 
                 const fmtBatchDate = (b) => {
                   if (b.minute === "unknown") return null;
@@ -2324,9 +2341,7 @@ const HomePage = ({
                           <p className="truncate text-sm font-semibold text-slate-900">{strategy.name}</p>
                           <p className="text-xs text-slate-600 line-clamp-1">
                             {isStack
-                              ? hasMixed
-                                ? `${filledCount} filled · ${pendingCount} pending · tap to see`
-                                : `${batches.length} purchases · tap to see each`
+                              ? `${batches.length} purchases · tap to see each`
                               : `${strategy.risk_level || 'Balanced'}${strategy.objective ? ` • ${strategy.objective}` : ''}`}
                           </p>
                         </div>
@@ -2383,34 +2398,31 @@ const HomePage = ({
                 if (isStack) {
                   return (
                     <div key={strategy.id} className="flex-shrink-0 w-[280px] snap-start relative">
-                      {/* Stack shadow layers — purple if pending batch exists, white otherwise */}
-                      {pendingCount > 0 ? (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl shadow-sm"
-                          style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)" }} />
-                      ) : (
-                        <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
-                      )}
+                      {/* Stack shadow layers — always white (filled-only section) */}
+                      <div className="absolute inset-x-3 top-2 bottom-0 rounded-3xl border border-slate-100/80 bg-white/70 shadow-sm" />
                       {batches.length > 2 && (
                         <div className="absolute inset-x-5 top-4 bottom-0 rounded-3xl border border-slate-100/60 bg-white/50 shadow-sm" />
                       )}
                       {/* Top card */}
                       <button
                         type="button"
-                        onClick={() => setExpandedStratStack({ strategy, batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap })}
+                        onClick={() => setExpandedStratStack({
+                          // Feed the modal the hook's POSITIONS-only values so each filled
+                          // batch's apportioned P&L matches the card header. batches is
+                          // already filtered to filled-only, so no pending card appears.
+                          strategy: hookStrat
+                            ? { ...strategy, currentValue: hookStrat.positionsValue, investedAmount: Number((hookStrat.positionsValue - hookStrat.unrealizedPnl).toFixed(2)) }
+                            : strategy,
+                          batches, fmtBatchDate, holdingsSnapshot, pct, livePriceMap
+                        })}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all active:scale-[0.97]"
                       >
                         {cardInner}
                       </button>
-                      {/* Purchase count badge */}
+                      {/* Filled purchase count badge */}
                       <div className="absolute top-2 right-2 h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white shadow">
                         {batches.length}×
                       </div>
-                      {/* Pending indicator if mixed */}
-                      {hasMixed && (
-                        <div className="absolute -top-1 -left-1 flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow ring-2 ring-white">
-                          <Clock3 className="h-2.5 w-2.5" /> {pendingCount} pending
-                        </div>
-                      )}
                     </div>
                   );
                 }

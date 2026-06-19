@@ -26,6 +26,7 @@ const InvestPage = lazy(() => import("./pages/InvestPage.jsx"));
 const InvestAmountPage = lazy(() => import("./pages/InvestAmountPage.jsx"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage.jsx"));
 const PaymentSuccessPage = lazy(() => import("./pages/PaymentSuccessPage.jsx"));
+const PaymentCancelledPage = lazy(() => import("./pages/PaymentCancelledPage.jsx"));
 const PaymentPendingPage = lazy(() => import("./pages/PaymentPendingPage.jsx"));
 const PaymentMethodModal = lazy(() => import("./components/PaymentMethodModal.jsx"));
 const FactsheetPage = lazy(() => import("./pages/FactsheetPage.jsx"));
@@ -174,8 +175,18 @@ const recoveryTokens = isRecoveryMode ? getTokensFromHash(initialHash) : null;
 
 const mainTabs = ['home', 'credit', 'transact', 'investments', 'markets', 'news', 'deposit', 'more', 'welcome', 'auth'];
 
+// Read ozow param synchronously at module level so initialPage is always correct,
+// eliminating any flash through home/welcome before the async session check resolves.
+const initialOzowParam = new URLSearchParams(window.location.search).get("ozow");
+
 const App = () => {
-  const initialPage = hasError ? "linkExpired" : initialGiftToken ? "giftClaim" : (isRecoveryMode ? "auth" : (storedSession ? "home" : "welcome"));
+  const initialPage = hasError ? "linkExpired"
+    : initialGiftToken ? "giftClaim"
+    : isRecoveryMode ? "auth"
+    : initialOzowParam === "success" ? "paymentSuccess"
+    : (initialOzowParam === "cancel" || initialOzowParam === "error" || initialOzowParam === "abandoned" || initialOzowParam === "pending" || initialOzowParam === "pendinginvestigation") ? "paymentCancelled"
+    : storedSession ? "home"
+    : "welcome";
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [mountedTabs, setMountedTabs] = useState(() => {
     const initial = new Set(['home']);
@@ -187,7 +198,7 @@ const App = () => {
   const [pageParams, setPageParams] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError && !initialOzowParam);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
@@ -329,6 +340,9 @@ const App = () => {
         const result = await resp.json();
         if (result.success) {
           console.log("[ozow] Investment recorded from success page", result.alreadyRecorded ? "(already done)" : "");
+          window.dispatchEvent(new Event("wallet-updated"));
+          window.dispatchEvent(new Event("profile-updated"));
+          window.dispatchEvent(new Event("financial-data-updated"));
         } else {
           console.error("[ozow] record-success failed:", result.error);
         }
@@ -506,6 +520,8 @@ const App = () => {
   useEffect(() => {
     const handleNavigationEvent = (e) => {
       const { page, member, child } = e.detail || {};
+      // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
+      if (page === 'withdraw') return;
       if (page) {
         let normalizedPage = page === 'family' ? 'familyDashboard' : page;
         const selectedChild = child || member || null;
@@ -613,6 +629,8 @@ const App = () => {
           if (session) {
             if (ozowReturnParam.current === "success") {
               setCurrentPage("paymentSuccess");
+            } else if (["cancel", "error", "abandoned", "pending", "pendinginvestigation"].includes(ozowReturnParam.current)) {
+              setCurrentPage("paymentCancelled");
             } else {
               setCurrentPage("home");
             }
@@ -789,6 +807,7 @@ const App = () => {
       import("./pages/InvestPage.jsx");
       import("./pages/PaymentPage.jsx");
       import("./pages/PaymentSuccessPage.jsx");
+      import("./pages/PaymentCancelledPage.jsx");
       // Fire-and-forget: warm the markets data cache before the user navigates there
       getMarketsSecuritiesWithMetrics().catch(() => {});
     };
@@ -812,7 +831,14 @@ const App = () => {
     setModal(null);
   };
 
+  // Withdrawals are temporarily disabled (CEO): tapping the purple balance card
+  // must NOT open the withdraw page. This is the single entry point (every card's
+  // onWithdraw routes here), so the early return hides the page everywhere. Flip
+  // WITHDRAW_ENABLED back to true to restore it.
+  const WITHDRAW_ENABLED = false;
+
   const handleWithdrawRequest = async () => {
+    if (!WITHDRAW_ENABLED) return; // withdraw page disabled — no navigation
     try {
       if (!supabase) {
         openModal("Withdraw", "You don't have any allocations to withdraw from.");
@@ -1197,7 +1223,7 @@ const App = () => {
         );
       }
       case 'paymentSuccess':
-        return <PaymentSuccessPage onDone={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }} />;
+        return null;
       case 'userOnboarding':
         return <UserOnboardingPage onComplete={noOp} />;
       case 'familyDashboard':
@@ -1703,6 +1729,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -1815,6 +1842,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -1823,6 +1851,7 @@ const App = () => {
                   transactionRef: data.TransactionReference,
                   strategyId: data.Optional1,
                   amount: data.Amount,
+                  strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
                 }));
                 const form = document.createElement("form");
                 form.method = "POST";
@@ -1898,10 +1927,18 @@ const App = () => {
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            // Navigate immediately so PaymentPage unmounts before any async work runs
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setCurrentPage("paymentSuccess");
+            // Goal update runs in the background after navigation
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock";
             const linkedSecurityId = stockCheckout.security?.id || stockCheckout.security?.security_id || null;
+            selectedGoalIdRef.current = null;
+            goalInvestAmountRef.current = 0;
+            setSelectedGoalId(null);
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -1938,12 +1975,6 @@ const App = () => {
                 console.error("Error updating goal:", e);
               }
             }
-            selectedGoalIdRef.current = null;
-            goalInvestAmountRef.current = 0;
-            setSelectedGoalId(null);
-            navigationHistory.current = [];
-            setPreviousPageName(null);
-            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
@@ -2138,6 +2169,7 @@ const App = () => {
                   successUrl: `${baseUrl}/?ozow=success`,
                   cancelUrl: `${baseUrl}/?ozow=cancel`,
                   errorUrl: `${baseUrl}/?ozow=error`,
+                  abandonedUrl: `${baseUrl}/?ozow=abandoned`,
                 }),
               });
               const data = await resp.json();
@@ -2146,6 +2178,7 @@ const App = () => {
                   transactionRef: data.TransactionReference,
                   strategyId: data.Optional1,
                   amount: data.Amount,
+                  strategyName: selectedStrategy?.name || "Investment",
                 }));
                 const form = document.createElement("form");
                 form.method = "POST";
@@ -2220,10 +2253,19 @@ const App = () => {
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            // Navigate immediately so PaymentPage unmounts before any async work runs
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setSelectedChildForInvest(null);
+            setCurrentPage("paymentSuccess");
+            // Goal update runs in the background after navigation
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = selectedStrategy?.name || "Strategy";
             const linkedStrategyId = selectedStrategy?.id || null;
+            selectedGoalIdRef.current = null;
+            goalInvestAmountRef.current = 0;
+            setSelectedGoalId(null);
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -2260,13 +2302,6 @@ const App = () => {
                 console.error("Error updating goal:", e);
               }
             }
-            selectedGoalIdRef.current = null;
-            goalInvestAmountRef.current = 0;
-            setSelectedGoalId(null);
-            setSelectedChildForInvest(null);
-            navigationHistory.current = [];
-            setPreviousPageName(null);
-            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
@@ -2275,7 +2310,31 @@ const App = () => {
   }
 
   if (currentPage === "paymentSuccess") {
-    return <PaymentSuccessPage onDone={() => setCurrentPage("home")} />;
+    let successStrategyName = null;
+    try {
+      const raw = sessionStorage.getItem("ozow_pending");
+      if (raw) successStrategyName = JSON.parse(raw)?.strategyName || null;
+    } catch {}
+    return (
+      <PaymentSuccessPage
+        strategyName={successStrategyName}
+        onDone={() => {
+          sessionStorage.removeItem("ozow_pending");
+          navigationHistory.current = [];
+          setPreviousPageName(null);
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "paymentCancelled") {
+    return (
+      <PaymentCancelledPage
+        status={ozowReturnParam.current || "cancel"}
+        onBack={() => setCurrentPage("home")}
+      />
+    );
   }
 
   if (currentPage === "paymentPending") {

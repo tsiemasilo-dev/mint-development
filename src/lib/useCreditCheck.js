@@ -304,20 +304,6 @@ export function useCreditCheck() {
       .catch(() => setEmployerCsv([]));
   }, []);
 
-  const fetchMockMode = useCallback(async () => {
-    try {
-      const response = await fetch("/api/mock-mode");
-      const payload = await response.json();
-      const value = payload?.mockMode ?? payload?.mock ?? null;
-      setMockMode(value === null ? null : Boolean(value));
-    } catch {
-      setMockMode(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchMockMode();
-  }, [fetchMockMode]);
 
   const lockInputs = useCallback(() => {
     if (!form.identityNumber || !form.firstName || !form.lastName) {

@@ -131,6 +131,13 @@ export default function GiftToggleV2({
       setStep("success");
       setCelebrate(true);
       setTimeout(() => setCelebrate(false), 1600);
+      // Sending debits the wallet immediately (reserve model) — nudge the balance
+      // card / financial data to refresh so the new balance shows right away.
+      try {
+        window.dispatchEvent(new Event("wallet-updated"));
+        window.dispatchEvent(new Event("profile-updated"));
+        window.dispatchEvent(new Event("financial-data-updated"));
+      } catch {}
     } catch {
       setError("Something went wrong. Please try again.");
       setStep("confirming");

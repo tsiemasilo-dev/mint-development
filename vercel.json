@@ -1,12 +1,13 @@
 {
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "crons": [
-    {
-      "path": "/api/mint-mornings",
-      "schedule": "0 5 * * *"
-    },
     {
       "path": "/api/gift/expire",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/prices/eod-save",
+      "schedule": "5 15 * * 1-5"
     }
   ],
   "rewrites": [

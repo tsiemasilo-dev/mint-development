@@ -1,3 +1,11 @@
+// Prevent any unhandled promise rejection from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('[server] Unhandled promise rejection (server kept alive):', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.warn('[server] Uncaught exception (server kept alive):', err?.message || err);
+});
+
 const fs = require("fs");
 const path = require("path");
 
@@ -680,11 +688,6 @@ try {
   console.warn('Supabase client not available:', e.message);
 }
 
-const { startMintMorningsListener, sendTestEmail } = require('./mintMorningsCron.cjs');
-if (supabaseAdmin) {
-  // startMintMorningsListener(supabaseAdmin);
-}
-
 function getAuthenticatedDb(token) {
   if (supabaseAdmin) return supabaseAdmin;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return supabase;
@@ -942,7 +945,9 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 
-runFuneralCoverMigration(pgPool);
+runFuneralCoverMigration(pgPool).catch(err => {
+  console.warn("[funeral-cover] Migration skipped — DB unreachable:", err.message);
+});
 
 // ── Request a sell ────────────────────────────────────────────────────────────
 // Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
@@ -3994,6 +3999,59 @@ app.get("/api/stocks/chart", async (req, res) => {
   } catch (error) {
     console.error("Stock chart error:", error);
     res.status(500).json({ error: "Failed to fetch stock chart data" });
+  }
+});
+
+// ── Yahoo historical daily prices — used by StockDetailPage for W/M/3M/6M/YTD/1Y/ALL ──
+// JSE (.JO) prices from Yahoo are in ZAc (cents); we divide by 100 to return Rands.
+// Also returns asOfTime (SAST HH:MM) from Yahoo's regularMarketTime.
+app.get("/api/prices/history", async (req, res) => {
+  const { symbol, period } = req.query;
+  if (!symbol || !period) return res.status(400).json({ error: "symbol and period are required" });
+
+  const rangeMap = { "1W": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "YTD": "ytd", "1Y": "1y", "ALL": "5y" };
+  const range = rangeMap[period];
+  if (!range) return res.status(400).json({ error: `Unknown period "${period}". Use 1W/1M/3M/6M/YTD/1Y/ALL` });
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
+    const yahooRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!yahooRes.ok) return res.status(502).json({ error: `Yahoo returned HTTP ${yahooRes.status}` });
+
+    const data = await yahooRes.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) return res.status(404).json({ error: "No price data found for symbol" });
+
+    const meta = result.meta;
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const isJSE = symbol.endsWith(".JO");
+
+    const points = timestamps
+      .map((ts, i) => {
+        const close = closes[i];
+        if (close == null) return null;
+        // JSE prices come back in ZAc (cents) — convert to Rands
+        const closeRands = isJSE ? close / 100 : close;
+        return { ts: new Date(ts * 1000).toISOString().split("T")[0], close: parseFloat(closeRands.toFixed(4)) };
+      })
+      .filter(Boolean);
+
+    // Compute "as of" time in SAST (Africa/Johannesburg = UTC+2)
+    const marketTimeSec = meta.regularMarketTime;
+    const asOfTime = marketTimeSec
+      ? new Date(marketTimeSec * 1000).toLocaleTimeString("en-ZA", {
+          hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Johannesburg",
+        })
+      : null;
+
+    res.json({ symbol, period, points, asOfTime, currency: meta.currency || "ZAR" });
+  } catch (err) {
+    console.error(`[prices/history] ${symbol} (${period}):`, err.message);
+    res.status(500).json({ error: "Failed to fetch price history from Yahoo" });
   }
 });
 
@@ -7689,49 +7747,6 @@ app.post("/api/webhooks/broker", async (req, res) => {
   }
 });
 
-app.post('/api/test-mint-mornings-single', async (req, res) => {
-  try {
-    const { email, titleSearch } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-    const db = supabaseAdmin || supabase;
-    if (!db) return res.status(500).json({ error: 'No database connection' });
-    const result = await sendTestEmail(db, email, titleSearch);
-    res.json(result);
-  } catch (error) {
-    console.error('[MINT MORNINGS] Test single error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/test-mint-mornings', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const db = supabaseAdmin || supabase;
-    if (!db) return res.status(500).json({ error: 'No database connection' });
-
-    const { data: { user }, error: authError } = await db.auth.getUser(token);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    const { data: profile } = await db.from('profiles').select('role').eq('id', user.id).single();
-    if (!profile || profile.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    console.log(`[MINT MORNINGS] Manual test trigger by admin ${user.email}`);
-    const result = await sendTestEmail(db, user.email);
-    res.json({ success: true, message: 'MINT MORNINGS test email sent to admin', result });
-  } catch (error) {
-    console.error('[MINT MORNINGS] Test trigger error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 const PORT = process.env.API_PORT || 3001;
 
 const packageJson = require('../package.json');
@@ -7917,7 +7932,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
     const optional3 = userId || "";
     const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
 
-    const baseUrl = process.env.APP_URL || "https://mymint.co.za";
+    const baseUrl = process.env.APP_URL || "https://app.mymint.co.za";
     const resolvedSuccessUrl = successUrl || `${baseUrl}/?ozow=success`;
     const resolvedCancelUrl = cancelUrl || `${baseUrl}/?ozow=cancel`;
     const resolvedErrorUrl = errorUrl || `${baseUrl}/?ozow=error`;
@@ -8060,40 +8075,25 @@ app.post("/api/ozow/record-success", async (req, res) => {
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) continue;
 
-        const holdingQty = rawQty * scalingRatio;
+        const holdingQty = Math.max(1, Math.round(rawQty * scalingRatio));
 
-        const { data: existing } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
-          const newQty = oldQty + holdingQty;
-          const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty : priceCents;
-          await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
-            updated_at: now,
-          }).eq("id", existing.id);
+        // Insert as pending (avg_fill: null) so it appears in pending orders
+        // just like the wallet/paystack flow via /api/record-investment.
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: userId,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+        });
+        if (insertErr) {
+          console.error(`[ozow/record-success] Failed to insert pending holding for ${holding.symbol}:`, insertErr.message);
         } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
-            unrealized_pnl: 0,
-            as_of_date: today,
-            Status: "active",
-          });
+          console.log(`[ozow/record-success] Inserted pending holding ${holding.symbol} qty=${holdingQty}`);
         }
       }
     }
@@ -10921,6 +10921,73 @@ setInterval(refreshHeldSecurities, INTRADAY_HELD_INTERVAL_MS);
 setTimeout(refreshIntradayPrices, 30000);
 setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
 
+// ── End-of-day: save closing prices to stock_returns_c ───────────────────────
+// Runs at 17:05 SAST (15:05 UTC) Mon–Fri, after JSE close.
+// Reads the latest intraday price for each security and upserts one row per day
+// into stock_returns_c so that all W/M/3M/6M/YTD/1Y chart timeframes always have data.
+async function saveSecurityEODPrices() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  const now = new Date();
+  const dow = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return; // skip weekends
+
+  const todayStr = now.toISOString().split("T")[0];
+  console.log(`[eod-returns] Running EOD price save for ${todayStr}...`);
+
+  try {
+    const { data: securities, error: secErr } = await db.from("securities_c").select("id, symbol");
+    if (secErr || !securities?.length) {
+      console.error("[eod-returns] Could not fetch securities:", secErr?.message);
+      return;
+    }
+
+    let saved = 0, skipped = 0, failed = 0;
+
+    for (let i = 0; i < securities.length; i += 10) {
+      const batch = securities.slice(i, i + 10);
+      await Promise.all(batch.map(async (sec) => {
+        try {
+          const { data: latest } = await db
+            .from("stock_intraday_c")
+            .select("current_price, timestamp")
+            .eq("security_id", sec.id)
+            .order("timestamp", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!latest?.current_price) { skipped++; return; }
+
+          const { error: upsertErr } = await db.from("stock_returns_c").upsert(
+            { security_id: sec.id, as_of_date: todayStr, current_price: latest.current_price },
+            { onConflict: "security_id,as_of_date", ignoreDuplicates: false }
+          );
+
+          if (upsertErr) {
+            console.error(`[eod-returns] Upsert failed for ${sec.symbol}:`, upsertErr.message);
+            failed++;
+          } else {
+            saved++;
+          }
+        } catch (e) {
+          console.error(`[eod-returns] Error for ${sec.symbol}:`, e.message);
+          failed++;
+        }
+      }));
+      if (i + 10 < securities.length) await new Promise(r => setTimeout(r, 200));
+    }
+
+    console.log(`[eod-returns] Done — saved: ${saved}, skipped: ${skipped}, failed: ${failed} / ${securities.length}`);
+  } catch (err) {
+    console.error("[eod-returns] Unexpected error:", err.message);
+  }
+}
+
+// 17:05 SAST = 15:05 UTC, weekdays only
+cron.schedule("5 15 * * 1-5", saveSecurityEODPrices, { timezone: "UTC" });
+console.log("[eod-returns] Scheduled daily EOD price save at 17:05 SAST (Mon–Fri)");
+
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
@@ -11616,6 +11683,351 @@ setTimeout(() => {
   saveAllParentReturnsEOD();
 }, 90 * 1000);
 
+// ── Strategy Returns Auto-Compute ─────────────────────────────────────────────
+// Computes YTD, 5d, 1m, 6m returns for every active strategy.
+//
+// YTD method: uses securities_c.ytd_performance (the authoritative field
+// maintained by the price feed) to back-compute each stock's implied Jan 1
+// price: jan1Price = last_price / (1 + ytd_performance/100).
+// This is reliable regardless of how far back stock_intraday_c retains data.
+//
+// 5d / 1m / 6m: sourced from stock_intraday_c historical rows with a slightly
+// widened lookback window (+2 days) to skip weekends/holidays cleanly.
+//
+// Runs twice per JSE trading day (Mon–Fri, non-holiday):
+//   Market open:  09:00 SAST (07:00 UTC)
+//   Market close: 17:30 SAST (15:30 UTC)
+// Also fires 60 s after server start (trading days only).
+
+// JSE public holidays — skip these even on weekdays
+const JSE_HOLIDAYS = new Set([
+  // 2025
+  '2025-01-01','2025-03-21','2025-04-18','2025-04-21','2025-04-28',
+  '2025-05-01','2025-06-16','2025-08-09','2025-09-24','2025-12-16',
+  '2025-12-25','2025-12-26',
+  // 2026
+  '2026-01-01','2026-03-21','2026-04-03','2026-04-06','2026-04-27',
+  '2026-05-01','2026-06-16','2026-08-10','2026-09-24','2026-12-16',
+  '2026-12-25','2026-12-26',
+  // 2027
+  '2027-01-01','2027-03-21','2027-03-26','2027-03-29','2027-04-27',
+  '2027-05-01','2027-06-16','2027-08-09','2027-09-24','2027-12-16',
+  '2027-12-25','2027-12-27',
+]);
+
+function isJseTradingDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return false;
+  if (JSE_HOLIDAYS.has(dateStr)) return false;
+  return true;
+}
+
+// Module-level cache for Dec-31-2025 anchor prices (never changes — fetch once per server lifetime).
+// Keys are base symbols (e.g. "NED"), values are closing prices in ZAp (cents).
+const _ytdAnchorCache = {};
+
+async function computeAndSaveStrategyReturns() {
+  const db = supabaseAdmin || supabase;
+  if (!db) { console.warn('[strategy-returns] No Supabase client'); return; }
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  // Skip weekends and JSE public holidays — no market data, no point running
+  if (!isJseTradingDay(todayStr)) {
+    console.log(`[strategy-returns] ${todayStr} is not a JSE trading day — skipping`);
+    return;
+  }
+
+  const daysAgo = (n) => {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().split('T')[0];
+  };
+
+  // Use slightly wider windows (+2 days) so the anchor lands on a trading day
+  // even when the nominal boundary falls on a weekend or public holiday.
+  const periods = { '5d': daysAgo(7), '1m': daysAgo(32), '6m': daysAgo(182) };
+
+  try {
+    console.log(`[strategy-returns] ${todayStr} — computing strategy returns...`);
+
+    // 1. Fetch all active strategies with holdings
+    const { data: strategies, error: stratErr } = await db
+      .from('strategies_c')
+      .select('id, name, holdings')
+      .eq('status', 'active');
+
+    if (stratErr || !strategies?.length) {
+      if (stratErr) console.error('[strategy-returns] Fetch error:', stratErr.message);
+      else console.warn('[strategy-returns] No active strategies found');
+      return;
+    }
+
+    // 2. Parse holdings — normalise all symbols to base form (no ".JO" suffix)
+    const allBaseSymbols = new Set();
+    const strategyHoldingsMap = {};
+
+    for (const strategy of strategies) {
+      const parsed = [];
+      for (const h of (strategy.holdings || [])) {
+        const raw  = (h.symbol || h.ticker || '').trim().toUpperCase();
+        const base = raw.split('.')[0]; // "NED.JO" → "NED"
+        if (!base) continue;
+        const shares = Number(h.shares || h.quantity || 1);
+        allBaseSymbols.add(base);
+        parsed.push({ symbol: base, shares });
+      }
+      strategyHoldingsMap[strategy.id] = parsed;
+    }
+
+    if (!allBaseSymbols.size) {
+      console.warn('[strategy-returns] No symbols in strategy holdings'); return;
+    }
+
+    const baseSymbolList = Array.from(allBaseSymbols);
+    // Query both bare ("NED") and JSE format ("NED.JO") — DB may use either
+    const querySymbolList = [
+      ...baseSymbolList,
+      ...baseSymbolList.map(s => `${s}.JO`),
+    ];
+
+    const toBase = (sym) => sym.split('.')[0].toUpperCase();
+
+    // 2b. Populate Dec-31-2025 YTD anchor prices from Yahoo Finance (cached per server lifetime).
+    //     Walk back up to 7 calendar days to find the last JSE trading close on or before Dec 31.
+    const missingAnchorSymbols = baseSymbolList.filter(s => !_ytdAnchorCache[s]);
+    if (missingAnchorSymbols.length) {
+      console.log(`[strategy-returns] Fetching Dec-31-2025 anchor prices for ${missingAnchorSymbols.length} symbol(s)…`);
+      const DEC31 = '2025-12-31';
+      const p1 = Math.floor(new Date('2025-12-24T00:00:00Z').getTime() / 1000);
+      const p2 = Math.floor(new Date('2026-01-02T23:59:59Z').getTime() / 1000);
+      await Promise.all(missingAnchorSymbols.map(async (base) => {
+        try {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${base}.JO?interval=1d&period1=${p1}&period2=${p2}`;
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find the last close on or before Dec 31 2025
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= DEC31 && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) {
+            _ytdAnchorCache[base] = bestPrice;
+            console.log(`[strategy-returns] Anchor ${base}: ${bestPrice}c`);
+          } else {
+            console.warn(`[strategy-returns] No Dec-31 anchor for ${base}`);
+          }
+        } catch (e) {
+          console.warn(`[strategy-returns] Anchor fetch failed for ${base}: ${e.message}`);
+        }
+      }));
+    }
+
+    // 3. Fetch securities_c for current last_price (used for YTD current value + period calcs)
+    const { data: securitiesRows } = await db
+      .from('securities_c')
+      .select('symbol, last_price, ytd_performance')
+      .in('symbol', querySymbolList);
+
+    const securitiesMap = {}; // base → { last_price (cents), ytd_performance (%) }
+    for (const row of (securitiesRows || [])) {
+      const base = toBase(row.symbol);
+      if (!securitiesMap[base] && row.last_price > 0) {
+        securitiesMap[base] = {
+          last_price:      Number(row.last_price),
+          ytd_performance: Number(row.ytd_performance ?? 0),
+        };
+      }
+    }
+
+    // 4. Latest intraday price per base-symbol (used for 5d / 1m / 6m current value)
+    const { data: latestRows } = await db
+      .from('stock_intraday_c')
+      .select('symbol, current_price')
+      .in('symbol', querySymbolList)
+      .order('timestamp', { ascending: false });
+
+    const latestPriceMap = {}; // base → cents
+    for (const row of (latestRows || [])) {
+      const base = toBase(row.symbol);
+      if (!latestPriceMap[base] && row.current_price > 0)
+        latestPriceMap[base] = row.current_price;
+    }
+
+    // 5. Period anchor prices (5d, 1m) from stock_intraday_c historical rows.
+    //    We take the FIRST record on or after the anchor date so we get the opening
+    //    price of the nearest trading day — no weekend/holiday data needed.
+    //    6m uses Yahoo Finance (stock_intraday_c is periodically pruned; 6m needs ~182 days of history).
+    const periodAnchorMaps = {};
+    for (const [period, anchorDate] of Object.entries(periods)) {
+      if (period === '6m') continue; // handled separately via Yahoo Finance
+
+      const { data: rows } = await db
+        .from('stock_intraday_c')
+        .select('symbol, current_price')
+        .in('symbol', querySymbolList)
+        .gte('timestamp', anchorDate)
+        .order('timestamp', { ascending: true });
+
+      periodAnchorMaps[period] = {};
+      for (const row of (rows || [])) {
+        const base = toBase(row.symbol);
+        if (!periodAnchorMaps[period][base] && row.current_price > 0)
+          periodAnchorMaps[period][base] = row.current_price;
+      }
+    }
+
+    // 5b. 6m anchor prices from Yahoo Finance (reliable historical data back 6+ months).
+    //     Yahoo Finance returns JSE prices in ZAp (South African cents), same unit as securities_c.last_price.
+    const yahoo6mAnchorDate = periods['6m']; // daysAgo(182) e.g. "2025-12-18"
+    const yahoo6mAnchorMap = {};
+    try {
+      const yahoo6mFetches = baseSymbolList.map(async (base) => {
+        const yahooSym = `${base}.JO`;
+        const p1 = Math.floor(new Date(yahoo6mAnchorDate + 'T00:00:00Z').getTime() / 1000) - 7 * 86400;
+        const p2 = Math.floor(new Date(yahoo6mAnchorDate + 'T23:59:59Z').getTime() / 1000) + 86400;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&period1=${p1}&period2=${p2}`;
+        try {
+          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
+          const json = await res.json();
+          const result = json?.chart?.result?.[0];
+          if (!result) return;
+          const timestamps = result.timestamp || [];
+          const closes     = result.indicators?.quote?.[0]?.close || [];
+          // Find last close on or before yahoo6mAnchorDate
+          let bestPrice = null;
+          for (let i = 0; i < timestamps.length; i++) {
+            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+            if (d <= yahoo6mAnchorDate && closes[i] > 0) bestPrice = Math.round(closes[i]);
+          }
+          if (bestPrice) yahoo6mAnchorMap[base] = bestPrice;
+        } catch (e) {
+          console.warn(`[strategy-returns] Yahoo 6m fetch failed for ${yahooSym}: ${e.message}`);
+        }
+      });
+      await Promise.all(yahoo6mFetches);
+    } catch (e) {
+      console.warn('[strategy-returns] Yahoo 6m anchor fetch error:', e.message);
+    }
+    periodAnchorMaps['6m'] = yahoo6mAnchorMap;
+    console.log(`[strategy-returns] 6m anchor (${yahoo6mAnchorDate}) via Yahoo: ${Object.keys(yahoo6mAnchorMap).length}/${baseSymbolList.length} symbols resolved`);
+
+    // 6a. Helper — period basket return (5d/1m/6m) using intraday anchor → latest price
+    const basketReturn = (holdings, anchorMap) => {
+      let startVal = 0, endVal = 0, matched = 0;
+      for (const { symbol, shares } of holdings) {
+        const anchorPrice  = anchorMap[symbol];
+        const currentPrice = latestPriceMap[symbol];
+        if (!anchorPrice || !currentPrice) continue;
+        startVal += shares * anchorPrice;
+        endVal   += shares * currentPrice;
+        matched++;
+      }
+      if (!startVal || !matched) return null;
+      return ((endVal - startVal) / startVal) * 100;
+    };
+
+    // 6b. YTD basket return using real Dec-31-2025 closes from Yahoo Finance as anchor.
+    //    Formula: ytd = (Σ shares × last_price) / (Σ shares × dec31Price) − 1
+    //    Anchor prices are fetched once and cached in _ytdAnchorCache for the server lifetime.
+    //    Current prices come from securities_c.last_price (kept live by the price feed).
+    const basketYtdReturn = (holdings) => {
+      let todayVal = 0, anchorVal = 0, matched = 0;
+      for (const { symbol, shares } of holdings) {
+        const anchorPrice   = _ytdAnchorCache[symbol];
+        const sec           = securitiesMap[symbol];
+        if (!anchorPrice || !sec?.last_price) continue;
+        anchorVal += shares * anchorPrice;
+        todayVal  += shares * sec.last_price;
+        matched++;
+      }
+      if (!anchorVal || !matched) return null;
+      return ((todayVal / anchorVal) - 1) * 100;
+    };
+
+    // 7. Compute + write per strategy
+    let saved = 0, failed = 0;
+
+    for (const strategy of strategies) {
+      try {
+        const holdings = strategyHoldingsMap[strategy.id];
+        if (!holdings?.length) continue;
+
+        const ytd = basketYtdReturn(holdings);
+        const r5d = basketReturn(holdings, periodAnchorMaps['5d']);
+        const r1m = basketReturn(holdings, periodAnchorMaps['1m']);
+        const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
+
+        const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
+
+        // Delete any existing row for today first (avoids duplicates)
+        await db
+          .from('strategies_returns_c')
+          .delete()
+          .eq('strategy_id', strategy.id)
+          .eq('as_of_date', todayStr);
+
+        const { error: insertErr } = await db
+          .from('strategies_returns_c')
+          .insert({
+            strategy_id: strategy.id,
+            as_of_date:  todayStr,
+            ytd_pct:     fmt(ytd),
+            '5d_pct':    fmt(r5d),
+            '1m_pct':    fmt(r1m),
+            '6m_pct':    fmt(r6m),
+          });
+
+        if (insertErr) {
+          console.error(`[strategy-returns] Insert failed for "${strategy.name}":`, insertErr.message);
+          failed++;
+        } else {
+          console.log(
+            `[strategy-returns] ${strategy.name}: ` +
+            `YTD=${ytd != null ? ytd.toFixed(2)+'%' : 'n/a'} ` +
+            `5d=${r5d != null ? r5d.toFixed(2)+'%' : 'n/a'} ` +
+            `1m=${r1m != null ? r1m.toFixed(2)+'%' : 'n/a'} ` +
+            `6m=${r6m != null ? r6m.toFixed(2)+'%' : 'n/a'}`
+          );
+          saved++;
+        }
+      } catch (strategyErr) {
+        console.error(`[strategy-returns] Error for "${strategy.name}":`, strategyErr.message);
+        failed++;
+      }
+    }
+
+    console.log(`[strategy-returns] Done — saved: ${saved}, failed: ${failed} / ${strategies.length}`);
+  } catch (err) {
+    console.error('[strategy-returns] Unexpected error:', err.message);
+  }
+}
+
+// Market open  — 09:00 SAST (07:00 UTC) Mon–Fri
+cron.schedule('0 7 * * 1-5', () => {
+  console.log('[strategy-returns-cron] Market open — computing strategy returns');
+  computeAndSaveStrategyReturns();
+});
+
+// Market close — 17:30 SAST (15:30 UTC) Mon–Fri
+cron.schedule('30 15 * * 1-5', () => {
+  console.log('[strategy-returns-cron] Market close — computing strategy returns');
+  computeAndSaveStrategyReturns();
+});
+
+// Startup seed — runs 60 s after server start (trading days only)
+setTimeout(() => {
+  console.log('[strategy-returns-cron] Startup — seeding today\'s strategy returns');
+  computeAndSaveStrategyReturns();
+}, 60 * 1000);
+
 // ── IT Incident Register API ──────────────────────────────────────────────────
 // Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
 
@@ -11776,6 +12188,70 @@ app.patch('/api/incidents/:id', async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/fees-config — public fee schedule for client UIs
+// Reads live values from app_settings('fees') so the UI always shows what the
+// CRM has set, instead of falling back to hardcoded defaults.
+const FEE_CONSTANTS_DEFAULT = {
+  EXECUTION_RESERVE_RATE: 0.08,
+  BROKER_FEE_RATE:        0.0025,
+  ISIN_FEE_PER_ASSET:     69,
+  TRANSACTION_FEE_RATE:   0.038,
+  REB_BROKERAGE_RATE:     0.005,
+  REB_CUSTODY_FEE:        69,
+};
+let _feeCfgCache = null;
+let _feeCfgCacheAt = 0;
+const FEE_CFG_TTL = 60_000;
+
+async function getServerFeeConfig() {
+  const now = Date.now();
+  if (_feeCfgCache && now - _feeCfgCacheAt < FEE_CFG_TTL) return _feeCfgCache;
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return { ...FEE_CONSTANTS_DEFAULT };
+    const { data } = await db.from('app_settings').select('value').eq('key', 'fees').maybeSingle();
+    const j = data?.value;
+    if (j && typeof j === 'object') {
+      const num = (v, d) => (v == null || v === '' || isNaN(Number(v)) ? d : Number(v));
+      _feeCfgCache = {
+        EXECUTION_RESERVE_RATE: num(j.executionReserveRate, FEE_CONSTANTS_DEFAULT.EXECUTION_RESERVE_RATE),
+        BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS_DEFAULT.BROKER_FEE_RATE),
+        ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS_DEFAULT.ISIN_FEE_PER_ASSET),
+        TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS_DEFAULT.TRANSACTION_FEE_RATE),
+        REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS_DEFAULT.REB_BROKERAGE_RATE),
+        REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS_DEFAULT.REB_CUSTODY_FEE),
+      };
+      _feeCfgCacheAt = now;
+      return _feeCfgCache;
+    }
+  } catch (e) {
+    console.warn('[fees-config] Could not load from app_settings, using defaults:', e.message);
+  }
+  return { ...FEE_CONSTANTS_DEFAULT };
+}
+
+app.get('/api/fees-config', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60');
+  try {
+    const c = await getServerFeeConfig();
+    return res.json({
+      success: true,
+      fees: {
+        ISIN_FEE_PER_ASSET:     c.ISIN_FEE_PER_ASSET,
+        BROKER_FEE_RATE:        c.BROKER_FEE_RATE,
+        TRANSACTION_FEE_RATE:   c.TRANSACTION_FEE_RATE,
+        EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
+        CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
+        REB_BROKERAGE_RATE:     c.REB_BROKERAGE_RATE,
+        REB_CUSTODY_FEE:        c.REB_CUSTODY_FEE,
+      },
+    });
+  } catch (err) {
+    console.error('[fees-config]', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

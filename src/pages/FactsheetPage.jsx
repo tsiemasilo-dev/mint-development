@@ -6,7 +6,7 @@ import { checkOnboardingComplete } from "../lib/checkOnboardingComplete";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
-import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
+import { formatChangePct, getChangeColor, getStrategyPriceHistory } from "../lib/strategyData.js";
 import { buildHoldingsBySymbol, calculateMinInvestmentSync, getAdjustedShares, computeExtendedSummary, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import {
   Area,
@@ -35,7 +35,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
-  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarYear, setCalendarYear] = useState(2025);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [holdingsSecurities, setHoldingsSecurities] = useState([]);
   const [strategyData, setStrategyData] = useState(strategy);
@@ -253,78 +253,55 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
     };
   }, [currentStrategy]);
 
-  // Fetch cumulative chart data for selected timeframe
+  // Fetch cumulative chart data for selected timeframe using holdings price history
   useEffect(() => {
     let isMounted = true;
 
     const fetchCumulativeData = async () => {
-      if (!supabase || !strategyId) return;
+      if (!strategyId) return;
+
+      // Map factsheet timeframe keys to getStrategyPriceHistory timeframe strings
+      const tfMap = { "5D": "1W", "1M": "1M", "6M": "6M", "YTD": "YTD" };
+      const priceTf = tfMap[timeframe];
+      if (!priceTf) return;
 
       try {
-        let startDate;
-        const today = new Date();
+        const navPoints = await getStrategyPriceHistory(strategyId, priceTf);
 
-        switch (timeframe) {
-          case "5D":
-            startDate = new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000);
-            break;
-          case "1M":
-            startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-            break;
-          case "6M":
-            startDate = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000);
-            break;
-          case "YTD":
-            startDate = new Date(today.getFullYear(), 0, 1);
-            break;
-          default:
-            return;
-        }
-
-        const startDateStr = startDate.toISOString().split("T")[0];
-
-        const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
-          .select("strategy_id, as_of_date, \"1d_pct\"")
-          .eq("strategy_id", strategyId)
-          .gte("as_of_date", startDateStr)
-          .order("as_of_date", { ascending: true });
-
-        if (error) throw error;
-
-        if (!dailyReturns || dailyReturns.length === 0) {
+        if (!navPoints || navPoints.length === 0) {
           if (isMounted) {
             setAnalytics(prev => ({
               ...prev,
-              curves: {
-                ...prev?.curves,
-                [timeframe]: []
-              }
+              curves: { ...prev?.curves, [timeframe]: [] }
             }));
           }
           return;
         }
 
-        // Calculate cumulative returns
-        const cumulativeData = [];
-        let cumulative = 0;
+        // For 5D: keep only the last 5 unique trading days
+        let filtered = navPoints;
+        if (timeframe === "5D") {
+          const uniqueDates = [...new Set(navPoints.map(p => p.ts.split("T")[0]))];
+          const last5 = uniqueDates.slice(-5);
+          filtered = navPoints.filter(p => last5.includes(p.ts.split("T")[0]));
+        }
 
-        dailyReturns.forEach((day) => {
-          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0;
-          cumulative += dailyReturn;
-          cumulativeData.push({
-            d: day.as_of_date,
-            v: Number((cumulative * 100).toFixed(2))
-          });
-        });
+        // Convert NAV series → cumulative % return from first point
+        const baseNav = filtered[0]?.nav;
+        if (!baseNav) {
+          if (isMounted) setAnalytics(prev => ({ ...prev, curves: { ...prev?.curves, [timeframe]: [] } }));
+          return;
+        }
+
+        const cumulativeData = filtered.map(p => ({
+          d: p.ts.split("T")[0],
+          v: Number(((p.nav - baseNav) / baseNav * 100).toFixed(2)),
+        }));
 
         if (isMounted) {
           setAnalytics(prev => ({
             ...prev,
-            curves: {
-              ...prev?.curves,
-              [timeframe]: cumulativeData
-            }
+            curves: { ...prev?.curves, [timeframe]: cumulativeData }
           }));
         }
       } catch (error) {
@@ -493,17 +470,11 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   const availableCalendarYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
-    // Only include years that have calendar return data
-    for (let i = 0; i < 5; i++) {
-      const year = currentYear - i;
-      // Check if this year has any data
-      const yearData = calendarReturns;
-      if (Object.keys(yearData).length > 0) {
-        years.push(String(year));
-      }
+    for (let year = 2025; year <= currentYear; year++) {
+      years.push(String(year));
     }
-    return years.sort();
-  }, [calendarReturns]);
+    return years;
+  }, []);
 
   const minimumInvestmentAmount = useMemo(() => {
     const holdingsMap = buildHoldingsBySymbol(holdingsSecurities);
@@ -595,10 +566,10 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   // Auto-scroll removed to allow manual scrolling.
 
   const getReturnColor = (value) => {
-    if (value == null) return "bg-slate-50 text-slate-600";
-    if (value > 0) return "bg-emerald-50 text-emerald-600";
-    if (value < 0) return "bg-rose-50 text-rose-600";
-    return "bg-slate-50 text-slate-600";
+    if (value == null) return "bg-slate-50 border border-slate-100 text-slate-400";
+    if (value > 0) return "bg-emerald-50 border border-emerald-200 text-emerald-700";
+    if (value < 0) return "bg-rose-50 border border-rose-200 text-rose-700";
+    return "bg-slate-50 border border-slate-100 text-slate-400";
   };
 
   return (
@@ -664,6 +635,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
                     calculatedMinInvestment: minimumInvestmentAmount,
                     performanceData,
                     timeframeReturns,
+                    feeRates,
                   });
                 } catch (e) {
                   console.error("PDF generation error:", e?.message || e?.toString?.() || e, e?.stack);
@@ -1062,18 +1034,18 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           ) : (
             <div>
               <p className="mb-2 text-xs font-semibold text-slate-500">{calendarYear}</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 {monthNames.map((label, index) => {
                   const monthKey = String(index + 1).padStart(2, "0");
                   const value = calendarData[String(calendarYear)]?.[monthKey];
                   return (
                     <div
                       key={`${calendarYear}-${label}`}
-                      className={`rounded-2xl px-3 py-3 text-center text-xs font-semibold ${getReturnColor(value)}`}
+                      className={`rounded-xl px-2 py-3 text-center ${getReturnColor(value)}`}
                     >
-                      <p className="text-[11px] font-semibold text-slate-600">{label}</p>
-                      <p className="mt-1 text-sm text-slate-900">
-                        {value == null ? "—" : `${Number(value).toFixed(2)}%`}
+                      <p className="text-[11px] font-medium opacity-60">{label}</p>
+                      <p className="mt-1 text-sm font-bold">
+                        {value == null ? <span className="text-slate-300 font-normal">—</span> : `${value > 0 ? "+" : ""}${Number(value).toFixed(2)}%`}
                       </p>
                     </div>
                   );
@@ -1087,9 +1059,13 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
-            <li>• Performance fee: 20% of profits</li>
-            <li>• Brokerage fee: {(feeRates.BROKER_FEE_RATE * 100).toLocaleString("en-ZA", { maximumFractionDigits: 3 })}% of investment amount</li>
-            <li>• Custody fee: R{Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset</li>
+            {currentStrategy?.management_fee_bps != null && Number(currentStrategy.management_fee_bps) > 0 && (
+              <li>• Management fee: {(Number(currentStrategy.management_fee_bps) / 100).toFixed(2)}% per annum</li>
+            )}
+            <li>• Broker fee ({+(feeRates.BROKER_FEE_RATE * 100).toFixed(3)}%)</li>
+            <li>• Custody (R{+Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset)</li>
+            <li>• Transaction fee ({+(feeRates.TRANSACTION_FEE_RATE * 100).toFixed(2)}%)</li>
+            <li>• Execution reserve ({+(feeRates.CASH_BUFFER_RATE * 100).toFixed(2)}% cash buffer)</li>
             <li>• Past performance does not guarantee future results</li>
             <li>• All data is for informational purposes only</li>
           </ul>
@@ -1164,7 +1140,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
             </div>
             <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
             <p className="text-center text-sm text-slate-600 mb-6">
-              You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+              You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow investing in our strategies. Please{" "}
               <button
                 type="button"
                 onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); else if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
@@ -1172,7 +1148,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               >
                 update your discretionary
               </button>{" "}
-              to trade strategies.
+              to invest in strategies.
             </p>
             <button
               type="button"
@@ -1290,7 +1266,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               setInvestChecking(false);
             }
           }}
-          className={`w-full rounded-2xl py-3 text-sm font-semibold shadow-lg disabled:opacity-70 ${isLimitedDiscretion ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white shadow-violet-200/60"}`}
+          className="w-full rounded-2xl py-3 text-sm font-semibold shadow-lg disabled:opacity-70 bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white shadow-violet-200/60"
         >
           {investChecking ? "Checking..." : `Invest in ${currentStrategy.name}`}
         </button>

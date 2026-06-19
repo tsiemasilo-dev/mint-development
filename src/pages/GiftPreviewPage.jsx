@@ -113,6 +113,14 @@ function GiftOpenAnimation({ assetName, onDone }) {
           >
             <p className="text-violet-300 text-xs font-semibold uppercase tracking-[0.2em] mb-2">You were gifted</p>
             <p className="text-white text-2xl font-extrabold leading-tight">{assetName}</p>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="text-violet-200/90 text-sm mt-4 leading-relaxed max-w-[260px] mx-auto"
+            >
+              We're sending your order to the market — it'll show as pending in your portfolio.
+            </motion.p>
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

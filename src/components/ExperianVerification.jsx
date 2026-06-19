@@ -721,6 +721,45 @@ const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
 
   // ── Mock mode ready ───────────────────────────────────────────────────────
   if (stage === STAGE.MOCK_READY) {
+    // On the LIVE app the OCR is always configured, so a "test mode" screen here
+    // can only mean the browser served a STALE cached build (clearing cache fixes
+    // it). Don't show the dev "simulate" flow to a real user — prompt a refresh.
+    if (typeof window !== "undefined" && /(^|\.)mymint\.co\.za$/i.test(window.location.hostname)) {
+      const hardRefresh = async () => {
+        try {
+          if (typeof caches !== "undefined" && caches?.keys) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch {}
+        const url = new URL(window.location.href);
+        url.searchParams.set("_cb", Date.now().toString());
+        window.location.replace(url.toString());
+      };
+      return (
+        <div className="w-full max-w-md mx-auto text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <FaceIcon className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">Let's refresh to continue</h3>
+          <p className="text-sm text-slate-500 mb-6">
+            You're on an older cached version of the app. Tap refresh to load the latest version and continue your verification.
+          </p>
+          <button
+            type="button"
+            onClick={hardRefresh}
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-95"
+            style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" }}
+          >
+            Refresh &amp; continue
+          </button>
+          <p className="text-xs text-center text-slate-400 mt-4">
+            Still seeing this after refreshing? Clear your browser cache, then reopen the app.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full max-w-md mx-auto">
         <div className="mb-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-2">
