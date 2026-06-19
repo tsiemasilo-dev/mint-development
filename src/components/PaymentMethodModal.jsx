@@ -212,7 +212,7 @@ const PaymentMethodModal = ({
                   onClick={() => onSelectOzow?.()}
                   className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm flex-shrink-0 overflow-hidden p-1">
                     <img
                       src="/ozow-logo.png"
                       alt="Ozow"
@@ -235,11 +235,11 @@ const PaymentMethodModal = ({
                     onClick={() => setEftExpanded(!eftExpanded)}
                     className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-slate-50"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0033a1]/5 border border-[#0033a1]/10 flex-shrink-0 p-1">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0033a1]/5 border border-[#0033a1]/10 flex-shrink-0 overflow-hidden p-1">
                       <img
                         src="/standard-bank-logo.png"
                         alt="Standard Bank"
-                        className="w-8 h-8 object-contain"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -270,7 +270,7 @@ const PaymentMethodModal = ({
                       >
                         <div className="border-t border-slate-100">
                           {/* Bank header */}
-                          <div className="flex items-center justify-between px-4 py-2.5 bg-[#001f5b]">
+                          <div className="flex items-center justify-between px-4 py-3 bg-[#001f5b]">
                             <div>
                               <p className="text-[10px] uppercase tracking-widest text-white/50">
                                 Receiving Bank
@@ -280,9 +280,9 @@ const PaymentMethodModal = ({
                               </p>
                             </div>
                             <img
-                              src={STANDARD_BANK_LOGO}
+                              src="/standard-bank-logo.png"
                               alt="Standard Bank"
-                              className="h-6 object-contain"
+                              className="h-9 w-auto object-contain"
                             />
                           </div>
 
@@ -423,7 +423,7 @@ const PaymentMethodModal = ({
                     <p className="text-[10px] uppercase tracking-widest text-white/50">Receiving Bank</p>
                     <p className="text-[11px] text-white/70 mt-0.5">EFT / Bank Transfer</p>
                   </div>
-                  <img src={STANDARD_BANK_LOGO} alt="Standard Bank" className="h-6 object-contain" />
+                  <img src="/standard-bank-logo.png" alt="Standard Bank" className="h-9 w-auto object-contain" />
                 </div>
 
                 <div className="px-5 py-4 space-y-2.5">
