@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
   const { data: gifts, error } = await db
     .from("gift_claims")
-    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at")
+    .select("id, amount, asset_type, asset_name, token, status, message, expires_at, created_at, claimed_at, cancelled_at, reserved_at, refunded_at")
     .eq("sender_user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(100);

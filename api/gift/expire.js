@@ -1,7 +1,10 @@
 import { supabase, supabaseAdmin } from "../_lib/supabase.js";
 
-// Cron endpoint — called every 15 minutes by Vercel (GET) or internally (POST)
-// Marks all pending_claim gifts where expires_at < now() as expired. No refund.
+// Cron endpoint — called every 15 minutes by Vercel (GET) or internally (POST).
+// Marks all unclaimed gifts past expires_at as "expired". No auto-refund: per CEO,
+// there is no time extension, and the sender's reserved funds are returned only
+// when they tap "Refund to wallet" (api/gift/refund.js). The bulk flip touches
+// only pending_claim -> expired, so it's safe to re-run.
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();

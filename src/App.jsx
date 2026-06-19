@@ -520,6 +520,8 @@ const App = () => {
   useEffect(() => {
     const handleNavigationEvent = (e) => {
       const { page, member, child } = e.detail || {};
+      // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
+      if (page === 'withdraw') return;
       if (page) {
         let normalizedPage = page === 'family' ? 'familyDashboard' : page;
         const selectedChild = child || member || null;
@@ -829,7 +831,14 @@ const App = () => {
     setModal(null);
   };
 
+  // Withdrawals are temporarily disabled (CEO): tapping the purple balance card
+  // must NOT open the withdraw page. This is the single entry point (every card's
+  // onWithdraw routes here), so the early return hides the page everywhere. Flip
+  // WITHDRAW_ENABLED back to true to restore it.
+  const WITHDRAW_ENABLED = false;
+
   const handleWithdrawRequest = async () => {
+    if (!WITHDRAW_ENABLED) return; // withdraw page disabled — no navigation
     try {
       if (!supabase) {
         openModal("Withdraw", "You don't have any allocations to withdraw from.");

@@ -647,7 +647,7 @@ export default function ChildInvestModal({
             <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
               <p className="text-center text-sm text-slate-600 mb-6">
-                You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+                You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow investing in our strategies. Please{" "}
                 <button
                   type="button"
                   onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); }}
@@ -655,7 +655,7 @@ export default function ChildInvestModal({
                 >
                   update your discretionary
                 </button>{" "}
-                to trade strategies.
+                to invest in strategies.
               </p>
               <button
                 type="button"

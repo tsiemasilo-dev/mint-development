@@ -71,6 +71,26 @@ const CheckCircleIcon = (props) => (
   </svg>
 );
 
+// Country list for the residential-address fallback. South Africa first (drives
+// the province dropdown); a curated set of common countries follows. Flag emojis
+// render natively on iOS/Android (the PWA's audience).
+const ADDRESS_COUNTRIES = [
+  { name: "South Africa", flag: "🇿🇦" },
+  { name: "Botswana", flag: "🇧🇼" },
+  { name: "Eswatini", flag: "🇸🇿" },
+  { name: "Lesotho", flag: "🇱🇸" },
+  { name: "Mozambique", flag: "🇲🇿" },
+  { name: "Namibia", flag: "🇳🇦" },
+  { name: "Zambia", flag: "🇿🇲" },
+  { name: "Zimbabwe", flag: "🇿🇼" },
+  { name: "Ghana", flag: "🇬🇭" },
+  { name: "Kenya", flag: "🇰🇪" },
+  { name: "Nigeria", flag: "🇳🇬" },
+  { name: "United Kingdom", flag: "🇬🇧" },
+  { name: "United States", flag: "🇺🇸" },
+  { name: "Other", flag: "🌍" },
+];
+
 const southAfricanBanks = [
   { value: "", label: "Select your bank", logo: null, branchCode: "" },
   { value: "absa", label: "Absa Bank", logo: "https://logo.clearbit.com/absa.co.za", branchCode: "632005" },
@@ -196,6 +216,19 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   const [address, setAddress] = useState("");
   const [addressDone, setAddressDone] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
+  // Structured manual-fallback address (only used when no bureau address is on
+  // record). Captured as separate fields so the format — and the postal code —
+  // are guaranteed, then combined into "Province, City, Street, 0000".
+  const [addrCountry, setAddrCountry] = useState("South Africa");
+  const [addrProvince, setAddrProvince] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrStreet, setAddrStreet] = useState("");
+  const [addrPostal, setAddrPostal] = useState("");
+  // Proof-of-address document (e.g. bank statement) — required on the manual fallback.
+  const [poaUrl, setPoaUrl] = useState("");
+  const [poaFileName, setPoaFileName] = useState("");
+  const [poaUploading, setPoaUploading] = useState(false);
+  const [poaError, setPoaError] = useState("");
   // Experian KYC V2 address lookup (bureau addresses for the dropdown on step 3)
   const [experianAddresses, setExperianAddresses] = useState(null); // null = not fetched, [] = none found
   const [experianAddrLoading, setExperianAddrLoading] = useState(false);
@@ -291,6 +324,48 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
       if (error) console.error("[Onboarding] saveProgressFlag failed for", flagKey, error.message);
     } catch (err) {
       console.error("[Onboarding] saveProgressFlag error for", flagKey, err?.message);
+    }
+  };
+
+  // Upload the manual-fallback proof-of-address document (bank statement / utility
+  // bill) to the PRIVATE "proof-of-address" bucket. The server issues a one-time
+  // signed upload URL (service role) and the file is uploaded straight to storage
+  // — no public access, no per-user storage RLS, and no serverless body-size limit
+  // (so phone photos work). We keep the storage path and persist it with the
+  // address below; admins read it via a signed download URL.
+  const handlePoaUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPoaError("");
+    if (file.size > 10 * 1024 * 1024) { setPoaError("File too large — max 10MB."); return; }
+    const okType = /pdf$/i.test(file.type) || /^image\//i.test(file.type) || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(file.name);
+    if (!okType) { setPoaError("Please upload a PDF or image (bank statement / utility bill)."); return; }
+    setPoaUploading(true);
+    try {
+      if (!supabase) throw new Error("Storage not available");
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("You need to be signed in.");
+      // 1. Ask the server for a one-time signed upload URL.
+      const res = await fetch("/api/onboarding/poa-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || "application/octet-stream" }),
+      });
+      const info = await res.json().catch(() => ({}));
+      if (!res.ok || !info.success) throw new Error(info.error || "Upload failed. Please try again.");
+      // 2. Upload the file straight to private storage with the signed token.
+      const { error: upErr } = await supabase.storage
+        .from(info.bucket)
+        .uploadToSignedUrl(info.path, info.token, file, { contentType: file.type || undefined, upsert: true });
+      if (upErr) throw upErr;
+      setPoaUrl(info.path);
+      setPoaFileName(file.name);
+    } catch (err) {
+      console.error("[Onboarding] POA upload failed:", err);
+      setPoaError(err?.message || "Upload failed. Please try again.");
+    } finally {
+      setPoaUploading(false);
     }
   };
 
@@ -581,6 +656,18 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
           if (raw.bank_details?.bank_account_type) setBankAccountType(raw.bank_details.bank_account_type);
           if (raw.tax_details?.tax_number) setTaxNumber(raw.tax_details.tax_number);
           if (raw.address_details?.address || record.address) setAddress(raw.address_details?.address || record.address);
+          // Rehydrate structured manual-fallback fields + proof of address so a
+          // returning user with partial progress doesn't lose what they entered.
+          if (raw.address_details?.manual_entry) {
+            const ad = raw.address_details;
+            if (ad.country) setAddrCountry(ad.country);
+            if (ad.province) setAddrProvince(ad.province);
+            if (ad.city) setAddrCity(ad.city);
+            if (ad.street) setAddrStreet(ad.street);
+            if (ad.postal_code) setAddrPostal(ad.postal_code);
+            if (ad.proof_of_address_path) setPoaUrl(ad.proof_of_address_path);
+            if (ad.proof_of_address_name) setPoaFileName(ad.proof_of_address_name);
+          }
           if (raw.source_of_funds_details) {
             const { source_of_funds, source_of_funds_other, expected_monthly_investment } = raw.source_of_funds_details;
             if (source_of_funds) setSourceOfFunds(source_of_funds);
@@ -1135,21 +1222,149 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                   </div>
                 ) : null}
 
-                <div className="animate-fade-in delay-2">
-                  <label htmlFor="residential-address">{experianAddresses && experianAddresses.length > 0 ? "Or enter your address" : "Street Address"}</label>
-                  <div className="glass-field">
-                    <AddressAutocomplete
-                      value={address}
-                      onChange={(value) => setAddress(value)}
-                      placeholder="Search for your residential address"
-                      containerClassName=""
-                      inputClassName="w-full with-icon"
-                    />
+                {experianAddrLoading ? null : (experianAddresses && experianAddresses.length > 0) ? (
+                  /* Bureau address on record — keep the free-text "different address" box. */
+                  <div className="animate-fade-in delay-2">
+                    <label htmlFor="residential-address">Or enter your address</label>
+                    <div className="glass-field">
+                      <AddressAutocomplete
+                        value={address}
+                        onChange={(value) => setAddress(value)}
+                        placeholder="Search for your residential address"
+                        containerClassName=""
+                        inputClassName="w-full with-icon"
+                      />
+                    </div>
+                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                      Your address is required for regulatory compliance and credit assessment.
+                    </p>
                   </div>
-                  <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                    Your address is required for regulatory compliance and credit assessment.
-                  </p>
-                </div>
+                ) : (
+                  /* Manual fallback (no bureau address) — structured fields on one row
+                     so the format + postal code are guaranteed, plus a required
+                     proof-of-address document. */
+                  <>
+                    <style>{"@keyframes poaspin{to{transform:rotate(360deg)}}"}</style>
+                    <div className="animate-fade-in delay-2">
+                      <label htmlFor="addr-province">Residential Address</label>
+                      {/* Province bar with a small flag country picker tucked in the left
+                         corner (mirrors postal on the right of the next bar). South Africa
+                         shows the province dropdown; other countries show the country name. */}
+                      <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden", marginBottom: "10px" }}>
+                        <div style={{ position: "relative", flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontSize: "18px", lineHeight: 1, pointerEvents: "none" }} aria-hidden="true">
+                            {(ADDRESS_COUNTRIES.find((c) => c.name === addrCountry) || ADDRESS_COUNTRIES[0]).flag}
+                          </span>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 60%)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", right: 5, bottom: 9, pointerEvents: "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+                          <select
+                            id="addr-country"
+                            aria-label="Country"
+                            value={addrCountry}
+                            onChange={(e) => { setAddrCountry(e.target.value); setAddrProvince(""); }}
+                            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                          >
+                            {ADDRESS_COUNTRIES.map((c) => (
+                              <option key={c.name} value={c.name}>{c.flag}  {c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
+                        {addrCountry === "South Africa" ? (
+                          <select
+                            id="addr-province"
+                            value={addrProvince}
+                            onChange={(e) => setAddrProvince(e.target.value)}
+                            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: addrProvince ? "hsl(270 30% 20%)" : "hsl(270 15% 60%)" }}
+                          >
+                            <option value="">Province</option>
+                            {["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"].map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            id="addr-province"
+                            value={addrProvince}
+                            onChange={(e) => setAddrProvince(e.target.value)}
+                            placeholder="Province / State / Region"
+                            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
+                          />
+                        )}
+                      </div>
+
+                      <div className="glass-field" style={{ display: "flex", alignItems: "stretch", padding: 0, overflow: "hidden" }}>
+                        <input
+                          value={addrCity}
+                          onChange={(e) => setAddrCity(e.target.value)}
+                          placeholder="City"
+                          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
+                        />
+                        <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
+                        <input
+                          value={addrStreet}
+                          onChange={(e) => setAddrStreet(e.target.value)}
+                          placeholder="Street"
+                          style={{ flex: 1.4, minWidth: 0, border: "none", background: "transparent", padding: "12px 10px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)" }}
+                        />
+                        <div style={{ width: 1, background: "hsl(270 20% 90%)" }} />
+                        <input
+                          value={addrPostal}
+                          onChange={(e) => setAddrPostal(addrCountry === "South Africa" ? e.target.value.replace(/\D/g, "").slice(0, 4) : e.target.value.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 10))}
+                          placeholder={addrCountry === "South Africa" ? "0000" : "Postal"}
+                          inputMode={addrCountry === "South Africa" ? "numeric" : "text"}
+                          maxLength={addrCountry === "South Africa" ? 4 : 10}
+                          style={{ flex: addrCountry === "South Africa" ? "0 0 64px" : "0 0 84px", minWidth: 0, border: "none", background: "transparent", padding: "12px 8px", fontSize: "14px", outline: "none", color: "hsl(270 30% 20%)", letterSpacing: addrCountry === "South Africa" ? "1px" : "0" }}
+                        />
+                      </div>
+                      <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
+                        {addrCountry === "South Africa"
+                          ? "Enter your full address — province, city, street and 4-digit postal code."
+                          : "Enter your full address — city, street and postal code."}
+                      </p>
+                    </div>
+
+                    {/* Proof of address — compact single-line upload */}
+                    <div className="animate-fade-in delay-2">
+                      <label htmlFor="poa-upload">Proof of address</label>
+                      <label
+                        htmlFor="poa-upload"
+                        className="glass-field"
+                        style={{
+                          display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px",
+                          cursor: poaUploading ? "wait" : "pointer",
+                          border: poaUrl ? "1px solid hsl(160 50% 80%)" : undefined,
+                          background: poaUrl ? "hsl(160 60% 98%)" : undefined,
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "999px", flexShrink: 0, background: poaUrl ? "hsl(160 55% 91%)" : "hsl(270 60% 95%)" }}>
+                          {poaUploading ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2.4" strokeLinecap="round" style={{ animation: "poaspin 0.8s linear infinite" }}>
+                              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                            </svg>
+                          ) : poaUrl ? (
+                            <CheckCircleIcon width={16} height={16} style={{ color: "hsl(160 55% 40%)" }} />
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(270 50% 55%)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                          )}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: "13px", fontWeight: 500, color: poaUrl ? "hsl(160 45% 33%)" : "hsl(270 30% 40%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload proof of address"}
+                        </span>
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: poaUrl ? "hsl(160 40% 45%)" : "hsl(270 40% 58%)", flexShrink: 0 }}>
+                          {poaUrl ? "Replace" : "PDF · photo"}
+                        </span>
+                      </label>
+                      <input id="poa-upload" type="file" accept=".pdf,image/*" style={{ display: "none" }} disabled={poaUploading} onChange={handlePoaUpload} />
+                      {poaError && (
+                        <p className="text-xs mt-2" style={{ color: "hsl(0 60% 50%)" }}>{poaError}</p>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* Experian KYC V2 — pick a contact number when several are on record */}
                 {experianPhones && experianPhones.length > 1 && (
@@ -1195,36 +1410,67 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                     type="button"
                     className="continue-button"
                     onClick={async () => {
-                      if (address && address.length > 5) {
-                        setAddressLoading(true);
-                        try {
-                          if (!supabase) {
-                            throw new Error("Supabase not initialized");
-                          }
-                          const { data: { session } } = await supabase.auth.getSession();
-                          if (session?.user) {
-                            // Save to profiles table
-                            await supabase
-                              .from("profiles")
-                              .update({ address: address })
-                              .eq("id", session.user.id);
-
-                            // Save flag to user_onboarding
-                            await saveProgressFlag("address_saved", {
-                              address_details: { address: address, savedAt: new Date().toISOString() },
-                            });
-
-                            setAddressDone(true);
-                            goToStep(getNextIncompleteStep(3));
-                          }
-                        } catch (err) {
-                          console.error("Failed to save address:", err);
-                        } finally {
-                          setAddressLoading(false);
+                      const fallback = !(experianAddresses && experianAddresses.length > 0);
+                      let finalAddress = address;
+                      let details = {};
+                      if (fallback) {
+                        // Structured manual entry — all fields + proof of address required.
+                        // Province + 4-digit postal only enforced for South Africa.
+                        const isSA = addrCountry === "South Africa";
+                        const valid = addrProvince.trim() && addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (isSA ? /^\d{4}$/.test(addrPostal) : true);
+                        if (!valid) return;
+                        finalAddress = isSA
+                          ? `${addrProvince}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal}`
+                          : `${addrProvince.trim()}, ${addrCity.trim()}, ${addrStreet.trim()}, ${addrPostal.trim()}, ${addrCountry}`;
+                        details = {
+                          country: addrCountry,
+                          province: addrProvince.trim(),
+                          city: addrCity.trim(),
+                          street: addrStreet.trim(),
+                          postal_code: addrPostal.trim(),
+                          proof_of_address_path: poaUrl,
+                          proof_of_address_name: poaFileName,
+                          manual_entry: true,
+                        };
+                      } else if (!(address && address.length > 5)) {
+                        return;
+                      }
+                      setAddressLoading(true);
+                      try {
+                        if (!supabase) {
+                          throw new Error("Supabase not initialized");
                         }
+                        const { data: { session } } = await supabase.auth.getSession();
+                        if (session?.user) {
+                          // Save to profiles table
+                          await supabase
+                            .from("profiles")
+                            .update({ address: finalAddress })
+                            .eq("id", session.user.id);
+
+                          // Save flag to user_onboarding
+                          await saveProgressFlag("address_saved", {
+                            address_details: { address: finalAddress, savedAt: new Date().toISOString(), ...details },
+                          });
+
+                          // Refresh the cached profile so the mandate step reads the new
+                          // address (and extracts its postal code → skips the postal prompt).
+                          window.dispatchEvent(new Event("profile-updated"));
+
+                          setAddressDone(true);
+                          goToStep(getNextIncompleteStep(3));
+                        }
+                      } catch (err) {
+                        console.error("Failed to save address:", err);
+                      } finally {
+                        setAddressLoading(false);
                       }
                     }}
-                    disabled={!address || address.length < 5 || addressLoading}
+                    disabled={addressLoading || ((experianAddresses && experianAddresses.length > 0)
+                      ? (!address || address.length < 5)
+                      : !(addrProvince.trim() && addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
+                          && (addrCountry === "South Africa" ? /^\d{4}$/.test(addrPostal) : true)))}
                   >
                     {addressLoading ? "Saving..." : "Continue"}
                   </button>

@@ -1140,7 +1140,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
             </div>
             <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Update your discretionary</h3>
             <p className="text-center text-sm text-slate-600 mb-6">
-              You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow trading our strategies. Please{" "}
+              You selected <span className="font-semibold text-slate-900">limited discretion</span>, which doesn&rsquo;t allow investing in our strategies. Please{" "}
               <button
                 type="button"
                 onClick={() => { setShowDiscretionModal(false); if (onUpdateMandate) onUpdateMandate(); else if (onNavigateToOnboarding) onNavigateToOnboarding(); }}
@@ -1148,7 +1148,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               >
                 update your discretionary
               </button>{" "}
-              to trade strategies.
+              to invest in strategies.
             </p>
             <button
               type="button"
@@ -1266,7 +1266,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
               setInvestChecking(false);
             }
           }}
-          className={`w-full rounded-2xl py-3 text-sm font-semibold shadow-lg disabled:opacity-70 ${isLimitedDiscretion ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white shadow-violet-200/60"}`}
+          className="w-full rounded-2xl py-3 text-sm font-semibold shadow-lg disabled:opacity-70 bg-gradient-to-r from-[#111111] via-[#3b1b7a] to-[#5b21b6] text-white shadow-violet-200/60"
         >
           {investChecking ? "Checking..." : `Invest in ${currentStrategy.name}`}
         </button>
