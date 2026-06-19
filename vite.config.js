@@ -9,6 +9,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    exclude: ['@lottiefiles/dotlottie-react'],
   },
   server: {
     host: '0.0.0.0',

@@ -183,6 +183,16 @@ export const getSecurityBySymbol = async (symbol) => {
       console.error(`❌ Error fetching intraday data for ${symbol}:`, intradayError);
     }
 
+    // Derive "as of" time from the intraday timestamp (SAST = UTC+2)
+    // This overrides any stale AsOfTime that may be stored in securities_c.
+    let asOfTime = null;
+    if (intradayData?.timestamp) {
+      const ts = new Date(intradayData.timestamp);
+      const h = String(ts.getUTCHours() + 2).padStart(2, "0");
+      const m = String(ts.getUTCMinutes()).padStart(2, "0");
+      asOfTime = `${h}:${m}`;
+    }
+
     const processedSecurity = {
       ...security,
       id: security.id,
@@ -191,9 +201,11 @@ export const getSecurityBySymbol = async (symbol) => {
       changeAbs: intradayData?.["1d_abs"] != null ? Number(intradayData["1d_abs"]) / 100 : null,
       last_price: intradayData?.current_price ? Number(intradayData.current_price) / 100 : null,
       change_percentage: intradayData?.["1d_pct"],
+      // Always overwrite with live-derived time — never use the stale securities_c value
+      AsOfTime: asOfTime,
     };
 
-    console.log(`✅ Processed ${symbol} — price: ${processedSecurity.currentPrice}, changePct: ${processedSecurity.changePct}`);
+    console.log(`✅ Processed ${symbol} — price: ${processedSecurity.currentPrice}, changePct: ${processedSecurity.changePct}, asOfTime: ${asOfTime}`);
     return processedSecurity;
   } catch (error) {
     console.error(`💥 Exception while fetching security ${symbol}:`, error);
@@ -210,7 +222,7 @@ export const getSecurityBySymbol = async (symbol) => {
  * @param {string} timeframe  - One of: "1D", "1W", "1M", "3M", "6M", "YTD", "1Y"
  * @returns {Promise<Array>} Array of {ts, close} objects (close in Rands)
  */
-export const getSecurityPrices = async (securityId, timeframe = "1M") => {
+export const getSecurityPrices = async (securityId, timeframe = "1M", symbol = null) => {
   if (!supabase || !securityId) {
     console.error("❌ Supabase client not initialized or securityId missing");
     return [];
@@ -229,6 +241,31 @@ export const getSecurityPrices = async (securityId, timeframe = "1M") => {
     console.log(`🔍 Fetching price history for ${securityId}, timeframe ${timeframe}...`);
 
     let prices = [];
+
+    // ── Non-1D timeframes: fetch directly from Yahoo via server proxy ──────────
+    // This avoids reliance on stock_returns_c being pre-populated and always
+    // reflects the most up-to-date Yahoo data (1W/1M/3M/6M/YTD/1Y/ALL).
+    if (timeframe !== "1D" && symbol) {
+      try {
+        const resp = await fetch(`/api/prices/history?symbol=${encodeURIComponent(symbol)}&period=${encodeURIComponent(timeframe)}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json.points && json.points.length >= 2) {
+            prices = json.points.map(p => ({ ts: p.ts, close: p.close }));
+            // Also store the live asOfTime for the caller if available
+            prices._asOfTime = json.asOfTime;
+            console.log(`✅ Fetched ${prices.length} points from Yahoo for ${symbol} (${timeframe})`);
+            cache.priceHistory.set(cacheKey, { data: prices, timestamp: now });
+            return prices;
+          }
+          console.warn(`⚠️ Yahoo returned ${json.points?.length ?? 0} points for ${symbol} (${timeframe}) — falling back to DB`);
+        } else {
+          console.warn(`⚠️ /api/prices/history returned ${resp.status} for ${symbol} — falling back to DB`);
+        }
+      } catch (yahooErr) {
+        console.warn(`⚠️ Yahoo fetch failed for ${symbol} (${timeframe}):`, yahooErr.message, "— falling back to DB");
+      }
+    }
 
     // ── 1D: use intraday table (stock_intraday_c) bucketed into 15-min intervals ──
     if (timeframe === "1D") {

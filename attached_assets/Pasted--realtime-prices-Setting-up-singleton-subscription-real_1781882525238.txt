@@ -1,0 +1,273 @@
+ [realtime-prices] Setting up singleton subscription
+ [realtime-prices] Subscription status: SUBSCRIBED
+ Setting up SINGLETON real-time subscription: required-actions-singleton
+ Singleton subscription status: SUBSCRIBED
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ KYC status check: stored="null" current="verified"
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useFinancialData] Updated balance from DB: 99888097.49
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ 🔍 Fetching latest intraday data from stock_intraday_c...
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [SwipeableBalanceCard] Loaded holdings: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ ✅ Fetched 240 securities with intraday metrics
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+ 📦 Using cached markets data
+ 🔍 Fetching strategies with metrics from Supabase...
+ 🔍 Fetching public strategies from Supabase...
+ 🔍 Fetching news articles from News_articles table...
+ 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 1M...
+ 🔍 Fetching price history for edd5dd04-7274-48ce-8f92-5299cd231256, timeframe 1M...
+ 🔍 Fetching price history for 7ae14f0b-d897-451a-acd0-a746c23934fa, timeframe 1M...
+ 🔍 Fetching price history for db9e9278-1d4b-40af-bda6-5ad1dc9dc735, timeframe 1M...
+ 🔍 Fetching price history for 91bf54ca-a7a3-4ea0-a274-f2225378b9c1, timeframe 1M...
+ 🔍 Fetching price history for 54539f26-2b28-416c-b9cf-25aecb9f2361, timeframe 1M...
+ 🔍 Fetching price history for 5bafe4a7-90ba-41bd-9836-606dfd20ff60, timeframe 1M...
+ 🔍 Fetching price history for 1867614b-28ae-46ae-b6b4-5a81f99acffe, timeframe 1M...
+ 🔍 Fetching price history for 27e45586-c932-4c52-a33e-d51bb86a8087, timeframe 1M...
+ 🔍 Fetching price history for 272dbf83-1191-4e51-8592-8d013cda8f64, timeframe 1M...
+ 🔍 Fetching price history for d34b7a23-6892-4ffb-bf52-0ebf1070dda1, timeframe 1M...
+ 🔍 Fetching price history for 04088874-53ac-437c-af81-f521b77a7d6a, timeframe 1M...
+ 🔍 Fetching price history for 8d70ce58-bbea-4148-873b-ad099cea0705, timeframe 1M...
+ 🔍 Fetching price history for 2c772050-a977-42ea-9d71-6b3e5fab50db, timeframe 1M...
+ 🔍 Fetching price history for 42ced564-a61d-4353-8d1f-57eff7b3e8fc, timeframe 1M...
+ 🔍 Fetching price history for 9e722062-432a-4af0-b775-4932099bf7ca, timeframe 1M...
+ 🔍 Fetching price history for 20caa821-84c7-4764-b75d-d034e8b45e8b, timeframe 1M...
+ 🔍 Fetching price history for fe7c325c-f1f1-42c3-9ce4-7dab640a9e64, timeframe 1M...
+ 🔍 Fetching price history for f9c1b5a1-baee-48b4-97c0-c627a221f04c, timeframe 1M...
+ 🔍 Fetching price history for 8d590c7d-dcc1-428f-8155-0f422174b694, timeframe 1M...
+ 🔍 Fetching price history for 3b9db219-a1df-4686-9443-6e32808a9c4b, timeframe 1M...
+ 🔍 Fetching price history for 7c6b296f-9c3d-413a-96ae-8417dddb9209, timeframe 1M...
+ 🔍 Fetching price history for 8e4bde19-01cb-4203-91fa-9a13ca793e2e, timeframe 1M...
+ 🔍 Fetching price history for 0bb12be4-ef24-4883-8e75-5c0b14951060, timeframe 1M...
+ 🔍 Fetching price history for 137aaa0c-0c04-45dc-b93e-157a2b13bcf1, timeframe 1M...
+ 🔍 Fetching price history for 2e089b95-babd-45c0-a878-44e0626584f5, timeframe 1M...
+ 🔍 Fetching price history for ee26cac6-c6dd-4ccf-8153-6e68c3df0efd, timeframe 1M...
+ 🔍 Fetching price history for b736127c-315e-4411-9372-00a14e3d54e2, timeframe 1M...
+ 🔍 Fetching price history for f0745a24-4f69-442d-be97-2838abdc57bf, timeframe 1M...
+ ✅ News articles fetched successfully!
+ 📊 Total count in DB: 5119
+ 📰 Articles returned: 50
+ Sample article: Object
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 9 strategies with metrics
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 7 public strategies with dynamic metrics
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ [PERIOD_DEBUG parent] RENDER: Object
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+ ✅ Fetched 21 price points from stock_returns_c for 1M
+index-DqVoeenn.js:7 [PERIOD_DEBUG parent] RENDER: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 🔍 Fetching security BHG.JO...
+index-DqVoeenn.js:2 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe YTD...
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+/api/prices/history?symbol=BHG.JO&period=YTD:1  Failed to load resource: the server responded with a status of 404 ()
+index-DqVoeenn.js:2 ⚠️ /api/prices/history returned 404 for BHG.JO — falling back to DB
+console.warn @ index-DqVoeenn.js:2
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 ✅ Fetched 104 price points from stock_returns_c for YTD
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 ✅ Processed BHG.JO — price: 689, changePct: -4.9393, asOfTime: 17:18
+StockDetailPage-D6A9eLZ9.js:1 📊 Updated security data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:7 [realtime-prices] Tearing down subscription
+index-DqVoeenn.js:7 [realtime-prices] Subscription status: CLOSED
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 6M...
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+/api/prices/history?symbol=BHG.JO&period=6M:1  Failed to load resource: the server responded with a status of 404 ()
+index-DqVoeenn.js:2 ⚠️ /api/prices/history returned 404 for BHG.JO — falling back to DB
+console.warn @ index-DqVoeenn.js:2
+index-DqVoeenn.js:2 ✅ Fetched 138 price points from stock_returns_c for 6M
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 📦 Using cached price history for cdb08821-d07a-4198-8ce8-b195f46a404f_1M
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:2 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 1W...
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+/api/prices/history?symbol=BHG.JO&period=1W:1  Failed to load resource: the server responded with a status of 404 ()
+index-DqVoeenn.js:2 ⚠️ /api/prices/history returned 404 for BHG.JO — falling back to DB
+console.warn @ index-DqVoeenn.js:2
+index-DqVoeenn.js:2 ⚠️ Insufficient history (0 rows) — using latest price
+index-DqVoeenn.js:2 ✅ Using latest price: 2026-06-02
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object
+index-DqVoeenn.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+StockDetailPage-D6A9eLZ9.js:1 🔍 Initial security prop: Object
+StockDetailPage-D6A9eLZ9.js:1 💰 Display data: Object

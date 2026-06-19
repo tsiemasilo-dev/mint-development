@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 
-const STANDARD_BANK_LOGO = "/standard-bank-logo.jpg";
+const STANDARD_BANK_LOGO = "https://cdn.brandfetch.io/ids9vvzhtN/w/720/h/720/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1668518662439";
 
 const PaymentMethodModal = ({
   isOpen,
@@ -24,6 +24,17 @@ const PaymentMethodModal = ({
   const [showThankYou, setShowThankYou] = useState(false);
   const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
   const [showEFTPopup, setShowEFTPopup] = useState(false);
+  const [ozowLoading, setOzowLoading] = useState(false);
+
+  const handleOzow = async () => {
+    if (ozowLoading) return;
+    setOzowLoading(true);
+    try {
+      await onSelectOzow?.();
+    } finally {
+      setOzowLoading(false);
+    }
+  };
   const { profile, loading: profileLoading } = useProfile();
 
   // ── FIX 1: Mint number pulled directly from profile ──────────────────────
@@ -130,12 +141,40 @@ const PaymentMethodModal = ({
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
-            className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+            className="relative w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl overflow-hidden"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
+            {/* Ozow loading overlay */}
+            <AnimatePresence>
+              {ozowLoading && (
+                <motion.div
+                  key="ozow-loader"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 rounded-t-3xl bg-white/95 backdrop-blur-sm"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <div className="h-16 w-16 rounded-2xl overflow-hidden border border-slate-100 shadow-md">
+                      <img src="/ozow-logo.png" alt="Ozow" className="w-full h-full object-contain" />
+                    </div>
+                    <svg className="absolute -inset-2 h-20 w-20 animate-spin text-violet-500" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                      <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-slate-900">Connecting to Ozow</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Preparing your secure payment…</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div className="flex items-center gap-2">
@@ -209,23 +248,32 @@ const PaymentMethodModal = ({
                 {/* ── Ozow ── */}
                 <button
                   type="button"
-                  onClick={() => onSelectOzow?.()}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40"
+                  onClick={handleOzow}
+                  disabled={ozowLoading}
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
-                    <img
-                      src="/ozow-logo.png"
-                      alt="Ozow"
-                      className="w-full h-full object-contain"
-                    />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm flex-shrink-0 overflow-hidden p-1">
+                    {ozowLoading ? (
+                      <Loader2 className="h-5 w-5 text-violet-500 animate-spin" />
+                    ) : (
+                      <img
+                        src="/ozow-logo.png"
+                        alt="Ozow"
+                        className="w-full h-full object-contain"
+                      />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900">Ozow</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Instant bank-to-bank payment
+                      {ozowLoading ? "Connecting to Ozow…" : "Instant bank-to-bank payment"}
                     </p>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">Instant</span>
+                  {ozowLoading ? (
+                    <Loader2 className="h-4 w-4 text-violet-400 animate-spin flex-shrink-0" />
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">Instant</span>
+                  )}
                 </button>
 
                 {/* ── Direct EFT ── */}
@@ -235,11 +283,11 @@ const PaymentMethodModal = ({
                     onClick={() => setEftExpanded(!eftExpanded)}
                     className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-slate-50"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0033a1]/5 border border-[#0033a1]/10 flex-shrink-0 p-1">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm flex-shrink-0 overflow-hidden p-1">
                       <img
-                        src="/standard-bank-logo.png"
+                        src={STANDARD_BANK_LOGO}
                         alt="Standard Bank"
-                        className="w-8 h-8 object-contain"
+                        className="w-full h-full object-contain"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -270,7 +318,7 @@ const PaymentMethodModal = ({
                       >
                         <div className="border-t border-slate-100">
                           {/* Bank header */}
-                          <div className="flex items-center justify-between px-4 py-2.5 bg-[#001f5b]">
+                          <div className="flex items-center justify-between px-4 py-3 bg-[#001f5b]">
                             <div>
                               <p className="text-[10px] uppercase tracking-widest text-white/50">
                                 Receiving Bank
@@ -282,7 +330,7 @@ const PaymentMethodModal = ({
                             <img
                               src={STANDARD_BANK_LOGO}
                               alt="Standard Bank"
-                              className="h-6 object-contain"
+                              className="h-9 w-auto object-contain"
                             />
                           </div>
 
@@ -356,7 +404,7 @@ const PaymentMethodModal = ({
 
                             <button
                               type="button"
-                              onClick={() => setShowThankYou(true)}
+                              onClick={() => { onClose(); setShowThankYou(true); }}
                               className="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-semibold transition active:scale-95"
                             >
                               I've sent the payment
@@ -423,7 +471,7 @@ const PaymentMethodModal = ({
                     <p className="text-[10px] uppercase tracking-widest text-white/50">Receiving Bank</p>
                     <p className="text-[11px] text-white/70 mt-0.5">EFT / Bank Transfer</p>
                   </div>
-                  <img src={STANDARD_BANK_LOGO} alt="Standard Bank" className="h-6 object-contain" />
+                  <img src={STANDARD_BANK_LOGO} alt="Standard Bank" className="h-9 w-auto object-contain" />
                 </div>
 
                 <div className="px-5 py-4 space-y-2.5">
@@ -475,7 +523,7 @@ const PaymentMethodModal = ({
 
                   <button
                     type="button"
-                    onClick={() => { setShowEFTPopup(false); setShowThankYou(true); }}
+                    onClick={() => { setShowEFTPopup(false); onClose(); setShowThankYou(true); }}
                     className="w-full py-3.5 rounded-xl bg-slate-900 text-white text-sm font-semibold transition active:scale-95"
                   >
                     I've sent the payment

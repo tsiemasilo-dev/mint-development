@@ -4,6 +4,10 @@
     {
       "path": "/api/gift/expire",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/prices/eod-save",
+      "schedule": "5 15 * * 1-5"
     }
   ],
   "rewrites": [

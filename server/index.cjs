@@ -1,3 +1,11 @@
+// Prevent any unhandled promise rejection from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('[server] Unhandled promise rejection (server kept alive):', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.warn('[server] Uncaught exception (server kept alive):', err?.message || err);
+});
+
 const fs = require("fs");
 const path = require("path");
 
@@ -937,7 +945,9 @@ async function ensureUserSessionsTable() {
 }
 ensureUserSessionsTable();
 
-runFuneralCoverMigration(pgPool);
+runFuneralCoverMigration(pgPool).catch(err => {
+  console.warn("[funeral-cover] Migration skipped — DB unreachable:", err.message);
+});
 
 // ── Request a sell ────────────────────────────────────────────────────────────
 // Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
@@ -3989,6 +3999,59 @@ app.get("/api/stocks/chart", async (req, res) => {
   } catch (error) {
     console.error("Stock chart error:", error);
     res.status(500).json({ error: "Failed to fetch stock chart data" });
+  }
+});
+
+// ── Yahoo historical daily prices — used by StockDetailPage for W/M/3M/6M/YTD/1Y/ALL ──
+// JSE (.JO) prices from Yahoo are in ZAc (cents); we divide by 100 to return Rands.
+// Also returns asOfTime (SAST HH:MM) from Yahoo's regularMarketTime.
+app.get("/api/prices/history", async (req, res) => {
+  const { symbol, period } = req.query;
+  if (!symbol || !period) return res.status(400).json({ error: "symbol and period are required" });
+
+  const rangeMap = { "1W": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "YTD": "ytd", "1Y": "1y", "ALL": "5y" };
+  const range = rangeMap[period];
+  if (!range) return res.status(400).json({ error: `Unknown period "${period}". Use 1W/1M/3M/6M/YTD/1Y/ALL` });
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
+    const yahooRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!yahooRes.ok) return res.status(502).json({ error: `Yahoo returned HTTP ${yahooRes.status}` });
+
+    const data = await yahooRes.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) return res.status(404).json({ error: "No price data found for symbol" });
+
+    const meta = result.meta;
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    const isJSE = symbol.endsWith(".JO");
+
+    const points = timestamps
+      .map((ts, i) => {
+        const close = closes[i];
+        if (close == null) return null;
+        // JSE prices come back in ZAc (cents) — convert to Rands
+        const closeRands = isJSE ? close / 100 : close;
+        return { ts: new Date(ts * 1000).toISOString().split("T")[0], close: parseFloat(closeRands.toFixed(4)) };
+      })
+      .filter(Boolean);
+
+    // Compute "as of" time in SAST (Africa/Johannesburg = UTC+2)
+    const marketTimeSec = meta.regularMarketTime;
+    const asOfTime = marketTimeSec
+      ? new Date(marketTimeSec * 1000).toLocaleTimeString("en-ZA", {
+          hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Johannesburg",
+        })
+      : null;
+
+    res.json({ symbol, period, points, asOfTime, currency: meta.currency || "ZAR" });
+  } catch (err) {
+    console.error(`[prices/history] ${symbol} (${period}):`, err.message);
+    res.status(500).json({ error: "Failed to fetch price history from Yahoo" });
   }
 });
 
@@ -7869,7 +7932,7 @@ app.post("/api/ozow/initiate", async (req, res) => {
     const optional3 = userId || "";
     const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
 
-    const baseUrl = process.env.APP_URL || "https://mymint.co.za";
+    const baseUrl = process.env.APP_URL || "https://app.mymint.co.za";
     const resolvedSuccessUrl = successUrl || `${baseUrl}/?ozow=success`;
     const resolvedCancelUrl = cancelUrl || `${baseUrl}/?ozow=cancel`;
     const resolvedErrorUrl = errorUrl || `${baseUrl}/?ozow=error`;
@@ -8012,40 +8075,25 @@ app.post("/api/ozow/record-success", async (req, res) => {
         const priceCents = Number(sec.last_price || 0);
         if (priceCents <= 0) continue;
 
-        const holdingQty = rawQty * scalingRatio;
+        const holdingQty = Math.max(1, Math.round(rawQty * scalingRatio));
 
-        const { data: existing } = await db
-          .from("stock_holdings_c")
-          .select("id, quantity, avg_fill")
-          .eq("user_id", userId)
-          .eq("security_id", sec.id)
-          .eq("strategy_id", strategyId)
-          .maybeSingle();
-
-        if (existing) {
-          const oldQty = Number(existing.quantity || 0);
-          const oldAvgFill = Number(existing.avg_fill || 0);
-          const newQty = oldQty + holdingQty;
-          const newAvgFill = newQty > 0 ? ((oldAvgFill * oldQty) + (priceCents * holdingQty)) / newQty : priceCents;
-          await db.from("stock_holdings_c").update({
-            quantity: newQty,
-            avg_fill: Math.round(newAvgFill),
-            market_value: Math.round(newQty * priceCents),
-            as_of_date: today,
-            updated_at: now,
-          }).eq("id", existing.id);
+        // Insert as pending (avg_fill: null) so it appears in pending orders
+        // just like the wallet/paystack flow via /api/record-investment.
+        const { error: insertErr } = await db.from("stock_holdings_c").insert({
+          user_id: userId,
+          security_id: sec.id,
+          strategy_id: strategyId,
+          quantity: holdingQty,
+          avg_fill: null,
+          market_value: 0,
+          unrealized_pnl: 0,
+          as_of_date: null,
+          Status: "active",
+        });
+        if (insertErr) {
+          console.error(`[ozow/record-success] Failed to insert pending holding for ${holding.symbol}:`, insertErr.message);
         } else {
-          await db.from("stock_holdings_c").insert({
-            user_id: userId,
-            security_id: sec.id,
-            strategy_id: strategyId,
-            quantity: holdingQty,
-            avg_fill: priceCents,
-            market_value: Math.round(holdingQty * priceCents),
-            unrealized_pnl: 0,
-            as_of_date: today,
-            Status: "active",
-          });
+          console.log(`[ozow/record-success] Inserted pending holding ${holding.symbol} qty=${holdingQty}`);
         }
       }
     }
@@ -10872,6 +10920,73 @@ setTimeout(refreshHeldSecurities, 5000);
 setInterval(refreshHeldSecurities, INTRADAY_HELD_INTERVAL_MS);
 setTimeout(refreshIntradayPrices, 30000);
 setInterval(refreshIntradayPrices, INTRADAY_INTERVAL_MS);
+
+// ── End-of-day: save closing prices to stock_returns_c ───────────────────────
+// Runs at 17:05 SAST (15:05 UTC) Mon–Fri, after JSE close.
+// Reads the latest intraday price for each security and upserts one row per day
+// into stock_returns_c so that all W/M/3M/6M/YTD/1Y chart timeframes always have data.
+async function saveSecurityEODPrices() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+
+  const now = new Date();
+  const dow = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return; // skip weekends
+
+  const todayStr = now.toISOString().split("T")[0];
+  console.log(`[eod-returns] Running EOD price save for ${todayStr}...`);
+
+  try {
+    const { data: securities, error: secErr } = await db.from("securities_c").select("id, symbol");
+    if (secErr || !securities?.length) {
+      console.error("[eod-returns] Could not fetch securities:", secErr?.message);
+      return;
+    }
+
+    let saved = 0, skipped = 0, failed = 0;
+
+    for (let i = 0; i < securities.length; i += 10) {
+      const batch = securities.slice(i, i + 10);
+      await Promise.all(batch.map(async (sec) => {
+        try {
+          const { data: latest } = await db
+            .from("stock_intraday_c")
+            .select("current_price, timestamp")
+            .eq("security_id", sec.id)
+            .order("timestamp", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!latest?.current_price) { skipped++; return; }
+
+          const { error: upsertErr } = await db.from("stock_returns_c").upsert(
+            { security_id: sec.id, as_of_date: todayStr, current_price: latest.current_price },
+            { onConflict: "security_id,as_of_date", ignoreDuplicates: false }
+          );
+
+          if (upsertErr) {
+            console.error(`[eod-returns] Upsert failed for ${sec.symbol}:`, upsertErr.message);
+            failed++;
+          } else {
+            saved++;
+          }
+        } catch (e) {
+          console.error(`[eod-returns] Error for ${sec.symbol}:`, e.message);
+          failed++;
+        }
+      }));
+      if (i + 10 < securities.length) await new Promise(r => setTimeout(r, 200));
+    }
+
+    console.log(`[eod-returns] Done — saved: ${saved}, skipped: ${skipped}, failed: ${failed} / ${securities.length}`);
+  } catch (err) {
+    console.error("[eod-returns] Unexpected error:", err.message);
+  }
+}
+
+// 17:05 SAST = 15:05 UTC, weekdays only
+cron.schedule("5 15 * * 1-5", saveSecurityEODPrices, { timezone: "UTC" });
+console.log("[eod-returns] Scheduled daily EOD price save at 17:05 SAST (Mon–Fri)");
 
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);

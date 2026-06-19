@@ -1,0 +1,19 @@
+[plugin:vite:import-analysis] Failed to resolve import "@lottiefiles/dotlottie-react" from "src/pages/PaymentSuccessPage.jsx". Does the file exist?
+/home/runner/workspace/src/pages/PaymentSuccessPage.jsx:2:31
+16 |  }
+17 |  import React from "react";
+18 |  import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+   |                                  ^
+19 |  const PaymentSuccessPage = ({ onDone, strategyName }) => /* @__PURE__ */ jsxDEV("div", { className: "min-h-screen bg-...
+20 |    /* @__PURE__ */ jsxDEV("div", { className: "flex justify-center mb-2", style: { height: 160 }, children: /* @__PURE...
+    at TransformPluginContext._formatLog (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:29019:43)
+    at TransformPluginContext.error (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:29016:14)
+    at normalizeUrl (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:27139:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:27197:32
+    at async Promise.all (index 4)
+    at async TransformPluginContext.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:27165:4)
+    at async EnvironmentPluginContainer.transform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:28817:14)
+    at async loadAndTransform (file:///home/runner/workspace/node_modules/.pnpm/vite@7.3.3_@types+node@25.4.0_jiti@1.21.7/node_modules/vite/dist/node/chunks/config.js:22686:26)
+Click outside, press Esc key, or fix the code to dismiss.
+You can also disable this overlay by setting server.hmr.overlay to false in vite.config.js.

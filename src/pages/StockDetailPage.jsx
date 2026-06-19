@@ -31,7 +31,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [buyFeeExpanded, setBuyFeeExpanded] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
-  const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y"];
+  const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
 
   useEffect(() => {
     if (profile?.watchlist && Array.isArray(profile.watchlist)) {
@@ -118,7 +118,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
       
       setLoading(true);
       try {
-        const prices = await getSecurityPrices(security.id, selectedPeriod);
+        const prices = await getSecurityPrices(security.id, selectedPeriod, security.symbol);
         setPriceHistory(prices);
       } catch (error) {
         console.error("Error fetching price history:", error);
