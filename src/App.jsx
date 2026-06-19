@@ -1918,10 +1918,18 @@ const App = () => {
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            // Navigate immediately so PaymentPage unmounts before any async work runs
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setCurrentPage("paymentSuccess");
+            // Goal update runs in the background after navigation
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock";
             const linkedSecurityId = stockCheckout.security?.id || stockCheckout.security?.security_id || null;
+            selectedGoalIdRef.current = null;
+            goalInvestAmountRef.current = 0;
+            setSelectedGoalId(null);
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -1958,12 +1966,6 @@ const App = () => {
                 console.error("Error updating goal:", e);
               }
             }
-            selectedGoalIdRef.current = null;
-            goalInvestAmountRef.current = 0;
-            setSelectedGoalId(null);
-            navigationHistory.current = [];
-            setPreviousPageName(null);
-            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
@@ -2242,10 +2244,19 @@ const App = () => {
           onOpenDeposit={() => navigateTo("deposit")}
           onSuccess={async (response) => {
             console.log("Payment successful:", response);
+            // Navigate immediately so PaymentPage unmounts before any async work runs
+            navigationHistory.current = [];
+            setPreviousPageName(null);
+            setSelectedChildForInvest(null);
+            setCurrentPage("paymentSuccess");
+            // Goal update runs in the background after navigation
             const goalId = selectedGoalIdRef.current;
             const goalAmount = goalInvestAmountRef.current;
             const linkedAssetName = selectedStrategy?.name || "Strategy";
             const linkedStrategyId = selectedStrategy?.id || null;
+            selectedGoalIdRef.current = null;
+            goalInvestAmountRef.current = 0;
+            setSelectedGoalId(null);
             if (goalId && supabase) {
               try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -2282,13 +2293,6 @@ const App = () => {
                 console.error("Error updating goal:", e);
               }
             }
-            selectedGoalIdRef.current = null;
-            goalInvestAmountRef.current = 0;
-            setSelectedGoalId(null);
-            setSelectedChildForInvest(null);
-            navigationHistory.current = [];
-            setPreviousPageName(null);
-            startTransition(() => setCurrentPage("paymentSuccess"));
           }}
           onCancel={goBack}
         />
