@@ -18,3 +18,9 @@ id = "Gok5uGbLuzAdV8kUOuG1D"
 uri = "file://mint-admin-it-register.tar.gz"
 type = "unspecified"
 title = "IT Register — updated files (service role key prompt)"
+
+[[outputs]]
+id = "gnsAIwN3qr6vOgs6Sz09s"
+uri = "file://ytdStrategy.md"
+type = "text"
+title = "ytdStrategy — Methodology & Full Comparison (1225 lines)"
