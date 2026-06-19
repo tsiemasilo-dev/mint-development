@@ -206,38 +206,27 @@ const PaymentMethodModal = ({
                   </span>
                 </button>
 
-                {/* ── Ozow (Coming Soon) ── */}
-                <div className="relative w-full">
-                  <div className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-100 bg-slate-50/60 px-4 py-3.5 opacity-60 select-none cursor-not-allowed">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
-                      <img
-                        src="/ozow-logo.png"
-                        alt="Ozow"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-500">Ozow</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Instant bank-to-bank payment
-                      </p>
-                    </div>
+                {/* ── Ozow ── */}
+                <button
+                  type="button"
+                  onClick={() => onSelectOzow?.()}
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3.5 text-left transition active:scale-[0.98] hover:border-violet-300 hover:bg-violet-50/40"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm flex-shrink-0 p-1.5">
+                    <img
+                      src="/ozow-logo.png"
+                      alt="Ozow"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white shadow-md"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%)",
-                        boxShadow:
-                          "0 1px 8px 0 rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.08)",
-                        letterSpacing: "0.12em",
-                      }}
-                    >
-                      Coming Soon
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">Ozow</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Instant bank-to-bank payment
+                    </p>
                   </div>
-                </div>
+                  <span className="text-[11px] text-slate-400 font-medium flex-shrink-0">Instant</span>
+                </button>
 
                 {/* ── Direct EFT ── */}
                 <div className="rounded-2xl border-2 border-slate-200 bg-white overflow-hidden">
