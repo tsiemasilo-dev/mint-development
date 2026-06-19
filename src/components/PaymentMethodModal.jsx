@@ -141,12 +141,40 @@ const PaymentMethodModal = ({
           onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.div
-            className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+            className="relative w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl overflow-hidden"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
+            {/* Ozow loading overlay */}
+            <AnimatePresence>
+              {ozowLoading && (
+                <motion.div
+                  key="ozow-loader"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 rounded-t-3xl bg-white/95 backdrop-blur-sm"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <div className="h-16 w-16 rounded-2xl overflow-hidden border border-slate-100 shadow-md">
+                      <img src="/ozow-logo.png" alt="Ozow" className="w-full h-full object-contain" />
+                    </div>
+                    <svg className="absolute -inset-2 h-20 w-20 animate-spin text-violet-500" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                      <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-slate-900">Connecting to Ozow</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Preparing your secure payment…</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div className="flex items-center gap-2">
