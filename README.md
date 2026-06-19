@@ -1,4 +1,4 @@
-# Mint — Investment & Wealth Platform..
+# Mint — Investment & Wealth Platform
 
 <p align="center">
   <img src="public/mint-logo.png" alt="Mint Logo" width="80" />
@@ -26,9 +26,6 @@
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Features](#features)
-- [Database Schema](#database-schema)
-- [API Reference](#api-reference)
-- [Authentication & Security](#authentication--security)
 - [Onboarding Flow](#onboarding-flow)
 - [Investment Engine](#investment-engine)
 - [Third-Party Integrations](#third-party-integrations)
@@ -70,337 +67,56 @@ Mint is a wealth and investment platform targeting South African retail investor
 |---|---|---|
 | **Node.js** | 20 | Runtime |
 | **Express** | 5.2 | REST API server |
-| **Supabase JS** | 2.106 | Database queries, auth, realtime |
+| **Supabase JS** | 2.107 | Database queries, auth, realtime |
 | **Resend** | 6.12 | Transactional email delivery |
-| **node-cron** | 4.2 | Scheduled jobs (gift expiry) |
+| **node-cron** | 4.2 | Scheduled jobs (gift expiry, price refreshes) |
 | **Multer** | 2.1 | File upload handling |
 | **xml2js** | 0.6 | XML parsing (broker webhook payloads) |
-| **ws** | 8.20 | WebSocket transport for Supabase realtime |
+| **ws** | 8.21 | WebSocket transport for Supabase realtime |
 | **pg** | 8.21 | Direct PostgreSQL access for migrations |
-| **Axios** | 1.16 | HTTP client for third-party APIs |
-
-### Infrastructure & Services
-
-| Service | Purpose |
-|---|---|
-| **Supabase** | PostgreSQL database, auth, real-time subscriptions, storage |
-| **Vercel** | Serverless API deployment and cron scheduling |
-| **Capacitor 8** | iOS and Android native app wrapper |
-| **Sumsub** | KYC / AML identity verification |
-| **TruID Connect** | Bank account verification and linking |
-| **Ozow** | Instant EFT payment processing (ZAR) |
-| **Paystack** | Card and bank payment gateway (ZAR) |
-| **Resend** | Transactional email (order confirmations, newsletters, loan agreements) |
-| **Yahoo Finance (proxy)** | Live JSE stock price data |
+| **Axios** | 1.17 | HTTP client for third-party APIs |
 
 ---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        React Frontend                           │
-│         (Vite · Tailwind · Framer Motion · Recharts)            │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐   │
-│  │  Pages (50+) │  │  Components  │  │  Custom Hooks/Lib  │   │
-│  │  Auth · KYC  │  │ SwipeCard    │  │ useFinancialData   │   │
-│  │  Portfolio   │  │ Modals       │  │ useUserStrategies  │   │
-│  │  Markets     │  │ Charts       │  │ useProfile         │   │
-│  │  Credit      │  │ PDFs         │  │ NotificationsCtx   │   │
-│  │  Gifts       │  │ Realtime     │  │ useInactivityTimer │   │
-│  └──────────────┘  └──────────────┘  └────────────────────┘   │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  REST / Fetch
-┌────────────────────────────▼────────────────────────────────────┐
-│                     Express API Server                          │
-│                    (server/index.cjs)                            │
-│                                                                  │
-│  Auth · Onboarding · Investments · Holdings · Wallets           │
-│  KYC (Sumsub) · Banking (TruID) · Payments (Ozow/Paystack)     │
-│  Credit · Sessions · Gifting · Family · Webhooks · Cron         │
-└──────────┬──────────────────────────────┬───────────────────────┘
-           │                              │
-┌──────────▼──────────┐       ┌───────────▼───────────────────────┐
-│     Supabase        │       │       Third-Party APIs             │
-│  PostgreSQL · Auth  │       │  Sumsub · TruID · Ozow · Paystack  │
-│  Realtime · Storage │       │  Resend · Yahoo Finance · Anthropic│
-└─────────────────────┘       └────────────────────────────────────┘
-```
+The app runs as two concurrent processes:
 
-### Key Architectural Decisions
+- **Express server** (`server/index.cjs`) on port `3001` — handles all secure server-side logic: Supabase admin operations, third-party API proxying, cron jobs, file uploads, and webhooks.
+- **Vite dev server** on port `5000` — serves the React frontend and proxies all `/api/*` requests to the Express server.
 
-- **Monorepo** — Frontend (React/Vite) and backend (Express) share one repository. `npm run dev` starts both concurrently.
-- **Always-Insert Holdings** — Each investment purchase inserts new holding rows rather than updating existing ones, enabling full batch history and accurate pending/fill tracking. Client-side `aggregateHoldings()` collapses these into one logical position per security.
-- **Client-side aggregation** — `aggregateHoldings()` groups raw `stock_holdings_c` rows by `(security_id, strategy_id, family_member_id)`. Downstream UI always sees one row per position with `batches[]` available for stacked-card UIs.
-- **Module-level caching** — Strategies, sessions, and market data are cached in module-level variables to prevent skeleton flicker on navigation (survives component unmount/remount).
-- **Singleton realtime subscriptions** — Supabase realtime channels (notifications, prices, required actions) use a singleton pattern to prevent duplicate subscriptions across page renders.
-- **Ref-guarded submissions** — Payment confirmations use `useRef` flags (not state) for submission guards to prevent duplicate API calls from rapid taps — React state updates are async and cannot reliably block re-entrant calls.
-- **JWT decode fallback** — When `supabase.auth.getUser()` returns "Auth session missing!" (invalidated session), the server decodes the JWT locally, extracts the `sub`, and confirms the user via the admin API — allowing valid users through without forcing re-login.
+In production, the Express server runs standalone and the frontend is served as a static Vite build, with additional lightweight endpoints handled by Vercel serverless functions under `api/`.
+
+### Navigation
+
+The app uses a custom state-based navigation stack in `App.jsx` (not React Router). Pages are rendered based on `currentPage` state, with `window.history` kept in sync for browser back-button support and deep-linking.
+
+### Authentication
+
+Supabase Auth handles all authentication — email/password signup with OTP email verification, session refresh, and JWT-based API authorization. Sessions are cached in `sessionCache.js` to reduce redundant Supabase calls.
+
+### Biometrics & PIN
+
+- Native biometric authentication via `@capgo/capacitor-native-biometric` (Face ID / Touch ID)
+- 5-digit PIN lock screen with SHA-256 hashing
+- Both are opt-in and configurable per user in Settings
 
 ---
 
 ## Features
 
-### Authentication
-- Email + password signup with real-time strength validation
-- 6-digit OTP email verification with 3-attempt lockout and countdown timers
-- Progressive cooldowns on failed login attempts
-- Secure session management with JWT decode fallback for invalidated sessions
-- Active session listing and remote revocation
-- Automatic session timeout with configurable inactivity period
-
-### Security
-- 5-digit PIN lock screen with SHA-256 hashing
-- Native biometric authentication (Face ID / Fingerprint) via `@capgo/capacitor-native-biometric`
-- Per-device session tracking with remote revocation support
-- Admin API fallback for invalidated JWT sessions
-
-### Onboarding (KYC & Compliance)
-Multi-step onboarding flow required before investing:
-1. **Identity** — SA ID number capture and validation
-2. **KYC** — Sumsub embedded WebSDK (document scan + liveness check)
-3. **Employment & Tax** — Income, employer, and tax number
-4. **Discretionary Mandate** — Digital signature via Signature Pad
-5. **Risk Disclosure** — Regulatory risk acceptance
-6. **Source of Funds** — Declaration and acceptance
-7. **Bank Account** — TruID-verified bank linking + bank confirmation letter upload
-8. **Terms & Conditions** — Final agreement signature and PDF download
-
-### Portfolio & Investing
-- Strategy baskets — curated multi-stock JSE portfolios (e.g. Yield Basket, Growth Basket)
-- Live JSE price data via Yahoo Finance proxy
-- Pending / filled holdings tracking with settlement badges
-- Portfolio equity curve charts (5D, 1M, YTD, All) anchored to purchase date
-- Calendar returns heatmap
-- PDF factsheet generation per strategy, personalised with the user's investment data
-- Holdings breakdown with constituent stock drill-down
-- Allocation pie chart with interactive segments
-
-### Markets
-- Live intraday data for 130+ JSE-listed securities
-- Stock detail pages with price history charts
-- Strategy discovery and performance comparison
-- Persistent filter state (saved to localStorage per context)
-
-### Payments
-- **Wallet** — Internal balance with deduction and real-time update
-- **Paystack** — Card / bank / EFT (ZAR)
-- **Ozow** — Instant EFT (ZAR)
-- **Direct EFT** — Manual bank transfer with reference generation and admin confirmation flow
-- Duplicate-submission guard using a `useRef` lock (prevents double-tap race conditions)
-
-### Credit & Liquidity
-- Credit score assessment
-- Instant and active liquidity facilities
-- Loan application engine with scoring (`LendingEngine.js`)
-- Repayment management
-- Loan agreement PDF generation and email delivery
-
-### Gifting
-- Send investment gifts (strategy-linked) to other users or new contacts
-- OTP-verified gift claiming
-- Self-claim flow
-- Gift expiry and extension management
-- Sent gifts history
-
-### Family & Child Accounts
-4-step child account onboarding:
-1. ID number capture
-2. Birth certificate upload
-3. Proof of address declaration
-4. Parental responsibility agreement
-
-Child accounts have fully isolated portfolios, wallets, and strategy returns — no data bleeds between parent and child caches.
-
-### Notifications
-- Real-time push via Supabase `postgres_changes` subscriptions
-- Grouped by date with unread badge count
-- Swipe-to-delete (mobile gesture)
-- Mark all as read
-- Required actions feed (KYC alerts, pending onboarding steps)
-
-### Statements
-- Strategy performance tab
-- Holdings snapshot tab
-- Financial transactions tab
-- PDF statement download (generated client-side)
-
-### Insurance (Funeral Cover)
-- Policy application flow
-- Premium calculation by tier
-- Policy PDF generation and email delivery
-
-### Scheduled Jobs (Cron)
-| Job | Schedule | Description |
-|---|---|---|
-| Gift Expiry | Every 15 min | Automatically expires unclaimed gifts past their deadline |
-
----
-
-## Database Schema
-
-Core Supabase (PostgreSQL) tables:
-
-| Table | Purpose |
-|---|---|
-| `profiles` | User profile (name, ID number, address, mint_number) |
-| `user_onboarding` | KYC status, sumsub_raw flags, bank details, employment, signatures |
-| `wallets` | User wallet balance (stored in cents) and rebalance residual |
-| `stock_holdings_c` | Individual holding rows per purchase batch (always-insert pattern) |
-| `strategies_c` | Strategy definitions (name, constituent stocks, weights, logos) |
-| `client_strategy_returns_c` | Admin-computed daily P&L snapshots per user per strategy |
-| `transactions` | Investment, fee, and payment transaction ledger |
-| `securities` | JSE securities master (symbol, name, logo, last_price) |
-| `securities_c` | Extended securities with intraday metrics |
-| `stock_intraday_c` | Intraday OHLCV data per security |
-| `News_articles` | Curated financial news articles |
-| `family_members` | Child account linkage (parent_id → child profile) |
-| `truid_bank_snapshots` | TruID bank verification snapshots |
-| `loan_application` | Credit facility applications |
-| `loan_engine_score` | Credit scoring results |
-| `order_emails` | Log of sent order confirmation and fill emails |
-| `user_onboarding_pack_details` | Extended onboarding document metadata |
-
----
-
-## API Reference
-
-All endpoints are prefixed `/api/` and served by `server/index.cjs`.
-
-### Auth & Sessions
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/health` | Server health check |
-| GET | `/api/version` | App version |
-| POST | `/api/sessions/record` | Record a new device session |
-| GET | `/api/sessions/list` | List active sessions for the user |
-| POST | `/api/sessions/revoke` | Revoke a specific session |
-| POST | `/api/sessions/revoke-others` | Revoke all other sessions |
-| POST | `/api/sessions/validate` | Validate a session token |
-
-### Onboarding & KYC
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/onboarding/status` | Full onboarding status with `is_fully_onboarded` flag |
-| POST | `/api/onboarding/complete` | Mark onboarding complete |
-| POST | `/api/onboarding/check-id-number` | Validate SA ID number (format + Luhn) |
-| POST | `/api/onboarding/save-employment` | Save employment and income details |
-| POST | `/api/onboarding/save-mandate` | Save discretionary mandate acceptance |
-| POST | `/api/onboarding/upload-agreement` | Upload signed account agreement PDF |
-| POST | `/api/onboarding/upload-bank-letter` | Upload bank confirmation letter |
-| POST | `/api/onboarding/mandate` | Retrieve mandate document |
-
-### Sumsub (KYC)
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/sumsub/access-token` | Generate Sumsub WebSDK access token |
-| GET | `/api/sumsub/status` | Current KYC review status |
-| POST | `/api/sumsub/sync` | Sync Sumsub review result to DB |
-| POST | `/api/sumsub/webhook` | Sumsub event webhook receiver |
-
-### Banking (TruID)
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/truid/initiate` | Initiate TruID bank-linking session |
-| GET | `/api/truid/status` | Check TruID verification status |
-| POST | `/api/truid/webhook` | TruID event webhook receiver |
-| GET | `/api/banking/accounts` | List linked bank accounts |
-| POST | `/api/banking/initiate` | Start bank verification |
-| POST | `/api/banking/capture` | Capture bank details |
-| GET | `/api/banking/status` | Bank verification status |
-| POST | `/api/banking/unlink` | Unlink a bank account |
-| POST | `/api/banking/verify-letter` | Verify uploaded bank confirmation letter |
-
-### Investments & Portfolio
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/record-investment` | Record a purchase (deduct wallet, insert holdings, create transactions) |
-| GET | `/api/user/holdings` | Get aggregated user holdings |
-| GET | `/api/user/transactions` | Get transaction history |
-| GET | `/api/user/strategies` | Get user's active strategies with P&L |
-| GET | `/api/user/strategy-subscriptions` | List strategy subscriptions |
-| GET | `/api/stocks/quote` | Get live stock quote |
-| GET | `/api/stocks/chart` | Get stock price history |
-| POST | `/api/webhooks/broker` | Broker fill notification webhook |
-| POST | `/api/webhooks/csdp` | CSDP settlement webhook |
-
-### Payments
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/eft-deposit` | Record EFT deposit intent or confirmation |
-| POST | `/api/confirm-eft-deposit` | Admin confirms EFT receipt and releases holdings |
-| POST | `/api/confirm-deposit` | Confirm a deposit |
-| POST | `/api/ozow/initiate` | Initiate Ozow payment |
-| POST | `/api/ozow/notify` | Ozow async payment notification |
-| POST | `/api/ozow/record-success` | Record successful Ozow payment |
-| POST | `/api/reconcile-payments` | Reconcile pending payment records |
-
-### Gifting
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/gift/create` | Create an investment gift |
-| GET | `/api/gift/:token` | Get gift details by token |
-| POST | `/api/gift/claim` | Claim a gift |
-| POST | `/api/gift/verify-code` | Verify gift OTP code |
-| POST | `/api/gift/request-otp` | Request a new gift OTP |
-| GET | `/api/gift/sent` | List sent gifts |
-| POST | `/api/gift/cancel` | Cancel a gift |
-| POST | `/api/gift/expire` | Expire a gift |
-| POST | `/api/gift/extend` | Extend a gift's expiry date |
-
-### Family & Child Accounts
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/family-members` | List family members |
-| POST | `/api/family-members` | Add a family member |
-| GET | `/api/family-members/:id` | Get a specific family member |
-| POST | `/api/family-members/confirm-pairing` | Confirm child account pairing |
-| POST | `/api/child-invest` | Record a child investment |
-| GET | `/api/child-wallet` | Get child wallet balance |
-| GET | `/api/child-transactions` | Get child transaction history |
-
-### Credit
-| Method | Route | Description |
-|---|---|---|
-| POST | `/api/credit-check` | Run credit assessment |
-| GET | `/api/loan/email-agreement` | Email loan agreement PDF to user |
-
-### Settlement & Config
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/settlement/config` | Get settlement configuration (`fullyIntegrated` flag) |
-
----
-
-## Authentication & Security
-
-### JWT Auth Flow
-
-```
-Client  →  Bearer token in Authorization header
-Server  →  supabase.auth.getUser(jwt)
-            ├── Success → proceed with user
-            └── "Auth session missing!" (invalidated session)
-                  → Decode JWT locally → extract sub (user_id)
-                  → supabaseAdmin.auth.admin.getUserById(userId)
-                  → User confirmed → proceed with admin client
-```
-
-### Session Management
-- Every login records a session row (device, IP, user-agent, timestamp)
-- Users can view all active sessions and revoke any of them remotely
-- Server validates session tokens on sensitive routes
-
-### PIN Lock
-- 5-digit PIN hashed with SHA-256 before storage
-- Lock screen activates after a configurable inactivity timeout
-- Failed PIN attempts trigger a lockout
-
-### Biometrics
-- `@capgo/capacitor-native-biometric` for Face ID / Touch ID on iOS and Android
-- Falls back to PIN when biometrics are unavailable
-- Toggle per user in Settings
+- **Portfolio Dashboard** — live JSE holdings, unrealised P&L, equity curves across multiple timeframes
+- **Strategy Baskets** — curated multi-stock portfolios with automated weighting and fill tracking
+- **Markets** — browse and filter all JSE-listed securities and strategies
+- **Invest** — buy strategies or individual stocks with Ozow (EFT) or Paystack (card/EFT)
+- **Credit** — credit scoring, liquidity facilities, and loan management
+- **Gifting** — send investment gifts via shareable gift codes; recipients redeem into their portfolio
+- **Family Accounts** — add and manage child/spouse sub-accounts with linked portfolios
+- **Funeral Cover** — quote and purchase funeral cover with automated policy PDF generation
+- **Statements** — downloadable PDF statements with strategy, holdings, and financial tabs
+- **KYC Onboarding** — 9-step onboarding flow with Sumsub/Experian identity verification and TruID bank linking
+- **Notifications** — real-time in-app notifications via Supabase subscriptions, grouped by date
+- **Settings** — biometric toggle, PIN management, session timeout, active session management
 
 ---
 
@@ -411,7 +127,7 @@ Signup → Email OTP Verification
   ↓
 Identity (SA ID Number)
   ↓
-KYC — Sumsub WebSDK (document scan + liveness check)
+KYC — Experian / Sumsub (document scan + liveness check)
   ↓
 Employment & Tax Details
   ↓
@@ -428,7 +144,7 @@ Terms & Conditions + Account Agreement Signature
 Onboarding Complete → Portfolio Access Unlocked
 ```
 
-Completion is tracked in `user_onboarding.sumsub_raw` as individual boolean flags. `parseOnboardingFlags()` evaluates all flags consistently on both client and server. Legacy users with `kyc_status = "onboarding_complete"` are grandfathered in automatically.
+Completion is tracked in `user_onboarding.sumsub_raw` as individual boolean flags. `parseOnboardingFlags()` evaluates all flags consistently on both client and server.
 
 ---
 
@@ -451,8 +167,8 @@ aggregateHoldings(rows) → aggregatedRows
 ### P&L Calculation
 - **Pending**: `avg_fill === null` → displayed with a "Pending" badge, no P&L shown
 - **Filled**: `P&L = (last_price × qty) − (avg_fill / 100 × qty)`
-- Cost basis prefers `Expected_fill` (price at click time, in rands) over `avg_fill` (broker fill, in cents)
-- Strategy-level P&L is aggregated in `client_strategy_returns_c` by an admin job
+- `last_price` and `avg_fill` are stored in **cents** — divide by 100 for Rand values
+- Strategy-level P&L is aggregated in `client_strategy_returns_c` by a scheduled job
 
 ### Minimum Investment
 - Enforced per strategy based on the basket's reference price
@@ -462,17 +178,18 @@ aggregateHoldings(rows) → aggregatedRows
 
 ## Third-Party Integrations
 
-### Sumsub (KYC)
-- Embedded WebSDK React component in the onboarding flow
+### Experian (KYC)
+- ID verification via Experian KYC V2 + ID Me Now APIs
+- Controlled by `EXPERIAN_MOCK=true` in development for safe testing without live API calls
+
+### Sumsub (KYC — legacy)
+- Embedded WebSDK React component available as a fallback KYC path
 - Server generates short-lived access tokens per user session
-- Webhook receives review results and updates `user_onboarding.kyc_status`
-- Client polls status with exponential backoff
 
 ### TruID Connect (Bank Verification)
 - OAuth-style redirect flow for live bank account verification
 - Captures account holder name, number, and branch code
 - Stores the full snapshot in `truid_bank_snapshots`
-- Pre-fills and verifies bank details during onboarding
 
 ### Ozow / Paystack (Payments)
 - Ozow: South African instant EFT (ZAR)
@@ -481,16 +198,17 @@ aggregateHoldings(rows) → aggregatedRows
 - Dedicated webhook endpoints for async payment confirmation
 
 ### Resend (Email)
-- Order confirmation emails on investment purchase
-- Fill notification emails when broker confirms
-- Loan agreement emails
-- Funeral cover policy emails
+- Order confirmation and fill notification emails
+- Loan agreement and funeral cover policy emails
 - All emails logged to the `order_emails` table
+
+### Anthropic (AI)
+- Accessed via `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (Replit integration, auto-provisioned)
 
 ### Yahoo Finance (Market Data)
 - Custom server-side proxy to avoid CORS and rate limiting
-- Powers live stock quotes and price history charts
-- Supplemented by `stock_intraday_c` and `securities_c` Supabase tables
+- Powers live JSE stock quotes and price history charts
+- JSE prices returned in ZAp (South African cents) — same unit as `securities_c.last_price`
 
 ---
 
@@ -499,15 +217,20 @@ aggregateHoldings(rows) → aggregatedRows
 ```
 mint/
 ├── server/
-│   ├── index.cjs                        # Express API server (all routes)
+│   ├── index.cjs                        # Express API server (all backend routes)
 │   ├── truidClient.cjs                  # TruID API client
-│   ├── funeralCoverMigration.cjs        # DB migration script
-│   └── strategySubscriptionMigration.cjs
+│   └── funeralCoverMigration.cjs        # DB migration helper
 │
 ├── api/                                 # Vercel serverless functions
-│   ├── onboarding/
-│   ├── user/
-│   ├── settlement/
+│   ├── _lib/                            # Shared utilities (supabase, fees, email templates)
+│   ├── onboarding/                      # Onboarding status & completion endpoints
+│   ├── user/                            # User profile endpoints
+│   ├── settlement/                      # Settlement config
+│   ├── gift/                            # Gift creation, claim, expiry
+│   ├── family-members/                  # Family account management
+│   ├── credit-check/                    # Experian credit check proxy
+│   ├── experian/                        # Experian KYC endpoints
+│   ├── sumsub/                          # Sumsub webhook & token endpoints
 │   └── ...
 │
 ├── src/
@@ -547,7 +270,7 @@ mint/
 │   │   ├── generateFactsheetPdf.js      # Strategy factsheet PDF generator
 │   │   ├── generateMintStatement.js     # Account statement PDF generator
 │   │   ├── generateLoanAgreementPdf.js  # Loan agreement PDF generator
-│   │   ├── LendingEngine.js             # Credit scoring engine
+│   │   ├── LendingEngine.js             # NCR-compliant credit scoring engine
 │   │   ├── strategyData.js              # Strategy price history fetch
 │   │   ├── marketData.js                # Market data utilities
 │   │   ├── biometrics.js                # Biometric auth wrapper
@@ -558,9 +281,15 @@ mint/
 │   ├── App.jsx                          # Root app with navigation stack
 │   └── main.jsx                         # Entry point
 │
+├── scripts/
+│   ├── post-merge.sh                    # Runs npm install after git merges
+│   └── run_daily_metrics.sh             # Daily metrics cron helper
+│
+├── public/                              # Static assets (fonts, images, email templates)
 ├── capacitor.config.json                # Capacitor iOS/Android config
 ├── vite.config.js                       # Vite build configuration
 ├── tailwind.config.js                   # Tailwind theme configuration
+├── vercel.json                          # Vercel deployment config
 └── package.json
 ```
 
@@ -587,7 +316,7 @@ npm install
 npm run dev
 ```
 
-Starts both the Express API server and the Vite dev server concurrently. The app is available at `http://localhost:5000`.
+Starts both the Express API server (port `3001`) and the Vite dev server (port `5000`) concurrently. Open `http://localhost:5000`.
 
 ### Build
 
@@ -607,50 +336,51 @@ npx cap open android  # Open in Android Studio
 
 ## Environment Variables
 
-Create a `.env.local` file in the project root:
+All secrets should be stored in your environment's secret manager (Replit Secrets, Vercel Environment Variables, etc.) — **never hardcoded in source files or committed to version control**.
 
-```env
-# Supabase
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-
-# Payments
-VITE_PAYSTACK_PUBLIC_KEY=pk_live_...
-PAYSTACK_SECRET_KEY=sk_live_...
-OZOW_SITE_CODE=your-site-code
-OZOW_PRIVATE_KEY=your-private-key
-
-# Email
-RESEND_API_KEY=re_...
-
-# KYC
-SUMSUB_APP_TOKEN=your-token
-SUMSUB_SECRET_KEY=your-secret
-
-# Banking
-TRUID_CLIENT_ID=your-client-id
-TRUID_CLIENT_SECRET=your-secret
-
-# Admin
-ADMIN_SECRET=your-admin-secret
-```
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_SUPABASE_URL` | ✅ | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key (server-side only) |
+| `VITE_PAYSTACK_PUBLIC_KEY` | ✅ | Paystack public key (client-side) |
+| `PAYSTACK_SECRET_KEY` | ✅ | Paystack secret key (server-side) |
+| `OZOW_SITE_CODE` | ✅ | Ozow site code |
+| `OZOW_PRIVATE_KEY` | ✅ | Ozow private key |
+| `RESEND_API_KEY` | ✅ | Resend email API key |
+| `SUMSUB_APP_TOKEN` | Optional | Sumsub KYC app token |
+| `SUMSUB_SECRET_KEY` | Optional | Sumsub KYC secret key |
+| `EXPERIAN_KYC_USERNAME` | Optional | Experian KYC username |
+| `EXPERIAN_KYC_PASSWORD` | Optional | Experian KYC password |
+| `GOOGLE_CLOUD_VISION_API_KEY` | Optional | Google Vision OCR for bank letter verification |
+| `ADMIN_SECRET` | Optional | Secret for admin-only API routes |
+| `EXPERIAN_MOCK` | Dev | Set to `true` to skip live Experian calls in development |
 
 ---
 
 ## Deployment
 
-The app deploys to **Vercel** with:
+### Vercel (Web)
+The app deploys to Vercel with:
 - Vite static build for the frontend (`dist/`)
 - Serverless functions under `api/` for lightweight endpoints
-- The Express server (`server/index.cjs`) running alongside for stateful work (cron jobs, webhooks, file uploads)
+- The Express server (`server/index.cjs`) running alongside for cron jobs, webhooks, and file uploads
 
 ```bash
 npm run build
 vercel --prod
 ```
 
-For Capacitor mobile builds, update `server.url` in `capacitor.config.json` to your production domain before running `npx cap sync`.
+### Replit (Development / Staging)
+The app runs natively on Replit via the `npm run dev` workflow. All secrets are managed via Replit Secrets (not `.env` files).
+
+### Mobile (Capacitor)
+Update `server.url` in `capacitor.config.json` to your production domain before running:
+
+```bash
+npx cap sync
+npx cap open ios
+```
 
 ---
 
