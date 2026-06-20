@@ -358,7 +358,6 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
 
   const finish = useCallback(() => {
     setExiting(true);
-    localStorage.setItem(BASKETS_EXPLAINER_KEY, "1");
     setTimeout(() => onDone?.(), 350);
   }, [onDone]);
 

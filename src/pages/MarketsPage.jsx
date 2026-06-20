@@ -399,9 +399,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      if (!localStorage.getItem(BASKETS_EXPLAINER_KEY)) {
-        setShowBasketsExplainer(true);
-      }
+      setShowBasketsExplainer(true);
+    } else {
+      setShowBasketsExplainer(false);
     }
   }, [viewMode, childFilter]);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
