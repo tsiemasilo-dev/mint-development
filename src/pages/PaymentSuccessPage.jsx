@@ -3,7 +3,7 @@ import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 const PaymentSuccessPage = ({ onDone, strategyName }) => (
   <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
-    <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
+    <div data-coach-success-card="true" className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
       <div className="flex justify-center mb-2" style={{ height: 160 }}>
         <DotLottieReact
           src="https://lottie.host/12e67a6d-3162-4c7d-a533-95c4c66e801b/Qatm3tqUj4.lottie"

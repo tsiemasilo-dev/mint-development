@@ -147,73 +147,77 @@ function WordReveal({ text, baseDelay = 0, wordStyle }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Phase 4 — Purchase Successful illustration
+   Phase 4 — Purchase Successful card spotlight
 ───────────────────────────────────────────────────────── */
-function PurchaseSuccessPanel({ onNext }) {
-  const screenW = typeof window !== "undefined" ? window.innerWidth  : 390;
-  const screenH = typeof window !== "undefined" ? window.innerHeight : 844;
-  const panelW  = Math.min(screenW - 40, 360);
+function SuccessCardSpotlight({ cardRect, onNext }) {
+  if (!cardRect) return null;
+
+  const pad = 16;
+  const hole = {
+    top:    cardRect.top    - pad,
+    left:   cardRect.left   - pad,
+    right:  cardRect.right  + pad,
+    bottom: cardRect.bottom + pad,
+    width:  cardRect.width  + pad * 2,
+    height: cardRect.height + pad * 2,
+  };
+
+  const ringRadius = 28;
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
+  const panelMaxWidth = Math.min(screenW - 40, 420);
+
+  // Place callout above the card if there's room, otherwise below
+  const spaceAbove = hole.top - 20;
+  const panelTop = spaceAbove > 140
+    ? Math.max(20, hole.top - 160)
+    : hole.bottom + 16;
 
   const glassBg = {
-    background: "rgba(8,8,20,0.92)",
-    backdropFilter: "blur(32px)",
-    WebkitBackdropFilter: "blur(32px)",
+    background: "rgba(8,8,20,0.88)",
+    backdropFilter: "blur(28px)",
+    WebkitBackdropFilter: "blur(28px)",
     border: "1px solid rgba(255,255,255,0.14)",
   };
 
   return (
     <>
-      {/* Full dim overlay */}
-      <motion.div
-        className="fixed inset-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.72)", zIndex: 10000 }}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.35 }}
-      />
+      <SingleHoleOverlay hole={hole} onClick={onNext} />
+      <AnimatedRing rect={cardRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
 
-      {/* Centred panel */}
+      {/* Glass callout */}
       <div
         className="pointer-events-none fixed z-[10004]"
-        style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: panelW }}
+        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
-          style={{ ...glassBg, borderRadius: 22, overflow: "hidden" }}
-          initial={{ opacity: 0, scale: 0.90, y: 16 }}
-          animate={{ opacity: 1, scale: 1,    y: 0  }}
-          exit={{ opacity: 0, scale: 0.94 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="pointer-events-auto"
+          style={{ ...glassBg, borderRadius: 20, padding: "16px 18px 14px" }}
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.28, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Screenshot */}
-          <div style={{ background: "#f4f4f8", borderRadius: "18px 18px 0 0", overflow: "hidden" }}>
-            <img
-              src="/image_1781954687781.png"
-              alt="Purchase Successful"
-              style={{ width: "100%", display: "block" }}
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
+          >
+            Purchase Successful!
+          </motion.p>
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.48, duration: 0.28 }}
+          />
+          <motion.p
+            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 0 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.56, duration: 0.26, ease: "easeOut" }}
+          >
+            <WordReveal
+              text="This is what you'll see after investing. Your order has been placed and is being processed — you'll be notified as soon as it's confirmed."
+              baseDelay={0.64}
             />
-          </div>
-
-          {/* Text callout */}
-          <div style={{ padding: "16px 18px 18px" }}>
-            <motion.p
-              style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
-            >
-              Purchase Successful!
-            </motion.p>
-            <motion.div
-              style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 9, originX: 0 }}
-              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-              transition={{ delay: 0.48, duration: 0.28 }}
-            />
-            <motion.p
-              style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 0 }}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.56, duration: 0.26, ease: "easeOut" }}
-            >
-              Your order has been placed and is being processed — you'll be notified as soon as it's confirmed.
-            </motion.p>
-          </div>
+          </motion.p>
         </motion.div>
       </div>
     </>
@@ -786,6 +790,8 @@ export default function MintBasketsExplainer({
   tabRef,
   onOpenStrategyForCoach,
   onNavigateToFactsheetForCoach,
+  onNavigateToSuccessForCoach,
+  onHideSuccessPage,
 }) {
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
@@ -800,6 +806,7 @@ export default function MintBasketsExplainer({
   const [lottieReady, setLottieReady]  = useState(false);
   const [phase2BtnRect, setPhase2BtnRect] = useState(null);
   const [phase3BtnRect, setPhase3BtnRect] = useState(null);
+  const [phase4CardRect, setPhase4CardRect] = useState(null);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
@@ -1006,17 +1013,38 @@ export default function MintBasketsExplainer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // handleGoToPhase4: Phase 3 → 4 — Purchase Successful illustration
+  // handleGoToPhase4: Phase 3 → 4 — navigate to success page overlay, then spotlight the card
   const handleGoToPhase4 = useCallback(() => {
-    setPhase(4);
-  }, []);
+    // Ask MarketsPage to render the PaymentSuccessPage as a fixed overlay
+    onNavigateToSuccessForCoach?.();
+    // Poll until the tagged card element appears in the DOM
+    let attempts = 0;
+    const MAX = 40; // 2 seconds total
+    const poll = () => {
+      const el = document.querySelector('[data-coach-success-card="true"]');
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setPhase4CardRect(rect);
+        setPhase(4);
+        return;
+      }
+      attempts++;
+      if (attempts < MAX) {
+        setTimeout(poll, 50);
+      }
+    };
+    setTimeout(poll, 80); // give React one tick to mount the overlay
+  }, [onNavigateToSuccessForCoach]);
 
-  // Auto-advance Phase 4 → 5 after 2 seconds
+  // Auto-advance Phase 4 → 5 after 2 seconds once card rect is captured
   useEffect(() => {
-    if (phase !== 4) return;
-    const t = setTimeout(() => setPhase(5), 2000);
+    if (phase !== 4 || !phase4CardRect) return;
+    const t = setTimeout(() => {
+      onHideSuccessPage?.();
+      setPhase(5);
+    }, 2500);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, phase4CardRect, onHideSuccessPage]);
 
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
@@ -1106,7 +1134,7 @@ export default function MintBasketsExplainer({
           />
         </motion.div>
       )}
-      {phase === 4 && (
+      {phase === 4 && phase4CardRect && (
         <motion.div
           key="phase4"
           initial={{ opacity: 0 }}
@@ -1114,7 +1142,10 @@ export default function MintBasketsExplainer({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <PurchaseSuccessPanel onNext={() => setPhase(5)} />
+          <SuccessCardSpotlight
+            cardRect={phase4CardRect}
+            onNext={() => { onHideSuccessPage?.(); setPhase(5); }}
+          />
         </motion.div>
       )}
       {phase === 5 && (
