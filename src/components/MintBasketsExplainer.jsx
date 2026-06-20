@@ -215,11 +215,16 @@ function TabSpotlight({ rect, onLottieLoad }) {
 
 /* ─────────────────────────────────────────────────────────
    Phase 2 — View Factsheet button spotlight
+   Matches the Phase 0 tab-spotlight style:
+   • Blurred 4-panel overlay with a clean hole around the button
+   • Pulsing AnimatedRing (same component as Phase 0/1)
+   • Bouncing down-arrow just above the button
+   • Glass text callout centred above, fading in after the ring
 ───────────────────────────────────────────────────────── */
 function FactsheetBtnSpotlight({ btnRect, onNext }) {
   if (!btnRect) return null;
 
-  const pad = 10;
+  const pad = 12;
   const hole = {
     top:    btnRect.top    - pad,
     left:   btnRect.left   - pad,
@@ -229,74 +234,66 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
     height: btnRect.height + pad * 2,
   };
 
-  const ringRadius = 18;
-  const panelMaxWidth = 460;
-  const panelWidth = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : panelMaxWidth, panelMaxWidth);
-  const panelTop = Math.max(24, Math.round(hole.top * 0.3));
+  const ringRadius = 20;
+  const screenW  = typeof window !== "undefined" ? window.innerWidth  : 390;
+  const screenH  = typeof window !== "undefined" ? window.innerHeight : 844;
+
+  // Text panel: centred, sits in the space between the modal top and the hole.
+  // Use 36% of the distance from screen-top to the hole as the panel's top edge.
+  const panelMaxWidth = Math.min(screenW - 40, 420);
+  const panelTop = Math.max(20, Math.round(hole.top * 0.36));
 
   const glassBg = {
-    background: "rgba(10,10,22,0.80)",
-    backdropFilter: "blur(24px)",
-    WebkitBackdropFilter: "blur(24px)",
-    border: "1px solid rgba(255,255,255,0.13)",
+    background: "rgba(8,8,20,0.88)",
+    backdropFilter: "blur(28px)",
+    WebkitBackdropFilter: "blur(28px)",
+    border: "1px solid rgba(255,255,255,0.14)",
   };
 
   return (
     <>
+      {/* Blurred 4-panel overlay — hole reveals only the factsheet button */}
       <SingleHoleOverlay hole={hole} onClick={onNext} />
 
-      {/* Ring around the button */}
-      <motion.div
-        className="pointer-events-none fixed z-[999]"
-        style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="absolute inset-0"
-          style={{ borderRadius: ringRadius,
-            border: "2px solid rgba(255,255,255,0.85)",
-            boxShadow: "0 0 24px 6px rgba(255,255,255,0.16)" }}
-        />
-        <motion.div className="absolute inset-0"
-          style={{ borderRadius: ringRadius, border: "1.5px solid rgba(255,255,255,0.50)" }}
-          animate={{ opacity: [0.6, 0.15, 0.6] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </motion.div>
+      {/* Pulsing ring — identical style to Phase 0 AnimatedRing */}
+      <AnimatedRing rect={btnRect} pad={pad} borderRadius={ringRadius} zIndex={999} pulse={true} />
 
-      {/* Down-pointing arrow just above the button */}
+      {/* Bouncing down-arrow pointing at the button — appears just above the ring */}
       <motion.div
         className="pointer-events-none fixed z-[1000] flex flex-col items-center"
-        style={{ bottom: (typeof window !== "undefined" ? window.innerHeight : 800) - hole.top + 10,
-          left: hole.left + hole.width / 2, transform: "translateX(-50%)" }}
+        style={{
+          top:       hole.top - 34,
+          left:      hole.left + hole.width / 2,
+          transform: "translateX(-50%)",
+        }}
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ delay: 0.5 }}
+        transition={{ delay: 0.25, duration: 0.3 }}
       >
-        <motion.div animate={{ y: [0, 5, 0] }} transition={{ duration: 1.1, repeat: Infinity }}>
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3L8 13M13 8L8 13L3 8" stroke="white" strokeWidth="2"
+        <motion.div animate={{ y: [0, 6, 0] }} transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}>
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3L8 13M13 8L8 13L3 8" stroke="white" strokeWidth="2.2"
               strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </motion.div>
       </motion.div>
 
-      {/* Text panel — centred, in the upper portion of the space above the button */}
+      {/* Glass callout — fades in ~300 ms after the ring, above the hole */}
       <div
         className="pointer-events-none fixed z-[1002]"
-        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelWidth }}
+        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
           className="pointer-events-auto"
-          style={{ ...glassBg, borderRadius: 18, padding: "14px 18px 14px" }}
-          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          style={{ ...glassBg, borderRadius: 20, padding: "16px 18px 14px" }}
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ delay: 0.18, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ delay: 0.32, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
               letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.26, duration: 0.30, ease: "easeOut" }}
+            transition={{ delay: 0.42, duration: 0.28, ease: "easeOut" }}
           >
             Strategy Factsheet
           </motion.p>
@@ -304,36 +301,36 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
           <motion.div
             style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
             initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.36, duration: 0.28 }}
+            transition={{ delay: 0.52, duration: 0.30 }}
           />
 
           <motion.p
-            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
+              lineHeight: 1.4, color: "rgba(255,255,255,0.96)", marginBottom: 8 }}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.44, duration: 0.28, ease: "easeOut" }}
+            transition={{ delay: 0.60, duration: 0.26, ease: "easeOut" }}
           >
             Your complete investment guide.
           </motion.p>
 
           <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
-            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+            color: "rgba(255,255,255,0.70)", marginBottom: 16 }}>
             <WordReveal
               text="A factsheet shows you everything — performance history, what the basket holds, fees, and risk profile. Tap to explore."
-              baseDelay={0.56}
+              baseDelay={0.70}
             />
           </p>
 
           <motion.button
             onClick={onNext}
             style={{
-              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+              padding: "8px 22px", borderRadius: 10, fontSize: 12, fontWeight: 700,
               letterSpacing: "0.04em", color: "#fff",
-              background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.38)", cursor: "pointer",
             }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 0.88, duration: 0.24 }}
+            transition={{ delay: 1.05, duration: 0.26 }}
             whileTap={{ scale: 0.93 }}
           >
             View Factsheet →
@@ -666,44 +663,48 @@ export default function MintBasketsExplainer({
     prevHOverflowsRef.current = [];
   }, []);
 
-  // handleNext: Phase 1 → 2 — fade out phase 1, restore transforms, open strategy modal,
-  // scroll modal to reveal factsheet btn, then capture its rect
+  // handleNext: Phase 1 → gap → modal opens at top → scrolls down → Phase 2 spotlight
+  // The "gap" phase (phase = 1.5) renders nothing, so there is zero bleed-through
+  // of phase 1 text/overlay while the strategy modal is opening.
   const handleNext = useCallback(() => {
-    // 1. Immediately fade out the phase 1 overlay so no text bleeds through
-    setPanelExiting(true);
+    // 1. Jump to gap state — nothing is rendered, overlay fully disappears instantly
+    setPhase(1.5);
 
-    // 2. After the phase 1 panel has faded, clean up transforms and open the modal
+    // 2. Restore card-section transforms (modal must open cleanly without the push)
     setTimeout(() => {
       partialCleanup();
+
+      // 3. Open the strategy modal — it will be at the TOP by default
       onOpenStrategyForCoach?.(cardName);
 
-      // 3. Wait for the strategy modal to open and animate in
+      // 4. Let the modal open and settle (~900 ms), then pause at the top for 1 s
       setTimeout(() => {
         const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
         if (!btn) { handleDone(); return; }
 
-        // 4. Scroll the modal's scrollable container to bring the button into view
         const scrollEl = btn.closest('.overflow-y-auto');
-        if (scrollEl) {
-          const btnBottom = btn.getBoundingClientRect().bottom;
-          const containerBottom = scrollEl.getBoundingClientRect().bottom;
-          if (btnBottom > containerBottom) {
-            scrollEl.scrollTo({ top: scrollEl.scrollTop + (btnBottom - containerBottom) + 32, behavior: 'smooth' });
-          }
-        } else {
-          btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
 
-        // 5. After scroll animation completes, capture the rect and show phase 2
+        // 5. Ensure modal is scrolled to top first (reset), so user sees it open at top
+        if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'instant' });
+
+        // 6. After the 1-second pause at the top, smooth-scroll down to the factsheet btn
         setTimeout(() => {
-          const freshBtn = document.querySelector('[data-coach-factsheet-btn="true"]');
-          if (!freshBtn) { handleDone(); return; }
-          setPanelExiting(false);
-          setPhase2BtnRect(freshBtn.getBoundingClientRect());
-          setPhase(2);
-        }, 520);
-      }, 800);
-    }, 220);
+          if (scrollEl) {
+            scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' });
+          } else {
+            btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+
+          // 7. After scroll settles, capture the rect and show phase 2 spotlight
+          setTimeout(() => {
+            const freshBtn = document.querySelector('[data-coach-factsheet-btn="true"]');
+            if (!freshBtn) { handleDone(); return; }
+            setPhase2BtnRect(freshBtn.getBoundingClientRect());
+            setPhase(2);
+          }, 650);
+        }, 1000); // 1-second pause at top
+      }, 900);
+    }, 40);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partialCleanup, cardName, onOpenStrategyForCoach]);
 
