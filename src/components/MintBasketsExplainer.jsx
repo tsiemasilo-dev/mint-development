@@ -271,8 +271,8 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
 
           {/* Strategy description */}
           <motion.p
-            style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.6,
-              color: "rgba(255,255,255,0.90)", marginBottom: 14 }}
+            style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.55,
+              color: "rgba(255,255,255,1.0)", marginBottom: 16 }}
             initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.68 }}
           >
             {cardDesc}
@@ -280,8 +280,8 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
 
           {/* Explanation */}
           <motion.p
-            style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.65,
-              color: "rgba(255,255,255,0.78)", marginBottom: 20 }}
+            style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.7,
+              color: "rgba(255,255,255,0.92)", marginBottom: 20 }}
             initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.84 }}
           >
             {explanation}
@@ -339,10 +339,10 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           <p style={{ fontSize: 22, fontWeight: 800, color: "white",
             marginBottom: 10, lineHeight: 1.2 }}>{cardName}</p>
           <div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 10 }} />
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.90)",
-            lineHeight: 1.6, marginBottom: 12 }}>{cardDesc}</p>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)",
-            lineHeight: 1.65, marginBottom: 18 }}>{explanation}</p>
+          <p style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,1.0)",
+            lineHeight: 1.55, marginBottom: 14 }}>{cardDesc}</p>
+          <p style={{ fontSize: 14, fontWeight: 400, color: "rgba(255,255,255,0.92)",
+            lineHeight: 1.7, marginBottom: 18 }}>{explanation}</p>
           <button
             onClick={onDone}
             style={{
