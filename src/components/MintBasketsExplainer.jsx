@@ -964,6 +964,18 @@ export default function MintBasketsExplainer({
         next.style.visibility = 'hidden';
         next = next.nextElementSibling;
       }
+
+      // Also hide the other strategy cards within the same list so they
+      // don't bleed through the spotlight hole around the highlighted card.
+      if (el.parentElement) {
+        Array.from(el.parentElement.children).forEach(sibling => {
+          if (sibling !== el) {
+            hidden.push(sibling);
+            sibling.style.visibility = 'hidden';
+          }
+        });
+      }
+
       hiddenSiblingsRef.current = hidden;
     }
 
