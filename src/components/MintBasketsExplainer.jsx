@@ -264,6 +264,15 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   };
   const panelMaxWidth = Math.min(screenW - 40, 420);
 
+  // Centre the panel on the card, not on the full viewport.
+  // On mobile the card is full-width so this equals 50%; on desktop where the
+  // section may sit to the right of a sidebar the panel follows the card.
+  const cardCenterX = (pendingRect.left + pendingRect.right) / 2;
+  const panelLeft = Math.min(
+    Math.max(panelMaxWidth / 2 + 20, cardCenterX),
+    screenW - panelMaxWidth / 2 - 20,
+  );
+
   const spaceBelow = screenH - hole.bottom - 20;
   const panelTop = spaceBelow > 160
     ? hole.bottom + 12
@@ -283,7 +292,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
 
       <div
         className="pointer-events-none fixed z-[10004]"
-        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
+        style={{ top: panelTop, left: panelLeft, transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
           className="pointer-events-auto"
@@ -1230,20 +1239,8 @@ export default function MintBasketsExplainer({
                     }
                     setTimeout(() => {
                       const finalRect = el.getBoundingClientRect();
-                      // Use inner content bounds for left/right so the hole is tight
-                      // around the cards on wide desktop viewports
-                      const contentEl = document.querySelector('[data-coach-pending-content="true"]');
-                      const contentRect = contentEl ? contentEl.getBoundingClientRect() : null;
-                      const combinedRect = contentRect ? {
-                        top:    finalRect.top,
-                        bottom: finalRect.bottom,
-                        left:   contentRect.left,
-                        right:  contentRect.right,
-                        width:  contentRect.width,
-                        height: finalRect.height,
-                      } : finalRect;
                       console.log('[coach-phase5] finalRect:', { top: finalRect.top, bottom: finalRect.bottom, height: finalRect.height });
-                      setPhase5PendingRect(combinedRect);
+                      setPhase5PendingRect(finalRect);
                       setPhase(5);
                     }, 120);
                     return;
