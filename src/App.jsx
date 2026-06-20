@@ -2320,6 +2320,9 @@ const App = () => {
       <PaymentSuccessPage
         strategyName={successStrategyName}
         onDone={() => {
+          if (successStrategyName) {
+            sessionStorage.setItem("mint_coach_pending_sim", successStrategyName);
+          }
           sessionStorage.removeItem("ozow_pending");
           navigationHistory.current = [];
           setPreviousPageName(null);
