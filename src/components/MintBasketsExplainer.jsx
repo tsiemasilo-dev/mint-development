@@ -276,23 +276,6 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
     <>
       <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} onClick={onDone} />
 
-      {/* White card backdrop — sits inside the hole exactly over the card.
-          Blocks any sibling-section content (next sector rows) that overlaps
-          the card's position after the translateY push, preventing bleed-through
-          of text/charts from cards in rows below. */}
-      <div
-        className="pointer-events-none fixed"
-        style={{
-          top:    cardRect.top,
-          left:   cardRect.left,
-          width:  cardRect.width,
-          height: cardRect.height,
-          borderRadius: Math.max(16, cardRadius ?? 20),
-          background: "#fff",
-          zIndex: 997,
-        }}
-      />
-
       {/* Tab ring stays alive */}
       <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={1001} pulse={true} />
 
@@ -318,66 +301,70 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
       </motion.div>
 
       {/* Callout panel — always centred horizontally between the highlighted
-          tab above and the highlighted card below, on all screen sizes. */}
-      <motion.div
-        className="pointer-events-auto fixed z-[1002]"
+          tab above and the highlighted card below, on all screen sizes.
+          Outer div owns the fixed position + centering so Framer Motion's
+          `y` animation on the inner div never clobbers the translateX(-50%). */}
+      <div
+        className="pointer-events-none fixed z-[1002]"
         style={{
           top:       panelTop,
           left:      "50%",
           transform: "translateX(-50%)",
           width:     panelWidth,
-          ...glassBg,
-          borderRadius: 18,
-          padding: "14px 18px 14px",
         }}
-        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       >
-        <motion.p
-          style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
-            letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
-        >
-          {displayName}
-        </motion.p>
-
         <motion.div
-          style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
-          initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-          transition={{ delay: 0.46, duration: 0.28 }}
-        />
-
-        <motion.p
-          style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-            lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
+          className="pointer-events-auto"
+          style={{ ...glassBg, borderRadius: 18, padding: "14px 18px 14px" }}
+          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
-          {desc}
-        </motion.p>
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
+              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
+          >
+            {displayName}
+          </motion.p>
 
-        <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
-          color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
-          <WordReveal text={explanation} baseDelay={0.66} />
-        </p>
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.46, duration: 0.28 }}
+          />
 
-        <motion.button
-          onClick={onDone}
-          style={{
-            padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-            letterSpacing: "0.04em", color: "#fff",
-            background: "rgba(255,255,255,0.14)",
-            border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
-          }}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          transition={{ delay: 0.90, duration: 0.24 }}
-          whileTap={{ scale: 0.93 }}
-        >
-          Got it
-        </motion.button>
-      </motion.div>
+          <motion.p
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
+          >
+            {desc}
+          </motion.p>
+
+          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+            <WordReveal text={explanation} baseDelay={0.66} />
+          </p>
+
+          <motion.button
+            onClick={onDone}
+            style={{
+              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.04em", color: "#fff",
+              background: "rgba(255,255,255,0.14)",
+              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.90, duration: 0.24 }}
+            whileTap={{ scale: 0.93 }}
+          >
+            Got it
+          </motion.button>
+        </motion.div>
+      </div>
     </>
   );
 }
@@ -398,7 +385,8 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   const [panelExiting, setPanelExiting] = useState(false);
   const [lottieReady, setLottieReady]  = useState(false);
   const phaseTimer    = useRef(null);
-  const cardSectionRef = useRef(null); // element we translateY to make room
+  const cardSectionRef    = useRef(null); // element we translateY to make room
+  const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
@@ -497,6 +485,17 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
       section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
       section.style.transform  = `translateY(${pushPx}px)`;
       cardSectionRef.current   = section;
+
+      // Hide every DOM sibling BELOW this section so they don't bleed
+      // through the spotlight hole after the translateY push overlaps them.
+      const hidden = [];
+      let next = section.nextElementSibling;
+      while (next) {
+        hidden.push(next);
+        next.style.visibility = 'hidden';
+        next = next.nextElementSibling;
+      }
+      hiddenSiblingsRef.current = hidden;
     }
 
     const t = setTimeout(() => setCardRect(el.getBoundingClientRect()), 950);
@@ -519,6 +518,9 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
         cardSectionRef.current.style.transform  = '';
         cardSectionRef.current = null;
       }
+      // Restore visibility of sections that were hidden to prevent bleed-through
+      hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
+      hiddenSiblingsRef.current = [];
     }, 180);
     // 4. Unmount after card has settled
     setTimeout(() => {
