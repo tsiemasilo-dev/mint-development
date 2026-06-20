@@ -211,7 +211,7 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
             transition={{ delay: 0.48, duration: 0.28 }}
           />
           <motion.p
-            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 0 }}
+            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 14 }}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.56, duration: 0.26, ease: "easeOut" }}
           >
@@ -220,6 +220,20 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
               baseDelay={0.64}
             />
           </motion.p>
+          <motion.button
+            onClick={onNext}
+            style={{
+              width: "100%", padding: "10px 0", borderRadius: 12,
+              fontSize: 13, fontWeight: 700, color: "#fff",
+              background: "linear-gradient(135deg,#7c3aed,#5b21b6)",
+              border: "none", cursor: "pointer",
+            }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.6, duration: 0.26, ease: "easeOut" }}
+            whileTap={{ scale: 0.97 }}
+          >
+            Next →
+          </motion.button>
         </motion.div>
       </div>
     </>
@@ -1031,27 +1045,7 @@ export default function MintBasketsExplainer({
     return () => cancelAnimationFrame(id);
   }, [showSuccessOverlay]);
 
-  // Auto-advance Phase 4 → 5 after 2.5 s
-  useEffect(() => {
-    if (phase !== 4 || !phase4CardRect) return;
-    const t = setTimeout(() => {
-      setShowSuccessOverlay(false);
-      // Navigate to Home, then poll for the pending orders section
-      onNavigateToHome?.();
-      let attempts = 0;
-      const pollPending = () => {
-        const el = document.querySelector('[data-coach-pending-orders="true"]');
-        if (el) {
-          setPhase5PendingRect(el.getBoundingClientRect());
-          setPhase(5);
-          return;
-        }
-        if (++attempts < 60) setTimeout(pollPending, 50);
-      };
-      setTimeout(pollPending, 300);
-    }, 2500);
-    return () => clearTimeout(t);
-  }, [phase, phase4CardRect, onNavigateToHome]);
+  // Phase 4 — no auto-advance; user proceeds via the "Next" button in SuccessCardSpotlight
 
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
