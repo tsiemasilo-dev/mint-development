@@ -247,7 +247,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   if (!pendingRect) return null;
 
   const padH = 16;    // horizontal
-  const padTop = 60;  // generous top — show the full "Pending orders" header + subtitle above the card
+  const padTop = 8;   // tight top — just enough to not clip the "Pending orders" heading
   const padBot = 20;  // clone has margin:0 so we add positive bottom padding inside the hole
 
   const ringRadius = 24;
