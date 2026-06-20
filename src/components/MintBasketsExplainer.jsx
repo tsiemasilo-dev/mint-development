@@ -1230,8 +1230,20 @@ export default function MintBasketsExplainer({
                     }
                     setTimeout(() => {
                       const finalRect = el.getBoundingClientRect();
+                      // Use inner content bounds for left/right so the hole is tight
+                      // around the cards on wide desktop viewports
+                      const contentEl = document.querySelector('[data-coach-pending-content="true"]');
+                      const contentRect = contentEl ? contentEl.getBoundingClientRect() : null;
+                      const combinedRect = contentRect ? {
+                        top:    finalRect.top,
+                        bottom: finalRect.bottom,
+                        left:   contentRect.left,
+                        right:  contentRect.right,
+                        width:  contentRect.width,
+                        height: finalRect.height,
+                      } : finalRect;
                       console.log('[coach-phase5] finalRect:', { top: finalRect.top, bottom: finalRect.bottom, height: finalRect.height });
-                      setPhase5PendingRect(finalRect);
+                      setPhase5PendingRect(combinedRect);
                       setPhase(5);
                     }, 120);
                     return;

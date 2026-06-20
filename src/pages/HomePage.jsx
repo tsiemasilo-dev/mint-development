@@ -1813,7 +1813,7 @@ const HomePage = ({
                 </div>
               </div>
 
-              <div className="mx-4 space-y-3">
+              <div className="mx-4 space-y-3" data-coach-pending-content="true">
                 {/* Strategy groups */}
                 {stratGroups.map(({ key, strat, txs }) => {
                   const isStack = txs.length > 1;
