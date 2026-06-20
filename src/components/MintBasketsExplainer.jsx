@@ -197,7 +197,11 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   const calloutRight  = cardHole.left - 14;
   const calloutCentreY = cardHole.top + cardHole.height / 2;
   const calloutTop    = Math.max(80, calloutCentreY - 190);
-  const hasLeftSpace  = calloutWidth >= 80;
+  // Only use the left callout when the card genuinely starts far enough from the
+  // left edge (>120 px). On mobile the card is nearly full-width so cardHole.left
+  // is tiny — the Math.max(80,…) floor made hasLeftSpace always true even though
+  // the callout was rendered off-screen. Fall through to the bottom panel instead.
+  const hasLeftSpace  = cardHole.left > 120;
 
   const explanation =
     "Mint Baskets are ready-made investment portfolios curated and actively managed by the Mint platform. " +
