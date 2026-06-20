@@ -374,11 +374,13 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
     height: tabRect.height + tpad * 2,
   } : null;
 
-  // Callout always sits centred horizontally between the tab and the card.
-  // On every screen size (mobile + desktop) the panel appears in the gap
-  // between the highlighted tab above and the highlighted card below —
-  // never off to one side.
-  const panelTop = (tabHole ? tabHole.bottom : 80) + 8;
+  // Callout vertically centred in the gap between the highlighted tab and the
+  // highlighted card — never hugging the tab edge. estimatedPanelHeight is a
+  // conservative approximation; the panel will never go above tabHole.bottom+12.
+  const gapTop    = tabHole ? tabHole.bottom + 12 : 80;
+  const gapBottom = cardHole.top - 12;
+  const estimatedPanelHeight = 168;
+  const panelTop = Math.max(gapTop, Math.round((gapTop + gapBottom) / 2 - estimatedPanelHeight / 2));
   const panelMaxWidth = 460;
   const panelWidth = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : panelMaxWidth, panelMaxWidth);
 
