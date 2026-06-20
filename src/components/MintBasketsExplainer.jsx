@@ -1212,7 +1212,7 @@ export default function MintBasketsExplainer({
                       appContentClientHeight: appContent?.clientHeight,
                     });
                     if (appContent) {
-                      const targetTop = 150;
+                      const targetTop = 220;
                       const newScrollTop = Math.max(0, naturalOffset - targetTop);
                       console.log('[coach-phase5] setting scrollTop:', newScrollTop);
                       appContent.scrollTop = newScrollTop;
