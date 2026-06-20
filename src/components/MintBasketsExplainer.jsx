@@ -852,14 +852,22 @@ export default function MintBasketsExplainer({
       appContent.style.overflowY = 'hidden';
     }
 
-    // Block touch-scroll on mobile — overflow:hidden alone doesn't stop
-    // native touch momentum scrolling on iOS/Android WebView.
-    const blockTouch = (e) => {
-      // Allow touches inside interactive elements (buttons, inputs, etc.)
+    // Block all scroll input — overflow:hidden alone doesn't stop native
+    // touch momentum on iOS/Android, and doesn't stop mouse-wheel or
+    // keyboard scrolling in a browser / WebView preview.
+    const SCROLL_KEYS = new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' ']);
+    const blockScroll = (e) => {
       if (e.target.closest('button, input, select, textarea, a, [role="button"]')) return;
       e.preventDefault();
     };
-    document.addEventListener('touchmove', blockTouch, { passive: false });
+    const blockKey = (e) => {
+      if (SCROLL_KEYS.has(e.key) && !e.target.closest('input, textarea, select')) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove', blockScroll, { passive: false });
+    document.addEventListener('wheel',     blockScroll, { passive: false });
+    document.addEventListener('keydown',   blockKey,   { passive: false });
 
     // Lock ALL horizontal scroll containers so the user cannot swipe
     // sideways through the strategy card list while the animation is active.
@@ -876,7 +884,9 @@ export default function MintBasketsExplainer({
         appContent.style.overflowY = '';
         appContent.scrollTop = savedScrollTop;
       }
-      document.removeEventListener('touchmove', blockTouch);
+      document.removeEventListener('touchmove', blockScroll);
+      document.removeEventListener('wheel',     blockScroll);
+      document.removeEventListener('keydown',   blockKey);
       // Restore horizontal scroll containers (if not already restored by partialCleanup)
       prevHOverflowsRef.current.forEach(({ el, overflow, scrollLeft }) => {
         el.style.overflowX = overflow;
