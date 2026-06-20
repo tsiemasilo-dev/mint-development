@@ -153,9 +153,9 @@ function TabSpotlight({ rect, onLottieLoad }) {
     height: rect.height + pad * 2,
   };
 
-  // Position: 62% of the way from top of screen down to the tab,
-  // centered horizontally — puts it in the lower-middle of the open space.
-  const lottieTop = Math.round(hole.top * 0.62);
+  // Position: 82% of the way from top of screen down to the tab,
+  // centered horizontally — sits low in the open space just above the tab.
+  const lottieTop = Math.round(hole.top * 0.82);
 
   return (
     <>
