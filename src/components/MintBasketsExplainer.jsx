@@ -204,7 +204,7 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   const hasLeftSpace  = cardHole.left > 120;
 
   const explanation =
-    "Mint Baskets are ready-made investment portfolios curated and actively managed by the Mint platform. " +
+    "Mint Baskets are ready-made investment portfolios curated and actively managed by Mint. " +
     "Each basket gives you instant diversification across top JSE-listed companies — with no stock-picking needed.";
 
   // Use the card's actual border radius for the ring
@@ -248,72 +248,57 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           exit={{ opacity: 0 }}
           transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
         >
-          {/* Label */}
-          <motion.p
-            style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.20em",
-              textTransform: "uppercase", color: "rgba(255,255,255,0.60)", marginBottom: 8 }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.38 }}
-          >
-            Mint Basket
-          </motion.p>
-
           {/* Basket name */}
           <motion.p
-            style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2,
-              color: "rgba(255,255,255,1.0)", marginBottom: 10 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.50 }}
+            style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.15,
+              color: "rgba(255,255,255,1.0)", marginBottom: 6 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
           >
             {cardName}
           </motion.p>
 
           {/* Divider */}
           <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.30)", marginBottom: 12 }}
+            style={{ height: 1, background: "rgba(255,255,255,0.28)", marginBottom: 9 }}
             initial={{ scaleX: 0, originX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.60, duration: 0.32 }}
+            transition={{ delay: 0.48, duration: 0.30 }}
           />
 
           {/* Strategy description */}
           <motion.p
-            style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.55,
-              color: "rgba(255,255,255,1.0)", marginBottom: 16 }}
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.68 }}
+            style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45,
+              color: "rgba(255,255,255,1.0)", marginBottom: 9 }}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.56 }}
           >
             {cardDesc}
           </motion.p>
 
           {/* Explanation */}
           <motion.p
-            style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.7,
-              color: "rgba(255,255,255,0.92)", marginBottom: 20 }}
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.84 }}
+            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.55,
+              color: "rgba(255,255,255,0.82)", marginBottom: 14 }}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.70 }}
           >
             {explanation}
           </motion.p>
-
-          {/* Divider */}
-          <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 14 }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.02 }}
-          />
 
           {/* Got it */}
           <motion.button
             onClick={onDone}
             style={{
               alignSelf: "flex-start",
-              padding: "9px 22px",
-              borderRadius: 10,
-              fontSize: 13,
+              padding: "7px 18px",
+              borderRadius: 9,
+              fontSize: 12,
               fontWeight: 600,
               letterSpacing: "0.04em",
               color: "rgba(255,255,255,0.97)",
               background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.45)",
+              border: "1px solid rgba(255,255,255,0.40)",
               cursor: "pointer",
               whiteSpace: "nowrap",
             }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.12 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.88 }}
             whileTap={{ scale: 0.95 }}
           >
             Got it
@@ -333,30 +318,27 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
             overflow: "hidden",
             background: "rgba(18,18,28,0.72)",
             backdropFilter: "blur(18px)",
-            borderRadius: 20,
-            border: "1px solid rgba(255,255,255,0.18)",
-            padding: "18px 20px 16px",
+            borderRadius: 18,
+            border: "1px solid rgba(255,255,255,0.16)",
+            padding: "14px 18px 14px",
           }}
-          initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }} transition={{ delay: 0.3, duration: 0.4 }}
+          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }} transition={{ delay: 0.3, duration: 0.38 }}
         >
-          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.20em",
-            textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 6 }}>
-            Mint Basket
-          </p>
-          <p style={{ fontSize: 22, fontWeight: 800, color: "white",
-            marginBottom: 10, lineHeight: 1.2 }}>{cardName}</p>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 10 }} />
-          <p style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,1.0)",
-            lineHeight: 1.55, marginBottom: 14 }}>{cardDesc}</p>
-          <p style={{ fontSize: 14, fontWeight: 400, color: "rgba(255,255,255,0.92)",
-            lineHeight: 1.7, marginBottom: 18 }}>{explanation}</p>
+          <p style={{ fontSize: 18, fontWeight: 800, color: "white",
+            marginBottom: 6, lineHeight: 1.15 }}>{cardName}</p>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 9 }} />
+          <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,1.0)",
+            lineHeight: 1.45, marginBottom: 9 }}>{cardDesc}</p>
+          <p style={{ fontSize: 12, fontWeight: 400, color: "rgba(255,255,255,0.82)",
+            lineHeight: 1.55, marginBottom: 14 }}>{explanation}</p>
           <button
             onClick={onDone}
             style={{
-              padding: "9px 22px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+              padding: "7px 18px", borderRadius: 9, fontSize: 12, fontWeight: 600,
               color: "white", background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.45)", cursor: "pointer",
+              border: "1px solid rgba(255,255,255,0.40)", cursor: "pointer",
+              letterSpacing: "0.03em",
             }}
           >Got it</button>
         </motion.div>
@@ -375,7 +357,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   const [cardRadius, setCardRadius] = useState(20);
   const [cardName, setCardName]   = useState("Mint Famous Brands");
   const [cardDesc, setCardDesc]   = useState(
-    "A curated mix of SA's most recognised brands — Naspers, Shoprite, Capitec & more."
+    "A high growth equity strategy targeting leading JSE companies with strong long term upside."
   );
   const [visible, setVisible] = useState(true);
   const phaseTimer    = useRef(null);
@@ -462,7 +444,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     const section = (scrollContainer?.parentElement) ?? null;
     if (section) {
       const currentTop = el.getBoundingClientRect().top;
-      const targetTop  = Math.floor(window.innerHeight * 0.68);
+      const targetTop  = Math.floor(window.innerHeight * 0.58);
       const pushPx     = Math.max(0, targetTop - currentTop);
       section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
       section.style.transform  = `translateY(${pushPx}px)`;
@@ -474,14 +456,24 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   }, [phase]);
 
   const handleDone = useCallback(() => {
-    // Restore the pushed card section before dismissing
+    // 1. Restore the pushed card section
     if (cardSectionRef.current) {
-      cardSectionRef.current.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.2,1)';
+      cardSectionRef.current.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1)';
       cardSectionRef.current.style.transform  = '';
       cardSectionRef.current = null;
     }
-    setVisible(false);
-    setTimeout(() => onDone?.(), 320);
+    // 2. Slide nav back in — remove the forced-hide override so the nav
+    //    uses its own transition (0.35 s ease) to animate back up from off-screen.
+    document.getElementById('__mint_coach_style__')?.remove();
+    // 3. Restore scroll locks eagerly (cleanup will no-op since style already removed)
+    document.body.style.overflow = '';
+    const appContent = document.querySelector('.app-content');
+    if (appContent) appContent.style.overflow = '';
+    // 4. Give nav ~320 ms to slide in, then fade out overlay and call onDone
+    setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => onDone?.(), 280);
+    }, 320);
   }, [onDone]);
 
   if (!visible) return null;
