@@ -232,9 +232,9 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
     top:    cardRect.top    - cpad,
     left:   cardRect.left   - cpad,
     right:  cardRect.right  + cpad,
-    bottom: cardRect.bottom + cpad,
+    bottom: cardRect.bottom + 2,          // minimal bottom pad — prevents next card bleeding through
     width:  cardRect.width  + cpad * 2,
-    height: cardRect.height + cpad * 2,
+    height: cardRect.height + cpad + 2,
   };
   const tabHole = tabRect ? {
     top:    tabRect.top    - tpad,
@@ -248,8 +248,12 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   // Callout on the left blur panel
   const calloutWidth  = Math.max(80, cardHole.left - 18);
   const calloutRight  = cardHole.left - 14;
-  const calloutCentreY = cardHole.top + cardHole.height / 2;
-  const calloutTop    = Math.max(80, calloutCentreY - 190);
+  // Position callout vertically centred in the gap between the tab and the card.
+  // This keeps the text clearly between the two highlighted elements on all
+  // screen sizes, instead of drifting down toward card-centre on tall viewports.
+  const gapTop    = tabHole ? tabHole.bottom + 12 : 80;
+  const gapBottom = cardHole.top - 12;
+  const calloutTop = Math.max(80, (gapTop + gapBottom) / 2 - 140);
   // Only use the left callout when the card genuinely starts far enough from the
   // left edge (>120 px). On mobile the card is nearly full-width so cardHole.left
   // is tiny — the Math.max(80,…) floor made hasLeftSpace always true even though
@@ -471,13 +475,19 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     `;
     document.head.appendChild(style);
 
-    // Lock scrolling everywhere
+    // Lock vertical scrolling
     const prevBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const appContent = document.querySelector('.app-content');
     const prevContentOverflow = appContent ? appContent.style.overflow : '';
     const savedScrollTop = appContent ? appContent.scrollTop : 0;
     if (appContent) appContent.style.overflow = 'hidden';
+
+    // Lock ALL horizontal scroll containers so the user cannot swipe
+    // sideways through the strategy card list while the animation is active.
+    const hScrollEls = Array.from(document.querySelectorAll('.overflow-x-auto, [class*="overflow-x-scroll"]'));
+    const prevHOverflows = hScrollEls.map(el => ({ el, overflow: el.style.overflowX, scrollLeft: el.scrollLeft }));
+    hScrollEls.forEach(el => { el.style.overflowX = 'hidden'; });
 
     return () => {
       document.getElementById('__mint_coach_style__')?.remove();
@@ -486,6 +496,11 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
         appContent.style.overflow = prevContentOverflow;
         appContent.scrollTop = savedScrollTop;
       }
+      // Restore horizontal scroll containers
+      prevHOverflows.forEach(({ el, overflow, scrollLeft }) => {
+        el.style.overflowX = overflow;
+        el.scrollLeft = scrollLeft;
+      });
     };
   }, []);
 
