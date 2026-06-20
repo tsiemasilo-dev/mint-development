@@ -1209,9 +1209,17 @@ export default function MintBasketsExplainer({
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
                     const appContent = document.querySelector('.app-content');
-                    // Temporarily release Y overflow so scrollIntoView can work
+                    // Temporarily release Y overflow so we can scroll
                     if (appContent) appContent.style.overflowY = 'auto';
-                    el.scrollIntoView({ behavior: 'instant', block: 'start' });
+                    // Position the section ~100px from the top so it looks centred,
+                    // not jammed at the very top of the viewport.
+                    if (appContent) {
+                      const containerRect = appContent.getBoundingClientRect();
+                      const elRect = el.getBoundingClientRect();
+                      const naturalOffset = elRect.top - containerRect.top + appContent.scrollTop;
+                      const targetTop = 100; // px from top of viewport
+                      appContent.scrollTop = Math.max(0, naturalOffset - targetTop);
+                    }
                     // Re-lock on next frame, then capture rect once sticky has settled
                     requestAnimationFrame(() => {
                       if (appContent) appContent.style.overflowY = 'hidden';
