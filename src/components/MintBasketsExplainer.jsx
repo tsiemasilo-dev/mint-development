@@ -378,7 +378,8 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     "A curated mix of SA's most recognised brands — Naspers, Shoprite, Capitec & more."
   );
   const [visible, setVisible] = useState(true);
-  const phaseTimer = useRef(null);
+  const phaseTimer    = useRef(null);
+  const cardSectionRef = useRef(null); // element we translateY to make room
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
@@ -446,7 +447,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     const rawRadius = parseFloat(computed.borderRadius || computed.borderTopLeftRadius || "20");
     setCardRadius(isNaN(rawRadius) ? 20 : rawRadius);
 
-    // Scroll card to land at ~42% from left, giving left panel space for text
+    // Horizontal scroll: bring card into view
     const scrollContainer = el.closest(".overflow-x-auto");
     if (scrollContainer) {
       const targetLeft = el.offsetLeft - Math.floor(window.innerWidth * 0.42);
@@ -455,24 +456,30 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
       el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
 
-    // After horizontal scroll + nav slide-away settle (~480 ms), measure the
-    // card's real screen position and push it to 70 % of viewport height.
-    // This guarantees the text panel between the tab and the card has room.
-    const t1 = setTimeout(() => {
-      const currentRect = el.getBoundingClientRect();
-      const targetCardTop = Math.floor(window.innerHeight * 0.70);
-      const scrollAmount = currentRect.top - targetCardTop;
-      const appContent = document.querySelector('.app-content');
-      if (appContent && scrollAmount > 0) {
-        appContent.scrollTop += scrollAmount;
-      }
-    }, 480);
+    // Push the card section DOWN with CSS transform so the text panel has room
+    // above it. scrollTop can't go negative (card is near top of page), so we
+    // move the container element instead. We push by enough to hit ~68 % vh.
+    const section = (scrollContainer?.parentElement) ?? null;
+    if (section) {
+      const currentTop = el.getBoundingClientRect().top;
+      const targetTop  = Math.floor(window.innerHeight * 0.68);
+      const pushPx     = Math.max(0, targetTop - currentTop);
+      section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
+      section.style.transform  = `translateY(${pushPx}px)`;
+      cardSectionRef.current   = section;
+    }
 
     const t = setTimeout(() => setCardRect(el.getBoundingClientRect()), 950);
-    return () => { clearTimeout(t); clearTimeout(t1); };
+    return () => { clearTimeout(t); };
   }, [phase]);
 
   const handleDone = useCallback(() => {
+    // Restore the pushed card section before dismissing
+    if (cardSectionRef.current) {
+      cardSectionRef.current.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.2,1)';
+      cardSectionRef.current.style.transform  = '';
+      cardSectionRef.current = null;
+    }
     setVisible(false);
     setTimeout(() => onDone?.(), 320);
   }, [onDone]);
