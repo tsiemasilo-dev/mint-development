@@ -949,8 +949,8 @@ export default function MintBasketsExplainer({
     const section = (scrollContainer?.parentElement) ?? null;
     if (section) {
       const currentTop = el.getBoundingClientRect().top;
-      const targetTop  = Math.floor(window.innerHeight * 0.38);
-      const pushPx     = Math.max(0, targetTop - currentTop);
+      const targetTop  = Math.floor(window.innerHeight * 0.55);
+      const pushPx     = targetTop - currentTop; // allow negative to pull card up
       section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
       section.style.transform  = `translateY(${pushPx}px)`;
       cardSectionRef.current   = section;
