@@ -2312,21 +2312,27 @@ const App = () => {
 
   if (currentPage === "paymentSuccess") {
     let successStrategyName = null;
+    let successAmount = null;
     try {
       const raw = sessionStorage.getItem("ozow_pending");
-      if (raw) successStrategyName = JSON.parse(raw)?.strategyName || null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        successStrategyName = parsed?.strategyName || null;
+        successAmount = parsed?.amount ? Number(parsed.amount) : null;
+      }
     } catch {}
     return (
       <PaymentSuccessPage
         strategyName={successStrategyName}
         onDone={() => {
-          if (successStrategyName) {
-            sessionStorage.setItem("mint_coach_pending_sim", successStrategyName);
-          }
           sessionStorage.removeItem("ozow_pending");
           navigationHistory.current = [];
           setPreviousPageName(null);
-          setCurrentPage("home");
+          setPendingPaymentInfo({
+            strategy: successStrategyName || "Investment",
+            amount: successAmount,
+          });
+          setCurrentPage("paymentPending");
         }}
       />
     );
