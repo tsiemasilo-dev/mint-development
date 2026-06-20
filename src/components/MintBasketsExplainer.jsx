@@ -1201,17 +1201,25 @@ export default function MintBasketsExplainer({
                 setShowSuccessOverlay(false);
                 // 5. Switch to Home tab
                 onNavigateToHome?.();
-                // 6. Poll for the pending orders section, scroll it into view first
+                // 6. Poll for the pending orders section, scroll it into view first.
+                //    The scroll lock (overflow:hidden on .app-content) blocks scrollIntoView,
+                //    so we temporarily release it, snap-scroll, re-lock, then capture the rect.
                 let attempts = 0;
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    // Wait for scroll to settle, then grab rect and enter phase 5
-                    setTimeout(() => {
-                      setPhase5PendingRect(el.getBoundingClientRect());
-                      setPhase(5);
-                    }, 500);
+                    const appContent = document.querySelector('.app-content');
+                    // Temporarily release Y overflow so scrollIntoView can work
+                    if (appContent) appContent.style.overflowY = 'auto';
+                    el.scrollIntoView({ behavior: 'instant', block: 'start' });
+                    // Re-lock on next frame, then capture rect once sticky has settled
+                    requestAnimationFrame(() => {
+                      if (appContent) appContent.style.overflowY = 'hidden';
+                      setTimeout(() => {
+                        setPhase5PendingRect(el.getBoundingClientRect());
+                        setPhase(5);
+                      }, 120);
+                    });
                     return;
                   }
                   if (++attempts < 100) setTimeout(pollPending, 50);
