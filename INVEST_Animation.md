@@ -2,7 +2,7 @@
 
 ## Overview
 
-A two-phase coach-mark animation that plays every time the user opens the Mint Baskets tab on the Markets page. It teaches the user what Mint Baskets are through progressive disclosure — first highlighting the tab itself, then spotlighting a real strategy card while keeping the tab ring active and showing clean white explanatory text on the left blur panel.
+A two-phase coach-mark animation that plays every time the user opens the Mint Baskets tab on the Markets page. It teaches the user what Mint Baskets are through progressive disclosure — first spotlighting the tab itself, then spotlighting a real strategy card while keeping the tab clear and showing large, white explanatory text directly on the blurred background.
 
 ---
 
@@ -10,51 +10,66 @@ A two-phase coach-mark animation that plays every time the user opens the Mint B
 
 | Phase | Duration | What happens |
 |---|---|---|
-| **0 — Tab ring** | 2.5 s (auto) | Blur overlay, pulsing white ring on Mint Baskets tab, bouncing arrow + label below it |
-| **1 — Card spotlight** | Until dismissed | Card scrolls to ~42% from left, blur panels surround it, tab ring stays alive, left panel shows white text callout + "Got it" button |
+| **0 — Tab ring** | 2.5 s (auto) | 4-panel blur surrounds the tab, pulsing white ring on it, bouncing arrow + label below |
+| **1 — Dual spotlight** | Until dismissed | 7-panel blur keeps BOTH the tab AND the card fully clear, tab ring stays alive, card ring matches the card's actual border-radius, large white text callout on the left blur panel |
 
 ---
 
-## Overlay Technique — 4-Panel Blur
+## Overlay Technique
 
-Instead of a single fullscreen overlay (which breaks `backdrop-filter` + cutout combinations), the overlay is **4 separate `position:fixed` panels** surrounding the spotlight target:
-
+### Phase 0 — Single hole (4 panels)
 ```
-┌─────────────────────────────────┐
-│           TOP PANEL             │  backdrop-filter: blur(7px)
-│                                 │  background: rgba(0,0,0,0.20)
-├────────┬────────────────┬────────┤
-│  LEFT  │  CLEAR WINDOW  │ RIGHT │
-│ PANEL  │  (target rect) │ PANEL │
-├────────┴────────────────┴────────┤
-│          BOTTOM PANEL           │
-└─────────────────────────────────┘
+┌──────────────── TOP ────────────────┐
+│                                     │  backdrop-filter: blur(7px)
+├──── LEFT ───┬── CLEAR ──┬── RIGHT ──┤  background: rgba(0,0,0,0.20)
+│             │   (tab)   │           │
+├─────────────┴───────────┴───────────┤
+│                BOTTOM               │
+└─────────────────────────────────────┘
 ```
 
-The clear window is the tab button (phase 0) or the strategy card (phase 1) — fully unblurred, unobscured.
+### Phase 1 — Dual hole (7 panels)
+```
+┌─────────────── VERY TOP ────────────────┐
+├── TAB-LEFT ──┬── CLEAR ──┬── TAB-RIGHT ─┤   Both tab and card
+├─────────────── MIDDLE ──────────────────┤   are pixel-perfectly
+├── CARD-LEFT ─┬── CLEAR ──┬ CARD-RIGHT ──┤   clear of blur
+└──────────────── BOTTOM ─────────────────┘
+```
+
+Each panel: `backdropFilter: "blur(7px)", background: "rgba(0,0,0,0.20)"`
 
 ---
 
-## Callout Text Style
+## Card Ring Shape
 
-Written directly on the left blur panel — no dark box, no purple glass card. Pure white typography:
+The ring around the strategy card reads the element's **actual computed `border-radius`** at runtime:
+
+```js
+const computed = window.getComputedStyle(el);
+const rawRadius = parseFloat(computed.borderRadius || computed.borderTopLeftRadius || "20");
+```
+
+The ring `border-radius` is then set to `Math.max(16, rawRadius + pad * 0.6)` so it always follows the card's true shape regardless of how the card's CSS is configured.
+
+---
+
+## Text Sizes (left blur panel callout)
 
 | Element | Size | Weight | Color |
 |---|---|---|---|
-| Section label ("MINT BASKET") | 10px | 700 | `rgba(255,255,255,0.55)` |
-| Basket name | 18px | 800 | `rgba(255,255,255,0.97)` |
-| Divider | 1px | — | `rgba(255,255,255,0.25)` |
-| Strategy description | 13px | 400 | `rgba(255,255,255,0.82)` |
-| Mint explanation paragraph | 12px | 400 | `rgba(255,255,255,0.70)` |
-| "Got it" button | 12px | 600 | white border + `rgba(255,255,255,0.14)` bg |
+| Section label ("MINT BASKET") | 11px | 700 | `rgba(255,255,255,0.60)` |
+| Basket name | **22px** | 800 | `rgba(255,255,255,1.0)` |
+| Divider | 1px | — | `rgba(255,255,255,0.30)` |
+| Strategy description | **14px** | 400 | `rgba(255,255,255,0.90)` |
+| Mint explanation paragraph | **13px** | 400 | `rgba(255,255,255,0.78)` |
+| "Got it" button | 13px | 600 | white border + `rgba(255,255,255,0.15)` bg |
 
 Explanation copy: *"Mint Baskets are ready-made investment portfolios curated and actively managed by the Mint platform. Each basket gives you instant diversification across top JSE-listed companies — with no stock-picking needed."*
 
 ---
 
 ## MarketsPage.jsx wiring
-
-Three changes made to `src/pages/MarketsPage.jsx`:
 
 ```jsx
 // 1. Ref for the tab button
@@ -72,13 +87,13 @@ useEffect(() => {
 // 3. On the Mint Baskets <button>
 ref={basketsTabRef}
 
-// 4. On every strategy card <button>
+// 4. On every strategy card element
 data-coach-target={displayName?.toLowerCase().includes('famous') ? 'true' : undefined}
 data-coach-first={filteredStrategies[0]?.id === strategy.id ? 'true' : undefined}
 data-coach-name={displayName}
-data-coach-desc={truncatedDescription || ''}
+data-coach-desc={truncatedDescription}
 
-// 5. Render
+// 5. Render the explainer
 {showBasketsExplainer && (
   <MintBasketsExplainer
     onDone={() => setShowBasketsExplainer(false)}
@@ -97,165 +112,137 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export const BASKETS_EXPLAINER_KEY = "mint_baskets_explainer_seen";
 
-/* ─────────────────────────────────────────────────────────
-   4-panel blur overlay — leaves a clear window at holeRect
-───────────────────────────────────────────────────────── */
-function BlurOverlay({ holeRect, onClick }) {
-  if (!holeRect) {
-    return (
-      <motion.div
-        className="fixed inset-0 z-[998] pointer-events-auto"
-        style={{ backdropFilter: "blur(6px)", background: "rgba(0,0,0,0.18)" }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClick}
-      />
-    );
-  }
+const PANEL = {
+  backdropFilter: "blur(7px)",
+  background: "rgba(0,0,0,0.20)",
+  position: "fixed",
+  zIndex: 998,
+  pointerEvents: "auto",
+};
 
-  const pad = 8;
-  const top    = holeRect.top    - pad;
-  const left   = holeRect.left   - pad;
-  const right  = holeRect.right  + pad;
-  const bottom = holeRect.bottom + pad;
-
-  const panel = {
-    backdropFilter: "blur(7px)",
-    background: "rgba(0,0,0,0.20)",
-    position: "fixed",
-    zIndex: 998,
-    pointerEvents: "auto",
-  };
-
+/* ─── Single-hole 4-panel overlay (Phase 0) ─── */
+function SingleHoleOverlay({ hole, onClick }) {
+  if (!hole) return (
+    <motion.div className="fixed inset-0 pointer-events-auto"
+      style={{ ...PANEL, zIndex: 998 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClick} />
+  );
+  const { top: t, left: l, right: r, bottom: b } = hole;
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.35 }}
-      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}
-    >
-      <div style={{ ...panel, top: 0, left: 0, right: 0, height: top }} onClick={onClick} />
-      <div style={{ ...panel, top: bottom, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
-      <div style={{ ...panel, top, left: 0, width: left, height: bottom - top }} onClick={onClick} />
-      <div style={{ ...panel, top, left: right, right: 0, height: bottom - top }} onClick={onClick} />
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}>
+      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: t }} onClick={onClick} />
+      <div style={{ ...PANEL, top: b, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
+      <div style={{ ...PANEL, top: t, left: 0, width: l, height: b - t }} onClick={onClick} />
+      <div style={{ ...PANEL, top: t, left: r, right: 0, height: b - t }} onClick={onClick} />
     </motion.div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Reusable animated ring
-───────────────────────────────────────────────────────── */
-function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 999, showPulse = true }) {
-  if (!rect) return null;
-  const top  = rect.top    - pad;
-  const left = rect.left   - pad;
-  const w    = rect.width  + pad * 2;
-  const h    = rect.height + pad * 2;
-
+/* ─── Dual-hole 7-panel overlay (Phase 1 — tab + card both clear) ─── */
+function DualHoleOverlay({ tabHole, cardHole, onClick }) {
+  if (!tabHole || !cardHole) return (
+    <motion.div className="fixed inset-0 pointer-events-auto"
+      style={{ ...PANEL, zIndex: 998 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClick} />
+  );
+  const { top: tt, left: tl, right: tr, bottom: tb } = tabHole;
+  const { top: ct, left: cl, right: cr, bottom: cb } = cardHole;
   return (
-    <div className="pointer-events-none fixed" style={{ top, left, width: w, height: h, zIndex }}>
-      <div className="absolute inset-0"
-        style={{
-          borderRadius,
-          border: "2px solid rgba(255,255,255,0.9)",
-          boxShadow: "0 0 14px 3px rgba(255,255,255,0.22)",
-        }}
-      />
-      {showPulse && (
-        <>
-          <motion.div className="absolute inset-0"
-            style={{ borderRadius, border: "1.5px solid rgba(255,255,255,0.6)" }}
-            animate={{ opacity: [0.7, 0], scale: [1, 1.55] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeOut" }}
-          />
-          <motion.div className="absolute inset-0"
-            style={{ borderRadius, border: "1px solid rgba(255,255,255,0.4)" }}
-            animate={{ opacity: [0.5, 0], scale: [1, 1.85] }}
-            transition={{ duration: 1.4, delay: 0.45, repeat: Infinity, ease: "easeOut" }}
-          />
-        </>
-      )}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}>
+      {/* above tab */}
+      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: tt }} onClick={onClick} />
+      {/* tab row left */}
+      <div style={{ ...PANEL, top: tt, left: 0, width: tl, height: tb - tt }} onClick={onClick} />
+      {/* tab row right */}
+      <div style={{ ...PANEL, top: tt, left: tr, right: 0, height: tb - tt }} onClick={onClick} />
+      {/* between tab and card */}
+      <div style={{ ...PANEL, top: tb, left: 0, right: 0, height: Math.max(0, ct - tb) }} onClick={onClick} />
+      {/* card row left */}
+      <div style={{ ...PANEL, top: ct, left: 0, width: cl, height: cb - ct }} onClick={onClick} />
+      {/* card row right */}
+      <div style={{ ...PANEL, top: ct, left: cr, right: 0, height: cb - ct }} onClick={onClick} />
+      {/* below card */}
+      <div style={{ ...PANEL, top: cb, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
+    </motion.div>
+  );
+}
+
+/* ─── Reusable pulsing ring ─── */
+function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 999, pulse = true }) {
+  if (!rect) return null;
+  return (
+    <div className="pointer-events-none fixed"
+      style={{ top: rect.top - pad, left: rect.left - pad,
+        width: rect.width + pad * 2, height: rect.height + pad * 2, zIndex }}>
+      <div className="absolute inset-0" style={{ borderRadius,
+        border: "2px solid rgba(255,255,255,0.90)",
+        boxShadow: "0 0 16px 4px rgba(255,255,255,0.22)" }} />
+      {pulse && <>
+        <motion.div className="absolute inset-0" style={{ borderRadius, border: "1.5px solid rgba(255,255,255,0.60)" }}
+          animate={{ opacity: [0.7, 0], scale: [1, 1.55] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeOut" }} />
+        <motion.div className="absolute inset-0" style={{ borderRadius, border: "1px solid rgba(255,255,255,0.40)" }}
+          animate={{ opacity: [0.5, 0], scale: [1, 1.85] }}
+          transition={{ duration: 1.4, delay: 0.45, repeat: Infinity, ease: "easeOut" }} />
+      </>}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Phase 0 — Tab coach mark
-───────────────────────────────────────────────────────── */
+/* ─── Phase 0 — Tab coach mark ─── */
 function TabSpotlight({ rect }) {
   if (!rect) return null;
   const pad = 9;
-  const holeRect = {
-    top:    rect.top    - pad,
-    left:   rect.left   - pad,
-    right:  rect.right  + pad,
-    bottom: rect.bottom + pad,
-    width:  rect.width  + pad * 2,
-    height: rect.height + pad * 2,
-  };
-
+  const hole = { top: rect.top - pad, left: rect.left - pad,
+    right: rect.right + pad, bottom: rect.bottom + pad,
+    width: rect.width + pad * 2, height: rect.height + pad * 2 };
   return (
     <>
-      <BlurOverlay holeRect={holeRect} />
-      <AnimatedRing rect={rect} pad={pad} zIndex={999} />
-
-      <motion.div
-        className="pointer-events-none fixed z-[1000] flex flex-col items-center gap-1.5"
-        style={{
-          top:  holeRect.top + holeRect.height + 10,
-          left: holeRect.left + holeRect.width / 2,
-          transform: "translateX(-50%)",
-        }}
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        transition={{ delay: 0.3 }}
-      >
+      <SingleHoleOverlay hole={hole} />
+      <AnimatedRing rect={rect} pad={pad} borderRadius={16} zIndex={999} />
+      <motion.div className="pointer-events-none fixed z-[1000] flex flex-col items-center gap-1.5"
+        style={{ top: hole.top + hole.height + 12,
+          left: hole.left + hole.width / 2, transform: "translateX(-50%)" }}
+        initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+        transition={{ delay: 0.3 }}>
         <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 1.1, repeat: Infinity }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 13L8 3M3 8L8 3L13 8"
-              stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+            <path d="M8 13L8 3M3 8L8 3L13 8" stroke="white" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </motion.div>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em",
-          textTransform: "uppercase", color: "rgba(255,255,255,0.9)" }}>
-          Mint Baskets
-        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.18em",
+          textTransform: "uppercase", color: "rgba(255,255,255,0.92)" }}>Mint Baskets</span>
       </motion.div>
     </>
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Phase 1 — Card spotlight + left callout + tab ring stays
-───────────────────────────────────────────────────────── */
-function CardSpotlight({ cardRect, tabRect, cardName, cardDesc, onDone }) {
+/* ─── Phase 1 — Dual spotlight + left text callout ─── */
+function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDone }) {
   const [pressed, setPressed] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setPressed(true), 350);
-    return () => clearTimeout(t);
-  }, []);
-
+  useEffect(() => { const t = setTimeout(() => setPressed(true), 350); return () => clearTimeout(t); }, []);
   if (!cardRect) return null;
 
-  const pad = 10;
-  const holeRect = {
-    top:    cardRect.top    - pad,
-    left:   cardRect.left   - pad,
-    right:  cardRect.right  + pad,
-    bottom: cardRect.bottom + pad,
-    width:  cardRect.width  + pad * 2,
-    height: cardRect.height + pad * 2,
-  };
+  const cpad = 12, tpad = 9;
+  const cardHole = { top: cardRect.top - cpad, left: cardRect.left - cpad,
+    right: cardRect.right + cpad, bottom: cardRect.bottom + cpad,
+    width: cardRect.width + cpad * 2, height: cardRect.height + cpad * 2 };
+  const tabHole = tabRect ? { top: tabRect.top - tpad, left: tabRect.left - tpad,
+    right: tabRect.right + tpad, bottom: tabRect.bottom + tpad,
+    width: tabRect.width + tpad * 2, height: tabRect.height + tpad * 2 } : null;
 
-  const calloutWidth  = Math.max(100, holeRect.left - 20);
-  const calloutRight  = holeRect.left - 12;
-  const calloutCentreY = holeRect.top + holeRect.height / 2;
-  const calloutTop = Math.max(70, calloutCentreY - 160);
+  const calloutWidth = Math.max(80, cardHole.left - 18);
+  const calloutRight = cardHole.left - 14;
+  const calloutTop   = Math.max(80, cardHole.top + cardHole.height / 2 - 190);
   const hasLeftSpace = calloutWidth >= 80;
+  const ringRadius   = Math.max(16, (cardRadius ?? 20) + cpad * 0.6);
 
   const explanation =
     "Mint Baskets are ready-made investment portfolios curated and actively managed by the Mint platform. " +
@@ -263,127 +250,109 @@ function CardSpotlight({ cardRect, tabRect, cardName, cardDesc, onDone }) {
 
   return (
     <>
-      <BlurOverlay holeRect={holeRect} onClick={onDone} />
+      <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} onClick={onDone} />
 
-      {/* card ring + press animation */}
-      <motion.div
-        className="pointer-events-none fixed z-[999]"
-        style={{ top: holeRect.top, left: holeRect.left, width: holeRect.width, height: holeRect.height }}
+      {/* Tab ring stays alive at z-index above overlay */}
+      <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={1001} pulse={true} />
+
+      {/* Card ring — matches card's actual border-radius */}
+      <motion.div className="pointer-events-none fixed z-[999]"
+        style={{ top: cardHole.top, left: cardHole.left,
+          width: cardHole.width, height: cardHole.height }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, scale: pressed ? [1, 0.975, 1] : 1 }}
         exit={{ opacity: 0 }}
-        transition={{
-          opacity: { duration: 0.3 },
-          scale: pressed ? { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } : {},
-        }}
-      >
-        <div className="absolute inset-0 rounded-[20px]"
-          style={{ border: "2px solid rgba(255,255,255,0.8)",
-            boxShadow: "0 0 20px 5px rgba(255,255,255,0.18)" }} />
-        <motion.div className="absolute inset-0 rounded-[20px]"
-          style={{ border: "1.5px solid rgba(255,255,255,0.5)" }}
+        transition={{ opacity: { duration: 0.3 }, scale: pressed ? { duration: 0.38 } : {} }}>
+        <div className="absolute inset-0" style={{ borderRadius: ringRadius,
+          border: "2px solid rgba(255,255,255,0.85)",
+          boxShadow: "0 0 24px 6px rgba(255,255,255,0.16)" }} />
+        <motion.div className="absolute inset-0"
+          style={{ borderRadius: ringRadius, border: "1.5px solid rgba(255,255,255,0.50)" }}
           animate={{ opacity: [0.6, 0.15, 0.6] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-        />
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }} />
       </motion.div>
 
-      {/* Tab ring stays alive */}
-      <AnimatedRing rect={tabRect} pad={9} borderRadius={16} zIndex={1000} showPulse={true} />
-
-      {/* Left callout */}
+      {/* Left callout — large white text on blur panel, no box */}
       {hasLeftSpace && (
-        <motion.div
-          className="pointer-events-auto fixed z-[1001] flex flex-col"
+        <motion.div className="pointer-events-auto fixed z-[1002] flex flex-col"
           style={{ top: calloutTop, right: `calc(100vw - ${calloutRight}px)`, width: calloutWidth }}
-          initial={{ opacity: 0, x: -14 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
-        >
-          <motion.p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.2em",
-            textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 8 }}
+          initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}>
+
+          <motion.p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.20em",
+            textTransform: "uppercase", color: "rgba(255,255,255,0.60)", marginBottom: 8 }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.38 }}>
             Mint Basket
           </motion.p>
 
-          <motion.p style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2,
-            color: "rgba(255,255,255,0.97)", marginBottom: 10 }}
+          <motion.p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2,
+            color: "rgba(255,255,255,1.0)", marginBottom: 10 }}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.50 }}>
             {cardName}
           </motion.p>
 
-          <motion.div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 10 }}
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.60, duration: 0.32 }} />
+          <motion.div style={{ height: 1, background: "rgba(255,255,255,0.30)", marginBottom: 12 }}
+            initial={{ scaleX: 0, originX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.60, duration: 0.32 }} />
 
-          <motion.p style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.55,
-            color: "rgba(255,255,255,0.82)", marginBottom: 12 }}
+          <motion.p style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.6,
+            color: "rgba(255,255,255,0.90)", marginBottom: 14 }}
             initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.68 }}>
             {cardDesc}
           </motion.p>
 
-          <motion.p style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.6,
-            color: "rgba(255,255,255,0.70)", marginBottom: 16 }}
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.82 }}>
+          <motion.p style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.65,
+            color: "rgba(255,255,255,0.78)", marginBottom: 20 }}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.84 }}>
             {explanation}
           </motion.p>
 
-          <motion.div style={{ height: 1, background: "rgba(255,255,255,0.18)", marginBottom: 14 }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.0 }} />
+          <motion.div style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 14 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.02 }} />
 
           <motion.button onClick={onDone}
-            style={{ alignSelf: "flex-start", padding: "8px 20px", borderRadius: 8,
-              fontSize: 12, fontWeight: 600, letterSpacing: "0.04em",
-              color: "rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.40)", cursor: "pointer", whiteSpace: "nowrap" }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.10 }}
+            style={{ alignSelf: "flex-start", padding: "9px 22px", borderRadius: 10,
+              fontSize: 13, fontWeight: 600, letterSpacing: "0.04em",
+              color: "rgba(255,255,255,0.97)", background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.45)", cursor: "pointer", whiteSpace: "nowrap" }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.12 }}
             whileTap={{ scale: 0.95 }}>
             Got it
           </motion.button>
         </motion.div>
       )}
 
-      {/* Bottom fallback */}
+      {/* Bottom fallback when left space < 80px */}
       {!hasLeftSpace && (
-        <motion.div
-          className="pointer-events-auto fixed z-[1001]"
+        <motion.div className="pointer-events-auto fixed z-[1002]"
           style={{ bottom: 52, left: 16, right: 16,
-            background: "rgba(20,20,30,0.55)", backdropFilter: "blur(14px)",
-            borderRadius: 18, border: "1px solid rgba(255,255,255,0.18)", padding: "20px 20px 16px" }}
-          initial={{ opacity: 0, y: 22 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ delay: 0.3, duration: 0.4 }}
-        >
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.2em",
-            textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Mint Basket</p>
-          <p style={{ fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.97)",
-            marginBottom: 10, lineHeight: 1.2 }}>{cardName}</p>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.2)", marginBottom: 10 }} />
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.82)",
-            lineHeight: 1.55, marginBottom: 10 }}>{cardDesc}</p>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.68)",
-            lineHeight: 1.6, marginBottom: 16 }}>{explanation}</p>
-          <button onClick={onDone}
-            style={{ padding: "8px 20px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-              color: "rgba(255,255,255,0.95)", background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.40)", cursor: "pointer" }}>
-            Got it
-          </button>
+            background: "rgba(18,18,28,0.60)", backdropFilter: "blur(16px)",
+            borderRadius: 20, border: "1px solid rgba(255,255,255,0.18)", padding: "22px 22px 18px" }}
+          initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }} transition={{ delay: 0.3, duration: 0.4 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.20em",
+            textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 6 }}>Mint Basket</p>
+          <p style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 10, lineHeight: 1.2 }}>{cardName}</p>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 10 }} />
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.90)", lineHeight: 1.6, marginBottom: 12 }}>{cardDesc}</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.65, marginBottom: 18 }}>{explanation}</p>
+          <button onClick={onDone} style={{ padding: "9px 22px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+            color: "white", background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.45)", cursor: "pointer" }}>Got it</button>
         </motion.div>
       )}
     </>
   );
 }
 
-/* ─────────────────────────────────────────────────────────
-   Main export
-───────────────────────────────────────────────────────── */
+/* ─── Main export ─── */
 export default function MintBasketsExplainer({ onDone, tabRef }) {
-  const [phase, setPhase]       = useState(0);
-  const [tabRect, setTabRect]   = useState(null);
-  const [cardRect, setCardRect] = useState(null);
-  const [cardName, setCardName] = useState("Mint Famous Brands");
-  const [cardDesc, setCardDesc] = useState(
+  const [phase, setPhase]           = useState(0);
+  const [tabRect, setTabRect]       = useState(null);
+  const [cardRect, setCardRect]     = useState(null);
+  const [cardRadius, setCardRadius] = useState(20);
+  const [cardName, setCardName]     = useState("Mint Famous Brands");
+  const [cardDesc, setCardDesc]     = useState(
     "A curated mix of SA's most recognised brands — Naspers, Shoprite, Capitec & more."
   );
   const [visible, setVisible] = useState(true);
@@ -414,10 +383,16 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     if (name) setCardName(name);
     if (desc) setCardDesc(desc);
 
+    const computed = window.getComputedStyle(el);
+    const rawRadius = parseFloat(computed.borderRadius || computed.borderTopLeftRadius || "20");
+    setCardRadius(isNaN(rawRadius) ? 20 : rawRadius);
+
     const scrollContainer = el.closest(".overflow-x-auto");
     if (scrollContainer) {
-      const targetLeft = el.offsetLeft - Math.floor(window.innerWidth * 0.42);
-      scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+      scrollContainer.scrollTo({
+        left: Math.max(0, el.offsetLeft - Math.floor(window.innerWidth * 0.42)),
+        behavior: "smooth",
+      });
     } else {
       el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
@@ -442,13 +417,8 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
       )}
       {phase === 1 && cardRect && (
         <motion.div key="phase1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <CardSpotlight
-            cardRect={cardRect}
-            tabRect={tabRect}
-            cardName={cardName}
-            cardDesc={cardDesc}
-            onDone={handleDone}
-          />
+          <CardSpotlight cardRect={cardRect} cardRadius={cardRadius}
+            tabRect={tabRect} cardName={cardName} cardDesc={cardDesc} onDone={handleDone} />
         </motion.div>
       )}
     </AnimatePresence>
@@ -461,6 +431,16 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
 ## Dismissal
 
 - Phase 0 auto-advances after **2 500 ms** — no tap needed.
-- Phase 1: tap **"Got it"** or the blurred overlay area to dismiss.
-- Navigating away from the Mint Baskets tab resets the animation so it replays on return.
-- No `localStorage` gate — intentionally plays every visit.
+- Phase 1: tap **"Got it"** or any blurred overlay panel to dismiss.
+- Navigating away from the Mint Baskets tab resets the animation (replays on return).
+- No `localStorage` gate — plays every visit intentionally.
+
+---
+
+## Files
+
+| File | Role |
+|---|---|
+| `src/components/MintBasketsExplainer.jsx` | Main animation component (full code above) |
+| `src/pages/MarketsPage.jsx` | Mounts the explainer; provides `basketsTabRef` and `data-coach-*` attributes |
+| `INVEST_Animation.md` | This documentation file |
