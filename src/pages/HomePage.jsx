@@ -1885,40 +1885,35 @@ const HomePage = ({
 
           // Inject a simulated pending order during the coach tour or right after a payment
           const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
-          if (coachSimName) {
-            // Auto-clear the sim once real pending orders have loaded
-            if (stratGroups.length > 0 || pendingAssetItems.length > 0) {
-              sessionStorage.removeItem('mint_coach_pending_sim');
-            } else if (!stratGroups.find(g => g.key === 'coach-sim')) {
-              // Match the actual purchased strategy by name first, then fall back
-              const realStrat = safeStrategies.find(s =>
-                (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
-                (s.short_name || '').toLowerCase() === coachSimName.toLowerCase()
-              ) || safeStrategies.find(s =>
-                (s.name || '').toLowerCase().includes(coachSimName.toLowerCase()) ||
-                coachSimName.toLowerCase().includes((s.name || '').toLowerCase())
-              ) || safeStrategies.find(s =>
-                (s.name || '').toLowerCase().includes('famous') ||
-                (s.short_name || '').toLowerCase().includes('famous')
-              ) || safeStrategies[0];
-              const minRands = realStrat?.min_investment
-                ? Math.round(Number(realStrat.min_investment) / 100)
-                : 0;
-              stratGroups.unshift({
-                key: 'coach-sim',
-                strat: {
-                  id: 'coach-sim',
-                  name: coachSimName,
-                  shortName: coachSimName,
-                  risk_level: realStrat?.risk_level || 'Growth',
-                  image_url: realStrat?.image_url || null,
-                  icon_url: realStrat?.icon_url || null,
-                  investedAmount: minRands,
-                  isPending: true,
-                },
-                txs: [null],
-              });
-            }
+          if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
+            // Match the actual purchased strategy by name first, then fall back to Famous Brands, then first strategy
+            const realStrat = safeStrategies.find(s =>
+              (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
+              (s.short_name || '').toLowerCase() === coachSimName.toLowerCase()
+            ) || safeStrategies.find(s =>
+              (s.name || '').toLowerCase().includes(coachSimName.toLowerCase()) ||
+              coachSimName.toLowerCase().includes((s.name || '').toLowerCase())
+            ) || safeStrategies.find(s =>
+              (s.name || '').toLowerCase().includes('famous') ||
+              (s.short_name || '').toLowerCase().includes('famous')
+            ) || safeStrategies[0];
+            const minRands = realStrat?.min_investment
+              ? Math.round(Number(realStrat.min_investment) / 100)
+              : 0;
+            stratGroups.unshift({
+              key: 'coach-sim',
+              strat: {
+                id: 'coach-sim',
+                name: coachSimName,
+                shortName: coachSimName,
+                risk_level: realStrat?.risk_level || 'Growth',
+                image_url: realStrat?.image_url || null,
+                icon_url: realStrat?.icon_url || null,
+                investedAmount: minRands,
+                isPending: true,
+              },
+              txs: [null],
+            });
           }
 
           const totalGroups = stratGroups.length + pendingAssetItems.length;
