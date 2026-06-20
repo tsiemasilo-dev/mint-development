@@ -1249,6 +1249,7 @@ export default function MintBasketsExplainer({
                     clone.style.left = '0';
                     clone.style.right = '0';
                     clone.style.margin = '0';
+                    clone.style.paddingTop = '0';
                     clone.style.zIndex = '10003';
                     document.body.appendChild(clone);
 
