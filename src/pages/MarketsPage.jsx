@@ -1412,6 +1412,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
             if (btn) btn.click();
           }}
+          onCloseStrategyForCoach={() => setSelectedStrategy(null)}
           onNavigateToHome={() => onNavigateToHome?.()}
         />
       )}

@@ -1878,16 +1878,24 @@ const HomePage = ({
           // Inject a simulated pending order during the coach tour
           const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
           if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
+            // Find the real strategy so we can use its actual image and min investment
+            const realStrat = safeStrategies.find(s =>
+              (s.name || '').toLowerCase().includes('famous') ||
+              (s.short_name || '').toLowerCase().includes('famous')
+            ) || safeStrategies[0];
+            const minRands = realStrat?.min_investment
+              ? Math.round(Number(realStrat.min_investment) / 100)
+              : 0;
             stratGroups.unshift({
               key: 'coach-sim',
               strat: {
                 id: 'coach-sim',
-                name: coachSimName,
-                shortName: coachSimName,
-                risk_level: 'Growth',
-                image_url: null,
-                icon_url: null,
-                investedAmount: 500,
+                name: realStrat?.name || coachSimName,
+                shortName: realStrat?.short_name || coachSimName,
+                risk_level: realStrat?.risk_level || 'Growth',
+                image_url: realStrat?.image_url || null,
+                icon_url: realStrat?.icon_url || null,
+                investedAmount: minRands,
                 isPending: true,
               },
               txs: [null],

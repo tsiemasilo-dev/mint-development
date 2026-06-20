@@ -801,6 +801,7 @@ export default function MintBasketsExplainer({
   onOpenStrategyForCoach,
   onNavigateToFactsheetForCoach,
   onNavigateToHome,
+  onCloseStrategyForCoach,
 }) {
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
@@ -1164,17 +1165,32 @@ export default function MintBasketsExplainer({
             <SuccessCardSpotlight
               cardRect={phase4CardRect}
               onNext={() => {
-                // Signal HomePage to show a simulated pending order
+                // 1. Immediately remove the coach overlay so strategy modal hole disappears
+                setPhase4CardRect(null);
+                // 2. Close the strategy bottom-sheet portal (it renders on body even when hidden)
+                onCloseStrategyForCoach?.();
+                // 3. Signal HomePage to show a simulated pending order
                 sessionStorage.setItem('mint_coach_pending_sim', 'MINT Famous Brands');
+                // 4. Hide the success page overlay
                 setShowSuccessOverlay(false);
+                // 5. Switch to Home tab
                 onNavigateToHome?.();
+                // 6. Poll for the pending orders section, scroll it into view first
                 let attempts = 0;
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
-                  if (el) { setPhase5PendingRect(el.getBoundingClientRect()); setPhase(5); return; }
-                  if (++attempts < 80) setTimeout(pollPending, 50);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Wait for scroll to settle, then grab rect and enter phase 5
+                    setTimeout(() => {
+                      setPhase5PendingRect(el.getBoundingClientRect());
+                      setPhase(5);
+                    }, 450);
+                    return;
+                  }
+                  if (++attempts < 100) setTimeout(pollPending, 50);
                 };
-                setTimeout(pollPending, 400);
+                setTimeout(pollPending, 500);
               }}
             />
           </motion.div>
