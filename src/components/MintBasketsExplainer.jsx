@@ -916,12 +916,12 @@ export default function MintBasketsExplainer({
     return () => clearTimeout(phaseTimer.current);
   }, [phase, lottieReady]);
 
-  // Phase 1: smooth-scroll to the target card, then position + spotlight it.
-  //
-  // The scroll lock applied at mount sets overflowX:'hidden' on all horizontal
-  // containers — which would cause scrollTo({behavior:'smooth'}) to jump
-  // instantly.  So we temporarily re-enable the target container for the
-  // scroll animation, then re-lock it once the card is in position.
+  // Phase 1 — three-beat choreography:
+  //   Beat 1 (~0 ms)   : sections ABOVE fade out + collapse height → section
+  //                       naturally rises as the space above it disappears.
+  //                       Sections BELOW disappear instantly (off-screen).
+  //   Beat 2 (~480 ms) : horizontal scroll plays smoothly to the target card.
+  //   Beat 3 (~1300 ms): sibling cards are hidden, spotlight rect captured.
   useEffect(() => {
     if (phase !== 1) return;
 
@@ -940,19 +940,28 @@ export default function MintBasketsExplainer({
 
     const scrollContainer = el.closest(".overflow-x-auto");
     const section = scrollContainer?.parentElement ?? null;
-
     const hidden = [];
 
-    // ── Step 1: hide ALL sibling sections immediately (before any scroll)
-    // so the page collapses and the target section is centred while the
-    // horizontal scroll animation plays — not pushed to the bottom.
+    // ── Beat 1: animate-out sections above, hide sections below ──────────
     if (section) {
+      // Sections ABOVE — fade + collapse so the gap closes smoothly
       let prev = section.previousElementSibling;
       while (prev) {
-        prev.style.visibility = 'hidden';
-        hidden.push(prev);
+        const p = prev;
+        const h = p.getBoundingClientRect().height;
+        p.style.overflow   = 'hidden';
+        p.style.maxHeight  = `${h}px`;
+        p.style.opacity    = '1';
+        // Kick off transitions on next paint so the browser sees the initial values first
+        requestAnimationFrame(() => {
+          p.style.transition = 'opacity 0.38s ease, max-height 0.42s cubic-bezier(0.4,0,0.2,1)';
+          p.style.opacity    = '0';
+          p.style.maxHeight  = '0px';
+        });
+        hidden.push(p);
         prev = prev.previousElementSibling;
       }
+      // Sections BELOW — instant (they're off-screen; no visible effect)
       let next = section.nextElementSibling;
       while (next) {
         next.style.visibility = 'hidden';
@@ -960,33 +969,22 @@ export default function MintBasketsExplainer({
         next = next.nextElementSibling;
       }
     }
-
     hiddenSiblingsRef.current = hidden;
 
-    // ── Step 2: re-enable the scroll container and animate to the card ────
-    if (scrollContainer) {
-      scrollContainer.style.overflowX = 'auto';
-      const targetLeft = el.offsetLeft - Math.floor(window.innerWidth * 0.42);
-      scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-    }
-
-    // ── Step 3: after scroll settles, position + hide sibling cards ───────
+    // ── Beat 2: after collapse finishes, scroll sideways to the card ──────
     const t1 = setTimeout(() => {
-      // Re-lock the scroll container
+      if (scrollContainer) {
+        scrollContainer.style.overflowX = 'auto';
+        const targetLeft = el.offsetLeft - Math.floor(window.innerWidth * 0.42);
+        scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+      }
+    }, 480);
+
+    // ── Beat 3: after scroll settles, hide sibling cards + capture rect ───
+    const t2 = setTimeout(() => {
       if (scrollContainer) scrollContainer.style.overflowX = 'hidden';
 
-      // Translate the section so the card lands at ~55% vh
-      if (section) {
-        const currentTop = el.getBoundingClientRect().top;
-        const targetTop  = Math.floor(window.innerHeight * 0.55);
-        const pushPx     = targetTop - currentTop;
-        section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
-        section.style.transform  = `translateY(${pushPx}px)`;
-        cardSectionRef.current   = section;
-      }
-
-      // Hide sibling cards within the same row (opacity so the layout is
-      // preserved but nothing bleeds through the hole).
+      // Hide sibling cards within the same row
       const cardList = el.parentElement;
       if (cardList) {
         cardList.dataset.coachOverflow = cardList.style.overflow;
@@ -1000,12 +998,12 @@ export default function MintBasketsExplainer({
         });
       }
 
-      // ── Step 4: capture rect after transform animation finishes ──────────
-      const t2 = setTimeout(() => setCardRect(el.getBoundingClientRect()), 600);
-      timers.push(t2);
-    }, 750);
+      // Capture the final rect for the spotlight
+      const t3 = setTimeout(() => setCardRect(el.getBoundingClientRect()), 200);
+      timers.push(t3);
+    }, 1350);
 
-    const timers = [t1];
+    const timers = [t1, t2];
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
@@ -1022,10 +1020,13 @@ export default function MintBasketsExplainer({
       cardSectionRef.current.style.transform  = '';
       cardSectionRef.current = null;
     }
-    // Restore sibling visibility + opacity + overflow
+    // Restore sibling visibility + opacity + collapse styles
     hiddenSiblingsRef.current.forEach(el => {
-      el.style.visibility = '';
-      el.style.opacity = '';
+      el.style.transition  = '';
+      el.style.maxHeight   = '';
+      el.style.overflow    = '';
+      el.style.visibility  = '';
+      el.style.opacity     = '';
       el.style.pointerEvents = '';
     });
     hiddenSiblingsRef.current = [];
@@ -1162,8 +1163,11 @@ export default function MintBasketsExplainer({
       }
       // Restore visibility of sections that were hidden to prevent bleed-through
       hiddenSiblingsRef.current.forEach(el => {
-        el.style.visibility = '';
-        el.style.opacity = '';
+        el.style.transition  = '';
+        el.style.maxHeight   = '';
+        el.style.overflow    = '';
+        el.style.visibility  = '';
+        el.style.opacity     = '';
         el.style.pointerEvents = '';
       });
       hiddenSiblingsRef.current = [];
