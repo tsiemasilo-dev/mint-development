@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, X, Info, Heart, Wallet, FileText } from "lucide-react";
 import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
@@ -32,6 +33,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const feeRates = useFees();
+  const [showCoachMark, setShowCoachMark] = useState(false);
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -95,6 +97,16 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
         : "";
 
   // Fetch strategy metadata + analytics
+  // Phase 3 coach mark — triggered by sessionStorage flag set in MintBasketsExplainer
+  useEffect(() => {
+    if (sessionStorage.getItem('coach_factsheet_pending') === '1') {
+      sessionStorage.removeItem('coach_factsheet_pending');
+      // Small delay so the page finishes rendering before capturing card rect
+      const t = setTimeout(() => setShowCoachMark(true), 500);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -574,6 +586,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      {showCoachMark && <FactsheetCoachMark onDone={() => setShowCoachMark(false)} />}
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pb-32 pt-12 md:max-w-md md:px-6">
         <header className="flex items-center justify-center gap-3 mb-6 relative">
           <button
@@ -663,7 +676,10 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           </div>
         </header>
 
-        <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
+        <section
+          data-coach-factsheet-card="true"
+          className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -1274,5 +1290,163 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
     </div>
   );
 };
+
+/* ─────────────────────────────────────────────────────────
+   Phase 3 coach mark: spotlights the top strategy card on FactsheetPage
+───────────────────────────────────────────────────────── */
+function FactsheetCoachMark({ onDone }) {
+  const [cardRect, setCardRect] = useState(null);
+  const [exiting, setExiting]   = useState(false);
+
+  useEffect(() => {
+    // Lock scroll
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const appContent = document.querySelector('.app-content');
+    const prevApp = appContent ? appContent.style.overflow : '';
+    if (appContent) appContent.style.overflow = 'hidden';
+
+    // Capture the card rect
+    const el = document.querySelector('[data-coach-factsheet-card="true"]');
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setCardRect(r);
+    }
+
+    return () => {
+      document.body.style.overflow = prev;
+      if (appContent) appContent.style.overflow = prevApp;
+    };
+  }, []);
+
+  const handleGotIt = useCallback(() => {
+    setExiting(true);
+    setTimeout(() => onDone?.(), 400);
+  }, [onDone]);
+
+  if (!cardRect) return null;
+
+  const RADIUS = 20;
+  const PAD    = 10;
+  const W      = window.innerWidth;
+  const H      = window.innerHeight;
+  const hx = cardRect.left - PAD;
+  const hy = cardRect.top  - PAD;
+  const hw = cardRect.width  + PAD * 2;
+  const hh = cardRect.height + PAD * 2;
+
+  const clipPath = `polygon(
+    0% 0%, 100% 0%, 100% 100%, 0% 100%,
+    0% ${hy + RADIUS}px,
+    ${hx}px ${hy + RADIUS}px,
+    ${hx}px ${hy + hh - RADIUS}px,
+    ${hx + RADIUS}px ${hy + hh}px,
+    ${hx + hw - RADIUS}px ${hy + hh}px,
+    ${hx + hw}px ${hy + hh - RADIUS}px,
+    ${hx + hw}px ${hy + RADIUS}px,
+    ${hx + hw - RADIUS}px ${hy}px,
+    ${hx + RADIUS}px ${hy}px,
+    ${hx}px ${hy + RADIUS}px,
+    0% ${hy + RADIUS}px,
+    0% 0%
+  )`;
+
+  return (
+    <AnimatePresence>
+      {!exiting && (
+        <motion.div
+          key="factsheet-coach"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.32 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}
+        >
+          {/* Dark overlay with hole */}
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              background: 'rgba(0,0,0,0.72)',
+              backdropFilter: 'blur(3px)',
+              WebkitBackdropFilter: 'blur(3px)',
+              clipPath,
+              pointerEvents: 'auto',
+            }}
+          />
+
+          {/* Glow ring around the card */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            style={{
+              position: 'absolute',
+              left:   hx - 3,
+              top:    hy - 3,
+              width:  hw + 6,
+              height: hh + 6,
+              borderRadius: RADIUS + 4,
+              border: '2px solid rgba(168,85,247,0.7)',
+              boxShadow: '0 0 20px rgba(168,85,247,0.45)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          {/* Text panel — bottom of screen */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              pointerEvents: 'auto',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.30, duration: 0.40, ease: [0.22,1,0.36,1] }}
+              style={{
+                margin: '0 16px 40px',
+                padding: '20px 20px 18px',
+                borderRadius: 20,
+                background: 'rgba(255,255,255,0.10)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+              }}
+            >
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '0.01em', margin: 0 }}>
+                Strategy Detail
+              </p>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', textAlign: 'center', margin: 0, lineHeight: 1.55 }}>
+                This card shows your chosen strategy's name, risk level, and performance data. Scroll down to explore holdings, returns, and more.
+              </p>
+              <motion.button
+                onClick={handleGotIt}
+                style={{
+                  padding: '7px 24px', borderRadius: 9, fontSize: 12, fontWeight: 600,
+                  letterSpacing: '0.04em', color: '#fff',
+                  background: 'rgba(255,255,255,0.14)',
+                  border: '1px solid rgba(255,255,255,0.36)', cursor: 'pointer',
+                }}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ delay: 0.60, duration: 0.24 }}
+                whileTap={{ scale: 0.93 }}
+              >
+                Got it
+              </motion.button>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 export default FactsheetPage;

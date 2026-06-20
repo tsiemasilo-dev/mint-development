@@ -214,9 +214,140 @@ function TabSpotlight({ rect, onLottieLoad }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Phase 1 — Dual spotlight + left text callout
+   Phase 2 — View Factsheet button spotlight
 ───────────────────────────────────────────────────────── */
-function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDone }) {
+function FactsheetBtnSpotlight({ btnRect, onNext }) {
+  if (!btnRect) return null;
+
+  const pad = 10;
+  const hole = {
+    top:    btnRect.top    - pad,
+    left:   btnRect.left   - pad,
+    right:  btnRect.right  + pad,
+    bottom: btnRect.bottom + pad,
+    width:  btnRect.width  + pad * 2,
+    height: btnRect.height + pad * 2,
+  };
+
+  const ringRadius = 18;
+  const panelMaxWidth = 460;
+  const panelWidth = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : panelMaxWidth, panelMaxWidth);
+  const panelTop = Math.max(24, Math.round(hole.top * 0.3));
+
+  const glassBg = {
+    background: "rgba(10,10,22,0.80)",
+    backdropFilter: "blur(24px)",
+    WebkitBackdropFilter: "blur(24px)",
+    border: "1px solid rgba(255,255,255,0.13)",
+  };
+
+  return (
+    <>
+      <SingleHoleOverlay hole={hole} onClick={onNext} />
+
+      {/* Ring around the button */}
+      <motion.div
+        className="pointer-events-none fixed z-[999]"
+        style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="absolute inset-0"
+          style={{ borderRadius: ringRadius,
+            border: "2px solid rgba(255,255,255,0.85)",
+            boxShadow: "0 0 24px 6px rgba(255,255,255,0.16)" }}
+        />
+        <motion.div className="absolute inset-0"
+          style={{ borderRadius: ringRadius, border: "1.5px solid rgba(255,255,255,0.50)" }}
+          animate={{ opacity: [0.6, 0.15, 0.6] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </motion.div>
+
+      {/* Down-pointing arrow just above the button */}
+      <motion.div
+        className="pointer-events-none fixed z-[1000] flex flex-col items-center"
+        style={{ bottom: (typeof window !== "undefined" ? window.innerHeight : 800) - hole.top + 10,
+          left: hole.left + hole.width / 2, transform: "translateX(-50%)" }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <motion.div animate={{ y: [0, 5, 0] }} transition={{ duration: 1.1, repeat: Infinity }}>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3L8 13M13 8L8 13L3 8" stroke="white" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </motion.div>
+      </motion.div>
+
+      {/* Text panel — centred, in the upper portion of the space above the button */}
+      <div
+        className="pointer-events-none fixed z-[1002]"
+        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelWidth }}
+      >
+        <motion.div
+          className="pointer-events-auto"
+          style={{ ...glassBg, borderRadius: 18, padding: "14px 18px 14px" }}
+          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.18, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
+              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.26, duration: 0.30, ease: "easeOut" }}
+          >
+            Strategy Factsheet
+          </motion.p>
+
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.36, duration: 0.28 }}
+          />
+
+          <motion.p
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.44, duration: 0.28, ease: "easeOut" }}
+          >
+            Your complete investment guide.
+          </motion.p>
+
+          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+            <WordReveal
+              text="A factsheet shows you everything — performance history, what the basket holds, fees, and risk profile. Tap to explore."
+              baseDelay={0.56}
+            />
+          </p>
+
+          <motion.button
+            onClick={onNext}
+            style={{
+              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.04em", color: "#fff",
+              background: "rgba(255,255,255,0.14)",
+              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.88, duration: 0.24 }}
+            whileTap={{ scale: 0.93 }}
+          >
+            View Factsheet →
+          </motion.button>
+        </motion.div>
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   Phase 1 — Dual spotlight + card text callout
+───────────────────────────────────────────────────────── */
+function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDone, onNext }) {
   const [pressed, setPressed] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setPressed(true), 350);
@@ -350,7 +481,7 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           </p>
 
           <motion.button
-            onClick={onDone}
+            onClick={onNext ?? onDone}
             style={{
               padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
               letterSpacing: "0.04em", color: "#fff",
@@ -361,7 +492,7 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
             transition={{ delay: 0.90, duration: 0.24 }}
             whileTap={{ scale: 0.93 }}
           >
-            Got it
+            Next →
           </motion.button>
         </motion.div>
       </div>
@@ -372,7 +503,12 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
 /* ─────────────────────────────────────────────────────────
    Main component
 ───────────────────────────────────────────────────────── */
-export default function MintBasketsExplainer({ onDone, tabRef }) {
+export default function MintBasketsExplainer({
+  onDone,
+  tabRef,
+  onOpenStrategyForCoach,
+  onNavigateToFactsheetForCoach,
+}) {
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
   const [cardRect, setCardRect]   = useState(null);
@@ -384,9 +520,11 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   const [visible, setVisible]         = useState(true);
   const [panelExiting, setPanelExiting] = useState(false);
   const [lottieReady, setLottieReady]  = useState(false);
+  const [phase2BtnRect, setPhase2BtnRect] = useState(null);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
+  const prevHOverflowsRef = useRef([]);   // saved h-scroll states for partial restore
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
@@ -414,6 +552,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     // sideways through the strategy card list while the animation is active.
     const hScrollEls = Array.from(document.querySelectorAll('.overflow-x-auto, [class*="overflow-x-scroll"]'));
     const prevHOverflows = hScrollEls.map(el => ({ el, overflow: el.style.overflowX, scrollLeft: el.scrollLeft }));
+    prevHOverflowsRef.current = prevHOverflows;
     hScrollEls.forEach(el => { el.style.overflowX = 'hidden'; });
 
     return () => {
@@ -423,11 +562,12 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
         appContent.style.overflow = prevContentOverflow;
         appContent.scrollTop = savedScrollTop;
       }
-      // Restore horizontal scroll containers
-      prevHOverflows.forEach(({ el, overflow, scrollLeft }) => {
+      // Restore horizontal scroll containers (if not already restored by partialCleanup)
+      prevHOverflowsRef.current.forEach(({ el, overflow, scrollLeft }) => {
         el.style.overflowX = overflow;
         el.scrollLeft = scrollLeft;
       });
+      prevHOverflowsRef.current = [];
     };
   }, []);
 
@@ -502,6 +642,58 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     return () => { clearTimeout(t); };
   }, [phase]);
 
+  // partialCleanup: restores Phase 1 transforms/scroll but keeps the explainer mounted
+  // Used when transitioning from Phase 1 → Phase 2 (strategy modal opens).
+  const partialCleanup = useCallback(() => {
+    document.getElementById('__mint_coach_style__')?.remove();
+    document.body.style.overflow = '';
+    const appContent = document.querySelector('.app-content');
+    if (appContent) appContent.style.overflow = '';
+    // Slide the card section back up
+    if (cardSectionRef.current) {
+      cardSectionRef.current.style.transition = 'transform 0.45s cubic-bezier(0.4,0,0.2,1)';
+      cardSectionRef.current.style.transform  = '';
+      cardSectionRef.current = null;
+    }
+    // Restore sibling visibility
+    hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
+    hiddenSiblingsRef.current = [];
+    // Restore horizontal scroll containers
+    prevHOverflowsRef.current.forEach(({ el, overflow, scrollLeft }) => {
+      el.style.overflowX = overflow;
+      el.scrollLeft = scrollLeft;
+    });
+    prevHOverflowsRef.current = [];
+  }, []);
+
+  // handleNext: Phase 1 → 2 — restore transforms, open strategy modal, find factsheet btn
+  const handleNext = useCallback(() => {
+    partialCleanup();
+    onOpenStrategyForCoach?.(cardName);
+    // After modal opens and animates, capture the factsheet button rect
+    const t = setTimeout(() => {
+      const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
+      if (!btn) { handleDone(); return; }
+      setPhase2BtnRect(btn.getBoundingClientRect());
+      setPhase(2);
+    }, 750);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partialCleanup, cardName, onOpenStrategyForCoach]);
+
+  // handleViewFactsheet: Phase 2 → 3 — set flag, fade out, navigate to factsheet
+  const handleViewFactsheet = useCallback(() => {
+    sessionStorage.setItem('coach_factsheet_pending', '1');
+    setPanelExiting(true);
+    // Navigate after overlay has started fading
+    setTimeout(() => { onNavigateToFactsheetForCoach?.(); }, 200);
+    // Unmount the explainer overlay
+    setTimeout(() => {
+      setVisible(false);
+      setTimeout(() => onDone?.(), 200);
+    }, 640);
+  }, [onNavigateToFactsheetForCoach, onDone]);
+
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
     setPanelExiting(true);
@@ -553,6 +745,21 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
             cardName={cardName}
             cardDesc={cardDesc}
             onDone={handleDone}
+            onNext={handleNext}
+          />
+        </motion.div>
+      )}
+      {phase === 2 && phase2BtnRect && (
+        <motion.div
+          key="phase2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: panelExiting ? 0 : 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+        >
+          <FactsheetBtnSpotlight
+            btnRect={phase2BtnRect}
+            onNext={handleViewFactsheet}
           />
         </motion.div>
       )}

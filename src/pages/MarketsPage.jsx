@@ -1398,7 +1398,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
       {showBasketsExplainer && (
-        <MintBasketsExplainer onDone={() => setShowBasketsExplainer(false)} tabRef={basketsTabRef} />
+        <MintBasketsExplainer
+          onDone={() => setShowBasketsExplainer(false)}
+          tabRef={basketsTabRef}
+          onOpenStrategyForCoach={(name) => {
+            const target =
+              strategies.find(s => (s.short_name || s.name) === name) ??
+              strategies.find(s => (s.short_name || s.name || '').toLowerCase().includes('famous')) ??
+              strategies[0];
+            if (target) setSelectedStrategy(target);
+          }}
+          onNavigateToFactsheetForCoach={() => {
+            const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
+            if (btn) btn.click();
+          }}
+        />
       )}
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
@@ -2410,6 +2424,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     });
                     onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                   }}
+                  data-coach-factsheet-btn="true"
                   className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
                 >
                   View Factsheet
