@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 export const BASKETS_EXPLAINER_KEY = "mint_baskets_explainer_seen";
 
@@ -156,6 +157,30 @@ function TabSpotlight({ rect }) {
     <>
       <SingleHoleOverlay hole={hole} />
       <AnimatedRing rect={rect} pad={pad} borderRadius={16} zIndex={999} />
+
+      {/* Lottie animation — centered in the main content area above the tab */}
+      <motion.div
+        className="pointer-events-none fixed z-[1000] flex items-center justify-center"
+        style={{
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: hole.top,
+        }}
+        initial={{ opacity: 0, scale: 0.88 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ delay: 0.25, duration: 0.45, ease: "easeOut" }}
+      >
+        <DotLottieReact
+          src="https://lottie.host/abde670e-c9ef-40b6-9009-6dfb6bbebc0a/1ank9HLrmf.json"
+          loop
+          autoplay
+          style={{ width: 260, height: 260 }}
+        />
+      </motion.div>
+
+      {/* Arrow + label below the tab ring */}
       <motion.div
         className="pointer-events-none fixed z-[1000] flex flex-col items-center gap-1.5"
         style={{
