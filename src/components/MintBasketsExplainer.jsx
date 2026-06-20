@@ -245,20 +245,13 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
     height: tabRect.height + tpad * 2,
   } : null;
 
-  // Callout on the left blur panel
-  const calloutWidth  = Math.max(80, cardHole.left - 18);
-  const calloutRight  = cardHole.left - 14;
-  // Position callout vertically centred in the gap between the tab and the card.
-  // This keeps the text clearly between the two highlighted elements on all
-  // screen sizes, instead of drifting down toward card-centre on tall viewports.
-  const gapTop    = tabHole ? tabHole.bottom + 12 : 80;
-  const gapBottom = cardHole.top - 12;
-  const calloutTop = Math.max(80, (gapTop + gapBottom) / 2 - 140);
-  // Only use the left callout when the card genuinely starts far enough from the
-  // left edge (>120 px). On mobile the card is nearly full-width so cardHole.left
-  // is tiny — the Math.max(80,…) floor made hasLeftSpace always true even though
-  // the callout was rendered off-screen. Fall through to the bottom panel instead.
-  const hasLeftSpace  = cardHole.left > 120;
+  // Callout always sits centred horizontally between the tab and the card.
+  // On every screen size (mobile + desktop) the panel appears in the gap
+  // between the highlighted tab above and the highlighted card below —
+  // never off to one side.
+  const panelTop = (tabHole ? tabHole.bottom : 80) + 8;
+  const panelMaxWidth = 460;
+  const panelWidth = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : panelMaxWidth, panelMaxWidth);
 
   const desc =
     "Top JSE companies — built for long-term growth.";
@@ -282,6 +275,23 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   return (
     <>
       <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} onClick={onDone} />
+
+      {/* White card backdrop — sits inside the hole exactly over the card.
+          Blocks any sibling-section content (next sector rows) that overlaps
+          the card's position after the translateY push, preventing bleed-through
+          of text/charts from cards in rows below. */}
+      <div
+        className="pointer-events-none fixed"
+        style={{
+          top:    cardRect.top,
+          left:   cardRect.left,
+          width:  cardRect.width,
+          height: cardRect.height,
+          borderRadius: Math.max(16, cardRadius ?? 20),
+          background: "#fff",
+          zIndex: 997,
+        }}
+      />
 
       {/* Tab ring stays alive */}
       <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={1001} pulse={true} />
@@ -307,138 +317,67 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
         />
       </motion.div>
 
-      {/* Left callout — desktop / wide screens */}
-      {hasLeftSpace && (
-        <motion.div
-          className="pointer-events-auto fixed z-[1002]"
-          style={{
-            top: calloutTop,
-            right: `calc(100vw - ${calloutRight}px)`,
-            width: calloutWidth,
-            display: "flex",
-            flexDirection: "column",
-            ...glassBg,
-            borderRadius: 18,
-            padding: "16px 18px 14px",
-          }}
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ delay: 0.18, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+      {/* Callout panel — always centred horizontally between the highlighted
+          tab above and the highlighted card below, on all screen sizes. */}
+      <motion.div
+        className="pointer-events-auto fixed z-[1002]"
+        style={{
+          top:       panelTop,
+          left:      "50%",
+          transform: "translateX(-50%)",
+          width:     panelWidth,
+          ...glassBg,
+          borderRadius: 18,
+          padding: "14px 18px 14px",
+        }}
+        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <motion.p
+          style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
+            letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
         >
-          {/* Name */}
-          <motion.p
-            style={{ fontSize: 20, fontWeight: 900, lineHeight: 1.1,
-              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.32, duration: 0.32, ease: "easeOut" }}
-          >
-            {displayName}
-          </motion.p>
+          {displayName}
+        </motion.p>
 
-          {/* Divider */}
-          <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 10, originX: 0 }}
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.44, duration: 0.28 }}
-          />
-
-          {/* Short desc */}
-          <motion.p
-            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.52, duration: 0.28, ease: "easeOut" }}
-          >
-            {desc}
-          </motion.p>
-
-          {/* Explanation — word reveal */}
-          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
-            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
-            <WordReveal text={explanation} baseDelay={0.64} />
-          </p>
-
-          {/* Got it */}
-          <motion.button
-            onClick={onDone}
-            style={{
-              alignSelf: "flex-start", padding: "7px 18px", borderRadius: 9,
-              fontSize: 12, fontWeight: 600, letterSpacing: "0.04em",
-              color: "#fff", background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 0.92, duration: 0.24 }}
-            whileTap={{ scale: 0.93 }}
-          >
-            Got it
-          </motion.button>
-        </motion.div>
-      )}
-
-      {/* Middle panel — mobile: sits in the gap between the tab and the card */}
-      {!hasLeftSpace && (
         <motion.div
-          className="pointer-events-auto fixed z-[1002]"
-          style={{
-            top:   (tabHole ? tabHole.bottom : 80) + 8,
-            left:  16,
-            right: 16,
-            ...glassBg,
-            borderRadius: 18,
-            padding: "14px 18px 14px",
-          }}
-          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+          initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+          transition={{ delay: 0.46, duration: 0.28 }}
+        />
+
+        <motion.p
+          style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+            lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
         >
-          <motion.p
-            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
-              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
-          >
-            {displayName}
-          </motion.p>
+          {desc}
+        </motion.p>
 
-          <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.46, duration: 0.28 }}
-          />
+        <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+          color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+          <WordReveal text={explanation} baseDelay={0.66} />
+        </p>
 
-          <motion.p
-            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
-          >
-            {desc}
-          </motion.p>
-
-          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
-            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
-            <WordReveal text={explanation} baseDelay={0.66} />
-          </p>
-
-          <motion.button
-            onClick={onDone}
-            style={{
-              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-              letterSpacing: "0.04em", color: "#fff",
-              background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
-            }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 0.90, duration: 0.24 }}
-            whileTap={{ scale: 0.93 }}
-          >
-            Got it
-          </motion.button>
-        </motion.div>
-      )}
+        <motion.button
+          onClick={onDone}
+          style={{
+            padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+            letterSpacing: "0.04em", color: "#fff",
+            background: "rgba(255,255,255,0.14)",
+            border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+          }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ delay: 0.90, duration: 0.24 }}
+          whileTap={{ scale: 0.93 }}
+        >
+          Got it
+        </motion.button>
+      </motion.div>
     </>
   );
 }
