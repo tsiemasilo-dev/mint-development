@@ -1299,19 +1299,14 @@ function FactsheetCoachMark({ onDone }) {
   const [exiting, setExiting]   = useState(false);
 
   useEffect(() => {
-    // Lock scroll
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const appContent = document.querySelector('.app-content');
     const prevApp = appContent ? appContent.style.overflow : '';
     if (appContent) appContent.style.overflow = 'hidden';
 
-    // Capture the card rect
     const el = document.querySelector('[data-coach-factsheet-card="true"]');
-    if (el) {
-      const r = el.getBoundingClientRect();
-      setCardRect(r);
-    }
+    if (el) setCardRect(el.getBoundingClientRect());
 
     return () => {
       document.body.style.overflow = prev;
@@ -1326,30 +1321,36 @@ function FactsheetCoachMark({ onDone }) {
 
   if (!cardRect) return null;
 
-  const RADIUS = 20;
-  const PAD    = 10;
-  const W      = window.innerWidth;
-  const H      = window.innerHeight;
-  const hx = cardRect.left - PAD;
-  const hy = cardRect.top  - PAD;
-  const hw = cardRect.width  + PAD * 2;
-  const hh = cardRect.height + PAD * 2;
+  // card is rounded-3xl = 24px; pad=12 → ring radius = 24+12 = 36
+  const PAD         = 12;
+  const CARD_RADIUS = 24;
+  const RING_RADIUS = CARD_RADIUS + PAD;
+  const W = window.innerWidth;
+  const H = window.innerHeight;
 
-  const clipPath = `polygon(
-    0% 0%, 100% 0%, 100% 100%, 0% 100%,
-    0% ${hy + RADIUS}px,
-    ${hx}px ${hy + RADIUS}px,
-    ${hx}px ${hy + hh - RADIUS}px,
-    ${hx + RADIUS}px ${hy + hh}px,
-    ${hx + hw - RADIUS}px ${hy + hh}px,
-    ${hx + hw}px ${hy + hh - RADIUS}px,
-    ${hx + hw}px ${hy + RADIUS}px,
-    ${hx + hw - RADIUS}px ${hy}px,
-    ${hx + RADIUS}px ${hy}px,
-    ${hx}px ${hy + RADIUS}px,
-    0% ${hy + RADIUS}px,
-    0% 0%
-  )`;
+  const hole = {
+    top:    cardRect.top    - PAD,
+    left:   cardRect.left   - PAD,
+    right:  cardRect.right  + PAD,
+    bottom: cardRect.bottom + PAD,
+    width:  cardRect.width  + PAD * 2,
+    height: cardRect.height + PAD * 2,
+  };
+
+  // Same 4-panel blur approach as Phase 0/1/2
+  const PANEL = {
+    position: 'absolute',
+    background: 'rgba(0,0,0,0.72)',
+    backdropFilter: 'blur(7px)',
+    WebkitBackdropFilter: 'blur(7px)',
+  };
+
+  const glassBg = {
+    background: 'rgba(8,8,20,0.88)',
+    backdropFilter: 'blur(28px)',
+    WebkitBackdropFilter: 'blur(28px)',
+    border: '1px solid rgba(255,255,255,0.14)',
+  };
 
   return (
     <AnimatePresence>
@@ -1360,86 +1361,126 @@ function FactsheetCoachMark({ onDone }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.32 }}
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, pointerEvents: 'none' }}
         >
-          {/* Dark overlay with hole */}
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              background: 'rgba(0,0,0,0.72)',
-              backdropFilter: 'blur(3px)',
-              WebkitBackdropFilter: 'blur(3px)',
-              clipPath,
-              pointerEvents: 'auto',
-            }}
-          />
+          {/* 4-panel blur overlay — clean hole around the card */}
+          {/* Top panel */}
+          <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: hole.top, pointerEvents: 'auto' }} />
+          {/* Bottom panel */}
+          <div style={{ ...PANEL, top: hole.bottom, left: 0, right: 0, bottom: 0, pointerEvents: 'auto' }} />
+          {/* Left panel */}
+          <div style={{ ...PANEL, top: hole.top, left: 0, width: hole.left, height: hole.height, pointerEvents: 'auto' }} />
+          {/* Right panel */}
+          <div style={{ ...PANEL, top: hole.top, left: hole.right, right: 0, height: hole.height, pointerEvents: 'auto' }} />
 
-          {/* Glow ring around the card */}
+          {/* Pulsing white ring — matches Phase 1/2 AnimatedRing style */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.4 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.18, duration: 0.30 }}
             style={{
               position: 'absolute',
-              left:   hx - 3,
-              top:    hy - 3,
-              width:  hw + 6,
-              height: hh + 6,
-              borderRadius: RADIUS + 4,
-              border: '2px solid rgba(168,85,247,0.7)',
-              boxShadow: '0 0 20px rgba(168,85,247,0.45)',
+              top: hole.top, left: hole.left,
+              width: hole.width, height: hole.height,
+              borderRadius: RING_RADIUS,
+              border: '2px solid rgba(255,255,255,0.85)',
+              boxShadow: '0 0 24px 6px rgba(255,255,255,0.16)',
               pointerEvents: 'none',
+              zIndex: 10001,
             }}
           />
+          {/* Second ring — animated pulse */}
+          <motion.div
+            style={{
+              position: 'absolute',
+              top: hole.top, left: hole.left,
+              width: hole.width, height: hole.height,
+              borderRadius: RING_RADIUS,
+              border: '1.5px solid rgba(255,255,255,0.50)',
+              pointerEvents: 'none',
+              zIndex: 10001,
+            }}
+            animate={{ opacity: [0.6, 0.15, 0.6] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
 
-          {/* Text panel — bottom of screen */}
+          {/* Dark glass callout panel — centred below the card, same style as Phase 1/2 */}
           <div
             style={{
               position: 'absolute',
               bottom: 0,
               left: 0,
               right: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               pointerEvents: 'auto',
+              zIndex: 10002,
             }}
           >
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.30, duration: 0.40, ease: [0.22,1,0.36,1] }}
+              transition={{ delay: 0.30, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
               style={{
-                margin: '0 16px 40px',
-                padding: '20px 20px 18px',
+                ...glassBg,
+                width: Math.min(W - 32, 460),
                 borderRadius: 20,
-                background: 'rgba(255,255,255,0.10)',
-                border: '1px solid rgba(255,255,255,0.22)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
+                padding: '18px 20px 16px',
+                marginBottom: 40,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 12,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+                gap: 10,
               }}
             >
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '0.01em', margin: 0 }}>
+              {/* Title */}
+              <motion.p
+                style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', color: '#fff', margin: 0 }}
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.36, duration: 0.28, ease: 'easeOut' }}
+              >
                 Strategy Detail
-              </p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', textAlign: 'center', margin: 0, lineHeight: 1.55 }}>
-                This card shows your chosen strategy's name, risk level, and performance data. Scroll down to explore holdings, returns, and more.
-              </p>
+              </motion.p>
+
+              {/* Divider */}
+              <motion.div
+                style={{ height: 1, background: 'rgba(255,255,255,0.22)', width: '100%', originX: 0 }}
+                initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+                transition={{ delay: 0.46, duration: 0.28 }}
+              />
+
+              {/* Description */}
+              <motion.p
+                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: 'rgba(255,255,255,0.82)', textAlign: 'center', margin: 0 }}
+                initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.52, duration: 0.28, ease: 'easeOut' }}
+              >
+                This card shows your strategy's name, risk level, and performance. Scroll down to explore holdings, returns, and more.
+              </motion.p>
+
+              {/* Got it button — matches Phase 1 "Next →" pill style */}
               <motion.button
                 onClick={handleGotIt}
-                style={{
-                  padding: '7px 24px', borderRadius: 9, fontSize: 12, fontWeight: 600,
-                  letterSpacing: '0.04em', color: '#fff',
-                  background: 'rgba(255,255,255,0.14)',
-                  border: '1px solid rgba(255,255,255,0.36)', cursor: 'pointer',
-                }}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                transition={{ delay: 0.60, duration: 0.24 }}
-                whileTap={{ scale: 0.93 }}
+                transition={{ delay: 0.62, duration: 0.24 }}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  marginTop: 2,
+                  padding: '10px 32px',
+                  borderRadius: 50,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                  color: '#fff',
+                  background: 'rgba(255,255,255,0.18)',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
               >
-                Got it
+                Got it →
               </motion.button>
             </motion.div>
           </div>
