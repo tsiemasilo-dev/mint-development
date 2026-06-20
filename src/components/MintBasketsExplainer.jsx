@@ -967,11 +967,18 @@ export default function MintBasketsExplainer({
 
       // Also hide the other strategy cards within the same list so they
       // don't bleed through the spotlight hole around the highlighted card.
-      if (el.parentElement) {
-        Array.from(el.parentElement.children).forEach(sibling => {
+      // Use opacity:0 + pointer-events:none (visibility:hidden alone doesn't
+      // prevent overflow-x containers from painting sibling content).
+      const cardList = el.parentElement;
+      if (cardList) {
+        // Clip the scroll container so no sibling content bleeds outside it
+        cardList.dataset.coachOverflow = cardList.style.overflow;
+        cardList.style.overflow = 'hidden';
+        Array.from(cardList.children).forEach(sibling => {
           if (sibling !== el) {
+            sibling.style.opacity = '0';
+            sibling.style.pointerEvents = 'none';
             hidden.push(sibling);
-            sibling.style.visibility = 'hidden';
           }
         });
       }
@@ -996,9 +1003,19 @@ export default function MintBasketsExplainer({
       cardSectionRef.current.style.transform  = '';
       cardSectionRef.current = null;
     }
-    // Restore sibling visibility
-    hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
+    // Restore sibling visibility + opacity + overflow
+    hiddenSiblingsRef.current.forEach(el => {
+      el.style.visibility = '';
+      el.style.opacity = '';
+      el.style.pointerEvents = '';
+    });
     hiddenSiblingsRef.current = [];
+    // Restore card list overflow that was set to 'hidden' during tour
+    const cardList = document.querySelector('[data-coach-overflow]');
+    if (cardList) {
+      cardList.style.overflow = cardList.dataset.coachOverflow || '';
+      delete cardList.dataset.coachOverflow;
+    }
     // Remove the cloned pending section and restore the original
     if (pendingStickyElRef.current) {
       const p = pendingStickyElRef.current;
@@ -1125,8 +1142,18 @@ export default function MintBasketsExplainer({
         cardSectionRef.current = null;
       }
       // Restore visibility of sections that were hidden to prevent bleed-through
-      hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
+      hiddenSiblingsRef.current.forEach(el => {
+        el.style.visibility = '';
+        el.style.opacity = '';
+        el.style.pointerEvents = '';
+      });
       hiddenSiblingsRef.current = [];
+      // Restore card list overflow
+      const cardList2 = document.querySelector('[data-coach-overflow]');
+      if (cardList2) {
+        cardList2.style.overflow = cardList2.dataset.coachOverflow || '';
+        delete cardList2.dataset.coachOverflow;
+      }
       // Remove the cloned pending section and restore the original
       if (pendingStickyElRef.current) {
         const p = pendingStickyElRef.current;
