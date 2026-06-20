@@ -8,7 +8,7 @@ const PANEL = {
   backdropFilter: "blur(7px)",
   background: "rgba(0,0,0,0.20)",
   position: "fixed",
-  zIndex: 998,
+  zIndex: 10000,
   pointerEvents: "auto",
 };
 
@@ -19,7 +19,7 @@ function SingleHoleOverlay({ hole, onClick }) {
   if (!hole) return (
     <motion.div
       className="fixed inset-0 pointer-events-auto"
-      style={{ ...PANEL, zIndex: 998 }}
+      style={{ ...PANEL, zIndex: 10000 }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onClick}
     />
@@ -31,7 +31,7 @@ function SingleHoleOverlay({ hole, onClick }) {
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}
+      style={{ position: "fixed", inset: 0, zIndex: 10000, pointerEvents: "none" }}
     >
       <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: t }} onClick={onClick} />
       <div style={{ ...PANEL, top: b, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
@@ -49,7 +49,7 @@ function DualHoleOverlay({ tabHole, cardHole, onClick }) {
   if (!tabHole || !cardHole) return (
     <motion.div
       className="fixed inset-0 pointer-events-auto"
-      style={{ ...PANEL, zIndex: 998 }}
+      style={{ ...PANEL, zIndex: 10000 }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onClick}
     />
@@ -62,7 +62,7 @@ function DualHoleOverlay({ tabHole, cardHole, onClick }) {
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}
+      style={{ position: "fixed", inset: 0, zIndex: 10000, pointerEvents: "none" }}
     >
       {/* above tab */}
       <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: tt }} onClick={onClick} />
@@ -85,7 +85,7 @@ function DualHoleOverlay({ tabHole, cardHole, onClick }) {
 /* ─────────────────────────────────────────────────────────
    Reusable pulsing ring
 ───────────────────────────────────────────────────────── */
-function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 999, pulse = true }) {
+function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 10001, pulse = true }) {
   if (!rect) return null;
   const style = {
     top:    rect.top    - pad,
@@ -160,11 +160,11 @@ function TabSpotlight({ rect, onLottieLoad }) {
   return (
     <>
       <SingleHoleOverlay hole={hole} />
-      <AnimatedRing rect={rect} pad={pad} borderRadius={16} zIndex={999} />
+      <AnimatedRing rect={rect} pad={pad} borderRadius={16} zIndex={10001} />
 
       {/* Lottie animation — lower-centered in the open space above the tab */}
       <motion.div
-        className="pointer-events-none fixed z-[1000]"
+        className="pointer-events-none fixed z-[10002]"
         style={{
           top:  lottieTop,
           left: "50%",
@@ -189,7 +189,7 @@ function TabSpotlight({ rect, onLottieLoad }) {
 
       {/* Arrow + label below the tab ring */}
       <motion.div
-        className="pointer-events-none fixed z-[1000] flex flex-col items-center gap-1.5"
+        className="pointer-events-none fixed z-[10002] flex flex-col items-center gap-1.5"
         style={{
           top:  hole.top + hole.height + 12,
           left: hole.left + hole.width / 2,
@@ -256,11 +256,11 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
       <SingleHoleOverlay hole={hole} onClick={onNext} />
 
       {/* Pulsing ring — identical style to Phase 0 AnimatedRing */}
-      <AnimatedRing rect={btnRect} pad={pad} borderRadius={ringRadius} zIndex={999} pulse={true} />
+      <AnimatedRing rect={btnRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
 
       {/* Bouncing down-arrow pointing at the button — appears just above the ring */}
       <motion.div
-        className="pointer-events-none fixed z-[1000] flex flex-col items-center"
+        className="pointer-events-none fixed z-[10002] flex flex-col items-center"
         style={{
           top:       hole.top - 34,
           left:      hole.left + hole.width / 2,
@@ -279,7 +279,7 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
 
       {/* Glass callout — fades in ~300 ms after the ring, above the hole */}
       <div
-        className="pointer-events-none fixed z-[1002]"
+        className="pointer-events-none fixed z-[10004]"
         style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
@@ -405,11 +405,11 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
       <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} onClick={onDone} />
 
       {/* Tab ring stays alive */}
-      <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={1001} pulse={true} />
+      <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={10003} pulse={true} />
 
       {/* Card ring — matches card shape */}
       <motion.div
-        className="pointer-events-none fixed z-[999]"
+        className="pointer-events-none fixed z-[10001]"
         style={{ top: cardHole.top, left: cardHole.left, width: cardHole.width, height: cardHole.height }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, scale: pressed ? [1, 0.975, 1] : 1 }}
@@ -433,7 +433,7 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           Outer div owns the fixed position + centering so Framer Motion's
           `y` animation on the inner div never clobbers the translateX(-50%). */}
       <div
-        className="pointer-events-none fixed z-[1002]"
+        className="pointer-events-none fixed z-[10004]"
         style={{
           top:       panelTop,
           left:      "50%",
