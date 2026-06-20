@@ -321,19 +321,23 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
         </motion.div>
       )}
 
-      {/* Bottom fallback when no left space */}
+      {/* Middle fallback — sits in the gap between the tab and the card */}
       {!hasLeftSpace && (
         <motion.div
           className="pointer-events-auto fixed z-[1002]"
           style={{
-            bottom: 52, left: 16, right: 16,
-            background: "rgba(18,18,28,0.60)",
-            backdropFilter: "blur(16px)",
+            top:  (tabHole ? tabHole.bottom : 80) + 8,
+            left: 16,
+            right: 16,
+            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 24,
+            overflowY: "auto",
+            background: "rgba(18,18,28,0.72)",
+            backdropFilter: "blur(18px)",
             borderRadius: 20,
             border: "1px solid rgba(255,255,255,0.18)",
-            padding: "22px 22px 18px",
+            padding: "18px 20px 16px",
           }}
-          initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }} transition={{ delay: 0.3, duration: 0.4 }}
         >
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.20em",
