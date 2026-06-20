@@ -1209,10 +1209,13 @@ export default function MintBasketsExplainer({
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
                     const appContent = document.querySelector('.app-content');
-                    // Temporarily release Y overflow so we can scroll
+                    // Release Y overflow so we can scroll to position the section
                     if (appContent) appContent.style.overflowY = 'auto';
-                    // Position the section ~100px from the top so it looks centred,
-                    // not jammed at the very top of the viewport.
+                    // Position the section ~100px from the top so it looks centred.
+                    // NOTE: we do NOT re-apply overflowY:'hidden' because doing so
+                    // causes the browser to reset scrollTop back to 0, which would
+                    // move the section off-screen before we can measure it.
+                    // The wheel/touchmove/keydown event locks already prevent user scroll.
                     if (appContent) {
                       const containerRect = appContent.getBoundingClientRect();
                       const elRect = el.getBoundingClientRect();
@@ -1220,14 +1223,12 @@ export default function MintBasketsExplainer({
                       const targetTop = 100; // px from top of viewport
                       appContent.scrollTop = Math.max(0, naturalOffset - targetTop);
                     }
-                    // Re-lock on next frame, then capture rect once sticky has settled
-                    requestAnimationFrame(() => {
-                      if (appContent) appContent.style.overflowY = 'hidden';
-                      setTimeout(() => {
-                        setPhase5PendingRect(el.getBoundingClientRect());
-                        setPhase(5);
-                      }, 120);
-                    });
+                    // Capture rect after scroll settles (scrollTop is stable because
+                    // event-based locks prevent any user-initiated scroll)
+                    setTimeout(() => {
+                      setPhase5PendingRect(el.getBoundingClientRect());
+                      setPhase(5);
+                    }, 120);
                     return;
                   }
                   if (++attempts < 100) setTimeout(pollPending, 50);
