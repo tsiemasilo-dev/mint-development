@@ -326,9 +326,11 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
         <motion.div
           className="pointer-events-auto fixed z-[1002]"
           style={{
-            top:  (tabHole ? tabHole.bottom : 80) + 8,
-            left: 16,
-            right: 16,
+            top:      (tabHole ? tabHole.bottom : 80) + 8,
+            left:     16,
+            right:    16,
+            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 24,
+            overflow: "hidden",
             background: "rgba(18,18,28,0.72)",
             backdropFilter: "blur(18px)",
             borderRadius: 20,
@@ -453,18 +455,18 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
       el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
 
-    // After the bottom nav has slid away (~400 ms), scroll main content DOWN
-    // by the navbar height so the card visually occupies the freed space.
+    // After horizontal scroll + nav slide-away settle (~480 ms), measure the
+    // card's real screen position and push it to 70 % of viewport height.
+    // This guarantees the text panel between the tab and the card has room.
     const t1 = setTimeout(() => {
-      const navHeight =
-        parseInt(getComputedStyle(document.documentElement).getPropertyValue('--navbar-height'), 10) || 75;
+      const currentRect = el.getBoundingClientRect();
+      const targetCardTop = Math.floor(window.innerHeight * 0.70);
+      const scrollAmount = currentRect.top - targetCardTop;
       const appContent = document.querySelector('.app-content');
-      if (appContent) {
-        // Temporarily allow scroll, nudge down, then re-lock
-        appContent.style.overflow = 'hidden';
-        appContent.scrollTop += navHeight;
+      if (appContent && scrollAmount > 0) {
+        appContent.scrollTop += scrollAmount;
       }
-    }, 420);
+    }, 480);
 
     const t = setTimeout(() => setCardRect(el.getBoundingClientRect()), 950);
     return () => { clearTimeout(t); clearTimeout(t1); };
