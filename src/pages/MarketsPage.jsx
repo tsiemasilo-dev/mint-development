@@ -2409,6 +2409,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     setSelectedStrategy(null);
                     setTimeout(() => onInvestNow?.(enrichedStrategy), 220);
                   }}
+                  data-coach-invest-btn="true"
                   className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
                 >
                   Invest Now

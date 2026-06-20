@@ -147,6 +147,109 @@ function WordReveal({ text, baseDelay = 0, wordStyle }) {
 }
 
 /* ─────────────────────────────────────────────────────────
+   Phase 3 — Invest Now button spotlight
+───────────────────────────────────────────────────────── */
+function InvestBtnSpotlight({ btnRect, onDone }) {
+  if (!btnRect) return null;
+
+  const pad = 12;
+  const hole = {
+    top:    btnRect.top    - pad,
+    left:   btnRect.left   - pad,
+    right:  btnRect.right  + pad,
+    bottom: btnRect.bottom + pad,
+    width:  btnRect.width  + pad * 2,
+    height: btnRect.height + pad * 2,
+  };
+
+  const ringRadius = 28;
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
+  const panelMaxWidth = Math.min(screenW - 40, 420);
+  const panelTop = Math.max(20, Math.round(hole.top * 0.36));
+
+  const glassBg = {
+    background: "rgba(8,8,20,0.88)",
+    backdropFilter: "blur(28px)",
+    WebkitBackdropFilter: "blur(28px)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  };
+
+  return (
+    <>
+      <SingleHoleOverlay hole={hole} onClick={onDone} />
+      <AnimatedRing rect={btnRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
+
+      {/* Bouncing arrow pointing at the button */}
+      <motion.div
+        className="pointer-events-none fixed z-[10002] flex flex-col items-center"
+        style={{ top: hole.top - 34, left: hole.left + hole.width / 2, transform: "translateX(-50%)" }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ delay: 0.25, duration: 0.3 }}
+      >
+        <motion.div animate={{ y: [0, 6, 0] }} transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}>
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3L8 13M13 8L8 13L3 8" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </motion.div>
+      </motion.div>
+
+      {/* Dark glass callout */}
+      <div className="pointer-events-none fixed z-[10004]"
+        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
+      >
+        <motion.div
+          className="pointer-events-auto"
+          style={{ ...glassBg, borderRadius: 20, padding: "16px 18px 14px" }}
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.32, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.42, duration: 0.28, ease: "easeOut" }}
+          >
+            Invest Now
+          </motion.p>
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.52, duration: 0.30 }}
+          />
+          <motion.p
+            style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.4, color: "rgba(255,255,255,0.96)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.60, duration: 0.26, ease: "easeOut" }}
+          >
+            Ready to grow your wealth?
+          </motion.p>
+          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.70)", marginBottom: 16 }}>
+            <WordReveal
+              text="Tap Invest Now to put money into this basket. You choose the amount and we take care of the rest."
+              baseDelay={0.70}
+            />
+          </p>
+          <motion.button
+            onClick={onDone}
+            style={{
+              padding: "8px 22px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+              letterSpacing: "0.04em", color: "#fff",
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.38)", cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 1.05, duration: 0.26 }}
+            whileTap={{ scale: 0.93 }}
+          >
+            Got it →
+          </motion.button>
+        </motion.div>
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    Phase 0 — Tab coach mark
 ───────────────────────────────────────────────────────── */
 function TabSpotlight({ rect, onLottieLoad }) {
@@ -342,7 +445,7 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
             transition={{ delay: 1.05, duration: 0.26 }}
             whileTap={{ scale: 0.93 }}
           >
-            View Factsheet →
+            Next →
           </motion.button>
         </motion.div>
       </div>
