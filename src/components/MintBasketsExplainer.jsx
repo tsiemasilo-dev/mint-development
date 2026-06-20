@@ -419,7 +419,8 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   const [cardDesc, setCardDesc]   = useState(
     "A high growth equity strategy targeting leading JSE companies with strong long term upside."
   );
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible]         = useState(true);
+  const [panelExiting, setPanelExiting] = useState(false);
   const phaseTimer    = useRef(null);
   const cardSectionRef = useRef(null); // element we translateY to make room
 
@@ -516,24 +517,27 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   }, [phase]);
 
   const handleDone = useCallback(() => {
-    // 1. Restore the pushed card section
-    if (cardSectionRef.current) {
-      cardSectionRef.current.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1)';
-      cardSectionRef.current.style.transform  = '';
-      cardSectionRef.current = null;
-    }
-    // 2. Slide nav back in — remove the forced-hide override so the nav
-    //    uses its own transition (0.35 s ease) to animate back up from off-screen.
+    // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
+    setPanelExiting(true);
+    // 2. Restore scroll + slide nav back in simultaneously
     document.getElementById('__mint_coach_style__')?.remove();
-    // 3. Restore scroll locks eagerly (cleanup will no-op since style already removed)
     document.body.style.overflow = '';
     const appContent = document.querySelector('.app-content');
     if (appContent) appContent.style.overflow = '';
-    // 4. Give nav ~320 ms to slide in, then fade out overlay and call onDone
+    // 3. After overlay has faded (~180 ms), THEN slide the card back up
+    //    — card is invisible behind the faded overlay, so there is no overlap
+    setTimeout(() => {
+      if (cardSectionRef.current) {
+        cardSectionRef.current.style.transition = 'transform 0.45s cubic-bezier(0.4,0,0.2,1)';
+        cardSectionRef.current.style.transform  = '';
+        cardSectionRef.current = null;
+      }
+    }, 180);
+    // 4. Unmount after card has settled
     setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDone?.(), 280);
-    }, 320);
+      setTimeout(() => onDone?.(), 200);
+    }, 640);
   }, [onDone]);
 
   if (!visible) return null;
@@ -546,7 +550,13 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
         </motion.div>
       )}
       {phase === 1 && cardRect && (
-        <motion.div key="phase1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div
+          key="phase1"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: panelExiting ? 0 : 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+        >
           <CardSpotlight
             cardRect={cardRect}
             cardRadius={cardRadius}
