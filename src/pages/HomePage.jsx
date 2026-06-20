@@ -639,6 +639,21 @@ const HomePage = ({
     return () => window.removeEventListener('mint-coach-sim-update', handler);
   }, []);
 
+  // Auto-scroll to pending section when sim activates via event
+  useEffect(() => {
+    if (coachSimTick === 0) return;
+    const simName = sessionStorage.getItem('mint_coach_pending_sim');
+    console.log('[HomePage] coachSimTick changed =', coachSimTick, 'simName=', simName);
+    if (!simName) return;
+    setTimeout(() => {
+      const el = document.querySelector('[data-coach-pending-orders="true"]');
+      console.log('[HomePage] scroll target el=', el);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  }, [coachSimTick]);
+
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
@@ -1603,183 +1618,12 @@ const HomePage = ({
           />
         ) : null}
 
-        {/* Market Insights */}
-        <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                Market Insights
-              </p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 bg-slate-50">
-                  <Gift className="h-2.5 w-2.5" />
-                </span>
-                <span>Latest updates for your portfolio</span>
-              </div>
-            </div>
-            <button
-              onClick={() => onOpenNews && onOpenNews()}
-              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
-            >
-              View all
-            </button>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {news.length > 0 ? (
-              news.slice(0, 4).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
-                        {item.source || 'Market'}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {formatDate(item.published_at)}
-                      </span>
-                    </div>
-                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
-                      {item.title}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
-                </button>
-              ))
-            ) : !loadingNews && (
-              <div className="p-6 text-center">
-                <p className="text-xs text-slate-400">No recent insights available.</p>
-              </div>
-            )}
-
-            {loadingNews && (
-              <div className="divide-y divide-slate-100">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="px-5 py-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-4 w-14 rounded-full" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-3/4" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Investment Goals */}
-        <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-900">
-                Investment Goals
-              </p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 bg-slate-50">
-                  <Target className="h-2.5 w-2.5" />
-                </span>
-                <span>Track your long-term wealth</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowGoalsModal(true)}
-              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
-            >
-              Manage
-            </button>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {loadingGoals ? (
-              <div className="divide-y divide-slate-100">
-                {[0, 1].map((i) => (
-                  <div key={i} className="flex items-center gap-3 px-5 py-4">
-                    <Skeleton className="h-10 w-10 rounded-2xl" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-1.5 w-full rounded-full" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : goals.length > 0 ? (
-              goals.map((goal) => {
-                const invested = goal.current_amount || 0;
-                const target = goal.target_amount || 0;
-                const progress = target > 0 ? Math.min(100, (invested / target) * 100) : 0;
-                return (
-                  <button
-                    key={goal.id}
-                    type="button"
-                    onClick={() => handleEditClick(goal)}
-                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 flex-shrink-0">
-                      <Target className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{goal.name}</p>
-                        <p className="text-xs font-semibold text-slate-600 ml-2 flex-shrink-0">
-                          {Math.round(progress)}%
-                        </p>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden mb-1">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[10px] text-slate-400">
-                            R{Number(invested).toLocaleString()} of R{Number(target).toLocaleString()}
-                          </p>
-                          {goal.target_date && !isNaN(new Date(goal.target_date).getTime()) && (
-                            <p className="text-[10px] text-slate-400">
-                              • {new Date(goal.target_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                            </p>
-                          )}
-                        </div>
-                        {goal.linked_asset_name && (
-                          <p className="text-[10px] text-violet-500 truncate ml-2">
-                            {goal.linked_asset_name}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
-                  </button>
-                );
-              })
-            ) : (
-              <div className="p-10 text-center">
-                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
-                  <Target className="h-8 w-8" />
-                </div>
-                <p className="text-sm font-semibold text-slate-900 mb-1">No goals yet</p>
-                <p className="text-xs text-slate-500 mb-6">Set investment goals to track your progress</p>
-                <button
-                  type="button"
-                  onClick={() => setShowGoalsModal(true)}
-                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
-                >
-                  Create Goal
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Pending Orders */}
         {(() => {
           const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
           const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
+          const _dbgCoachSim = sessionStorage.getItem('mint_coach_pending_sim');
+          console.log('[PendingOrders IIFE] coachSimName=', _dbgCoachSim, 'safeAssets=', safeAssets.length, 'safeStrategies=', safeStrategies.length, 'coachSimTick=', coachSimTick);
           // Include fully-pending assets AND mixed assets (some batches filled, some
           // pending) so a re-buy of a security you already hold surfaces its pending
           // batch here while the filled portion stays in the portfolio carousel.
@@ -2114,6 +1958,179 @@ const HomePage = ({
             </section>
           );
         })()}
+
+        {/* Market Insights */}
+        <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">
+                Market Insights
+              </p>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 bg-slate-50">
+                  <Gift className="h-2.5 w-2.5" />
+                </span>
+                <span>Latest updates for your portfolio</span>
+              </div>
+            </div>
+            <button
+              onClick={() => onOpenNews && onOpenNews()}
+              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
+            >
+              View all
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {news.length > 0 ? (
+              news.slice(0, 4).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => onOpenNewsArticle && onOpenNewsArticle(item.id)}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                        {item.source || 'Market'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {formatDate(item.published_at)}
+                      </span>
+                    </div>
+                    <p className="text-[13px] font-semibold text-slate-900 line-clamp-2 leading-snug">
+                      {item.title}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                </button>
+              ))
+            ) : !loadingNews && (
+              <div className="p-6 text-center">
+                <p className="text-xs text-slate-400">No recent insights available.</p>
+              </div>
+            )}
+
+            {loadingNews && (
+              <div className="divide-y divide-slate-100">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="px-5 py-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-14 rounded-full" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Investment Goals */}
+        <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">
+                Investment Goals
+              </p>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 bg-slate-50">
+                  <Target className="h-2.5 w-2.5" />
+                </span>
+                <span>Track your long-term wealth</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowGoalsModal(true)}
+              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
+            >
+              Manage
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {loadingGoals ? (
+              <div className="divide-y divide-slate-100">
+                {[0, 1].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-5 py-4">
+                    <Skeleton className="h-10 w-10 rounded-2xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-1.5 w-full rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : goals.length > 0 ? (
+              goals.map((goal) => {
+                const invested = goal.current_amount || 0;
+                const target = goal.target_amount || 0;
+                const progress = target > 0 ? Math.min(100, (invested / target) * 100) : 0;
+                return (
+                  <button
+                    key={goal.id}
+                    type="button"
+                    onClick={() => handleEditClick(goal)}
+                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 flex-shrink-0">
+                      <Target className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{goal.name}</p>
+                        <p className="text-xs font-semibold text-slate-600 ml-2 flex-shrink-0">
+                          {Math.round(progress)}%
+                        </p>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden mb-1">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[10px] text-slate-400">
+                            R{Number(invested).toLocaleString()} of R{Number(target).toLocaleString()}
+                          </p>
+                          {goal.target_date && !isNaN(new Date(goal.target_date).getTime()) && (
+                            <p className="text-[10px] text-slate-400">
+                              • {new Date(goal.target_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          )}
+                        </div>
+                        {goal.linked_asset_name && (
+                          <p className="text-[10px] text-violet-500 truncate ml-2">
+                            {goal.linked_asset_name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
+                  </button>
+                );
+              })
+            ) : (
+              <div className="p-10 text-center">
+                <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-full bg-violet-50 text-violet-600 mb-4">
+                  <Target className="h-8 w-8" />
+                </div>
+                <p className="text-sm font-semibold text-slate-900 mb-1">No goals yet</p>
+                <p className="text-xs text-slate-500 mb-6">Set investment goals to track your progress</p>
+                <button
+                  type="button"
+                  onClick={() => setShowGoalsModal(true)}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+                >
+                  Create Goal
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Best Performing Assets — only shown when user has individual stock holdings
             (i.e. not part of a strategy). Strategies have their own section. */}

@@ -2325,13 +2325,21 @@ const App = () => {
       <PaymentSuccessPage
         strategyName={successStrategyName}
         onDone={() => {
+          console.log("[PaymentSuccess] onDone fired. successStrategyName=", successStrategyName, "ozow_pending=", sessionStorage.getItem("ozow_pending"));
           if (successStrategyName) {
             sessionStorage.setItem("mint_coach_pending_sim", successStrategyName);
+            console.log("[PaymentSuccess] Set mint_coach_pending_sim =", successStrategyName);
+          } else {
+            console.warn("[PaymentSuccess] successStrategyName is null/empty — sim will NOT be set");
           }
           sessionStorage.removeItem("ozow_pending");
           navigationHistory.current = [];
           setPreviousPageName(null);
           setCurrentPage("home");
+          // Trigger home page re-render so it picks up mint_coach_pending_sim
+          setTimeout(() => {
+            try { window.dispatchEvent(new Event("mint-coach-sim-update")); } catch {}
+          }, 100);
         }}
       />
     );
