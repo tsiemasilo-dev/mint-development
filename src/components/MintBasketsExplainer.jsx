@@ -96,9 +96,17 @@ function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 10001, pulse 
 
   return (
     <div className="pointer-events-none fixed" style={{ ...style, zIndex }}>
+      {/* Solid ring — dark outline makes it pop on both light and dark backgrounds */}
       <div className="absolute inset-0"
-        style={{ borderRadius, border: "2px solid rgba(255,255,255,0.90)",
-          boxShadow: "0 0 16px 4px rgba(255,255,255,0.22)" }} />
+        style={{
+          borderRadius,
+          border: "2px solid rgba(255,255,255,0.90)",
+          boxShadow: [
+            "0 0 0 1.5px rgba(0,0,0,0.28)",      // dark outline → visible on white
+            "0 0 16px 4px rgba(255,255,255,0.22)", // white glow → visible on dark
+          ].join(", "),
+        }}
+      />
       {pulse && (
         <>
           <motion.div className="absolute inset-0"
@@ -421,8 +429,8 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
       >
         <div className="absolute inset-0"
           style={{ borderRadius: ringRadius,
-            border: "2px solid rgba(255,255,255,0.85)",
-            boxShadow: "0 0 24px 6px rgba(255,255,255,0.16)" }}
+            border: "2px solid rgba(255,255,255,0.90)",
+            boxShadow: "0 0 0 1.5px rgba(0,0,0,0.28), 0 0 24px 6px rgba(255,255,255,0.16)" }}
         />
         <motion.div className="absolute inset-0"
           style={{ borderRadius: ringRadius, border: "1.5px solid rgba(255,255,255,0.50)" }}
