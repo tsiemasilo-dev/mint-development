@@ -342,19 +342,14 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
         </motion.div>
       )}
 
-      {/* Middle panel — mobile: sits in the gap between the tab and the card.
-          Flex column so the "Got it" button is ALWAYS anchored at the bottom
-          and never clipped by the maxHeight constraint.                      */}
+      {/* Middle panel — mobile: sits in the gap between the tab and the card */}
       {!hasLeftSpace && (
         <motion.div
           className="pointer-events-auto fixed z-[1002]"
           style={{
-            top:       (tabHole ? tabHole.bottom : 80) + 8,
-            left:      16,
-            right:     16,
-            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 20,
-            display:   "flex",
-            flexDirection: "column",
+            top:   (tabHole ? tabHole.bottom : 80) + 8,
+            left:  16,
+            right: 16,
             ...glassBg,
             borderRadius: 18,
             padding: "14px 18px 14px",
@@ -363,55 +358,49 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           exit={{ opacity: 0 }}
           transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Text area — shrinks inside maxHeight; overflow clips text before button */}
-          <div style={{ flex: "1 1 0", overflow: "hidden", minHeight: 0 }}>
-            <motion.p
-              style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
-                letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
-            >
-              {displayName}
-            </motion.p>
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
+              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
+          >
+            {displayName}
+          </motion.p>
 
-            <motion.div
-              style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
-              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-              transition={{ delay: 0.46, duration: 0.28 }}
-            />
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.46, duration: 0.28 }}
+          />
 
-            <motion.p
-              style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
-            >
-              {desc}
-            </motion.p>
+          <motion.p
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
+          >
+            {desc}
+          </motion.p>
 
-            <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
-              color: "rgba(255,255,255,0.68)", marginBottom: 0 }}>
-              <WordReveal text={explanation} baseDelay={0.66} />
-            </p>
-          </div>
+          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+            <WordReveal text={explanation} baseDelay={0.66} />
+          </p>
 
-          {/* Button — flex: 0 so it always gets its space, never clipped */}
-          <div style={{ flex: "0 0 auto", paddingTop: 12 }}>
-            <motion.button
-              onClick={onDone}
-              style={{
-                padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-                letterSpacing: "0.04em", color: "#fff",
-                background: "rgba(255,255,255,0.14)",
-                border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
-              }}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: 0.90, duration: 0.24 }}
-              whileTap={{ scale: 0.93 }}
-            >
-              Got it
-            </motion.button>
-          </div>
+          <motion.button
+            onClick={onDone}
+            style={{
+              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.04em", color: "#fff",
+              background: "rgba(255,255,255,0.14)",
+              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.90, duration: 0.24 }}
+            whileTap={{ scale: 0.93 }}
+          >
+            Got it
+          </motion.button>
         </motion.div>
       )}
     </>
