@@ -117,6 +117,27 @@ function AnimatedRing({ rect, pad = 9, borderRadius = 16, zIndex = 999, pulse = 
 }
 
 /* ─────────────────────────────────────────────────────────
+   Word-by-word reveal animation
+───────────────────────────────────────────────────────── */
+function WordReveal({ text, baseDelay = 0, wordStyle }) {
+  return (
+    <>
+      {text.split(" ").map((word, i) => (
+        <motion.span
+          key={i}
+          initial={{ opacity: 0, y: 9 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: baseDelay + i * 0.048, duration: 0.26, ease: "easeOut" }}
+          style={{ display: "inline-block", marginRight: "0.26em", ...wordStyle }}
+        >
+          {word}
+        </motion.span>
+      ))}
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    Phase 0 — Tab coach mark
 ───────────────────────────────────────────────────────── */
 function TabSpotlight({ rect }) {
@@ -203,12 +224,24 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   // the callout was rendered off-screen. Fall through to the bottom panel instead.
   const hasLeftSpace  = cardHole.left > 120;
 
+  const desc =
+    "Top JSE companies — built for long-term growth.";
   const explanation =
-    "Mint Baskets are ready-made investment portfolios curated and actively managed by Mint. " +
-    "Each basket gives you instant diversification across top JSE-listed companies — with no stock-picking needed.";
+    "MINT Baskets are ready-made, actively managed portfolios. " +
+    "Instant diversification — no stock-picking needed.";
+  // Ensure "Mint" → "MINT" in the card name
+  const displayName = cardName.replace(/\bMint\b/g, "MINT");
 
   // Use the card's actual border radius for the ring
   const ringRadius = Math.max(16, (cardRadius ?? 20) + cpad * 0.6);
+
+  // Shared glass panel style
+  const glassBg = {
+    background: "rgba(10,10,22,0.80)",
+    backdropFilter: "blur(24px)",
+    WebkitBackdropFilter: "blur(24px)",
+    border: "1px solid rgba(255,255,255,0.13)",
+  };
 
   return (
     <>
@@ -238,109 +271,147 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
         />
       </motion.div>
 
-      {/* Left callout — text written on blur panel, no box */}
+      {/* Left callout — desktop / wide screens */}
       {hasLeftSpace && (
         <motion.div
-          className="pointer-events-auto fixed z-[1002] flex flex-col"
-          style={{ top: calloutTop, right: `calc(100vw - ${calloutRight}px)`, width: calloutWidth }}
-          initial={{ opacity: 0, x: -14 }}
+          className="pointer-events-auto fixed z-[1002]"
+          style={{
+            top: calloutTop,
+            right: `calc(100vw - ${calloutRight}px)`,
+            width: calloutWidth,
+            display: "flex",
+            flexDirection: "column",
+            ...glassBg,
+            borderRadius: 18,
+            padding: "16px 18px 14px",
+          }}
+          initial={{ opacity: 0, x: -16 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
+          transition={{ delay: 0.18, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Basket name */}
+          {/* Name */}
           <motion.p
-            style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.15,
-              color: "rgba(255,255,255,1.0)", marginBottom: 6 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
+            style={{ fontSize: 20, fontWeight: 900, lineHeight: 1.1,
+              letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.32, duration: 0.32, ease: "easeOut" }}
           >
-            {cardName}
+            {displayName}
           </motion.p>
 
           {/* Divider */}
           <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.28)", marginBottom: 9 }}
-            initial={{ scaleX: 0, originX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.48, duration: 0.30 }}
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 10, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.44, duration: 0.28 }}
           />
 
-          {/* Strategy description */}
+          {/* Short desc */}
           <motion.p
-            style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45,
-              color: "rgba(255,255,255,1.0)", marginBottom: 9 }}
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.56 }}
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+              lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.52, duration: 0.28, ease: "easeOut" }}
           >
-            {cardDesc}
+            {desc}
           </motion.p>
 
-          {/* Explanation */}
-          <motion.p
-            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.55,
-              color: "rgba(255,255,255,0.82)", marginBottom: 14 }}
-            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.70 }}
-          >
-            {explanation}
-          </motion.p>
+          {/* Explanation — word reveal */}
+          <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+            color: "rgba(255,255,255,0.68)", marginBottom: 14 }}>
+            <WordReveal text={explanation} baseDelay={0.64} />
+          </p>
 
           {/* Got it */}
           <motion.button
             onClick={onDone}
             style={{
-              alignSelf: "flex-start",
-              padding: "7px 18px",
-              borderRadius: 9,
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              color: "rgba(255,255,255,0.97)",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.40)",
-              cursor: "pointer",
+              alignSelf: "flex-start", padding: "7px 18px", borderRadius: 9,
+              fontSize: 12, fontWeight: 600, letterSpacing: "0.04em",
+              color: "#fff", background: "rgba(255,255,255,0.14)",
+              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
               whiteSpace: "nowrap",
             }}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.88 }}
-            whileTap={{ scale: 0.95 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.92, duration: 0.24 }}
+            whileTap={{ scale: 0.93 }}
           >
             Got it
           </motion.button>
         </motion.div>
       )}
 
-      {/* Middle fallback — sits in the gap between the tab and the card */}
+      {/* Middle panel — mobile: sits in the gap between the tab and the card.
+          Flex column so the "Got it" button is ALWAYS anchored at the bottom
+          and never clipped by the maxHeight constraint.                      */}
       {!hasLeftSpace && (
         <motion.div
           className="pointer-events-auto fixed z-[1002]"
           style={{
-            top:      (tabHole ? tabHole.bottom : 80) + 8,
-            left:     16,
-            right:    16,
-            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 24,
-            overflow: "hidden",
-            background: "rgba(18,18,28,0.72)",
-            backdropFilter: "blur(18px)",
+            top:       (tabHole ? tabHole.bottom : 80) + 8,
+            left:      16,
+            right:     16,
+            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 20,
+            display:   "flex",
+            flexDirection: "column",
+            ...glassBg,
             borderRadius: 18,
-            border: "1px solid rgba(255,255,255,0.16)",
             padding: "14px 18px 14px",
           }}
           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }} transition={{ delay: 0.3, duration: 0.38 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
-          <p style={{ fontSize: 18, fontWeight: 800, color: "white",
-            marginBottom: 6, lineHeight: 1.15 }}>{cardName}</p>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.25)", marginBottom: 9 }} />
-          <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,1.0)",
-            lineHeight: 1.45, marginBottom: 9 }}>{cardDesc}</p>
-          <p style={{ fontSize: 12, fontWeight: 400, color: "rgba(255,255,255,0.82)",
-            lineHeight: 1.55, marginBottom: 14 }}>{explanation}</p>
-          <button
-            onClick={onDone}
-            style={{
-              padding: "7px 18px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-              color: "white", background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.40)", cursor: "pointer",
-              letterSpacing: "0.03em",
-            }}
-          >Got it</button>
+          {/* Text area — shrinks inside maxHeight; overflow clips text before button */}
+          <div style={{ flex: "1 1 0", overflow: "hidden", minHeight: 0 }}>
+            <motion.p
+              style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
+                letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.34, duration: 0.30, ease: "easeOut" }}
+            >
+              {displayName}
+            </motion.p>
+
+            <motion.div
+              style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+              transition={{ delay: 0.46, duration: 0.28 }}
+            />
+
+            <motion.p
+              style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+                lineHeight: 1.4, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.54, duration: 0.28, ease: "easeOut" }}
+            >
+              {desc}
+            </motion.p>
+
+            <p style={{ fontSize: 11.5, fontWeight: 400, lineHeight: 1.65,
+              color: "rgba(255,255,255,0.68)", marginBottom: 0 }}>
+              <WordReveal text={explanation} baseDelay={0.66} />
+            </p>
+          </div>
+
+          {/* Button — flex: 0 so it always gets its space, never clipped */}
+          <div style={{ flex: "0 0 auto", paddingTop: 12 }}>
+            <motion.button
+              onClick={onDone}
+              style={{
+                padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
+                letterSpacing: "0.04em", color: "#fff",
+                background: "rgba(255,255,255,0.14)",
+                border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+              }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: 0.90, duration: 0.24 }}
+              whileTap={{ scale: 0.93 }}
+            >
+              Got it
+            </motion.button>
+          </div>
         </motion.div>
       )}
     </>
