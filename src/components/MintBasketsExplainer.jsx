@@ -277,7 +277,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   return (
     <>
       <SingleHoleOverlay hole={hole} onClick={onDone} />
-      <AnimatedRing rect={pendingRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
+      <AnimatedRing rect={pendingRect} pad={padH} borderRadius={ringRadius} zIndex={10001} pulse={true} />
 
       <div
         className="pointer-events-none fixed z-[10004]"
