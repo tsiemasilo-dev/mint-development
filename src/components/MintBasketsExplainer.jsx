@@ -847,7 +847,19 @@ export default function MintBasketsExplainer({
     const appContent = document.querySelector('.app-content');
     const prevContentOverflow = appContent ? appContent.style.overflow : '';
     const savedScrollTop = appContent ? appContent.scrollTop : 0;
-    if (appContent) appContent.style.overflow = 'hidden';
+    if (appContent) {
+      appContent.style.overflow = 'hidden';
+      appContent.style.overflowY = 'hidden';
+    }
+
+    // Block touch-scroll on mobile — overflow:hidden alone doesn't stop
+    // native touch momentum scrolling on iOS/Android WebView.
+    const blockTouch = (e) => {
+      // Allow touches inside interactive elements (buttons, inputs, etc.)
+      if (e.target.closest('button, input, select, textarea, a, [role="button"]')) return;
+      e.preventDefault();
+    };
+    document.addEventListener('touchmove', blockTouch, { passive: false });
 
     // Lock ALL horizontal scroll containers so the user cannot swipe
     // sideways through the strategy card list while the animation is active.
@@ -861,8 +873,10 @@ export default function MintBasketsExplainer({
       document.body.style.overflow = prevBodyOverflow;
       if (appContent) {
         appContent.style.overflow = prevContentOverflow;
+        appContent.style.overflowY = '';
         appContent.scrollTop = savedScrollTop;
       }
+      document.removeEventListener('touchmove', blockTouch);
       // Restore horizontal scroll containers (if not already restored by partialCleanup)
       prevHOverflowsRef.current.forEach(({ el, overflow, scrollLeft }) => {
         el.style.overflowX = overflow;
