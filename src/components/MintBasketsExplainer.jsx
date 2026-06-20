@@ -234,7 +234,8 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
     height: btnRect.height + pad * 2,
   };
 
-  const ringRadius = 20;
+  // 16px (rounded-2xl on the button) + 12px pad = 28px — ring exactly follows button shape
+  const ringRadius = 28;
   const screenW  = typeof window !== "undefined" ? window.innerWidth  : 390;
   const screenH  = typeof window !== "undefined" ? window.innerHeight : 844;
 
@@ -687,10 +688,13 @@ export default function MintBasketsExplainer({
         // 5. Ensure modal is scrolled to top first (reset), so user sees it open at top
         if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'instant' });
 
-        // 6. After the 1-second pause at the top, smooth-scroll down to the factsheet btn
+        // 6. After the 1-second pause at the top, smooth-scroll down to the factsheet btn.
+        //    Stop 90px short of scrollHeight so the button sits comfortably above the edge,
+        //    mirroring how the strategy card is pushed down in Phase 1.
         setTimeout(() => {
           if (scrollEl) {
-            scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' });
+            const target = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight - 90);
+            scrollEl.scrollTo({ top: target, behavior: 'smooth' });
           } else {
             btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
