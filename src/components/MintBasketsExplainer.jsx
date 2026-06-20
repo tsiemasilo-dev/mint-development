@@ -248,7 +248,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
 
   const padH = 16;    // horizontal
   const padTop = 60;  // generous top — show the full "Pending orders" header + subtitle above the card
-  const padBot = -14; // negative: the -my-3 on the section pulls the next section up ~12px, so we must cut short
+  const padBot = 20;  // clone has margin:0 so we add positive bottom padding inside the hole
 
   const ringRadius = 24;
   const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
@@ -275,7 +275,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
 
   const spaceBelow = screenH - hole.bottom - 20;
   const panelTop = spaceBelow > 160
-    ? hole.bottom + 12
+    ? hole.bottom + 24
     : Math.max(20, hole.top - 180);
 
   const glassBg = {
