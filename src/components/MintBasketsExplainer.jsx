@@ -329,8 +329,6 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
             top:  (tabHole ? tabHole.bottom : 80) + 8,
             left: 16,
             right: 16,
-            maxHeight: cardHole.top - (tabHole ? tabHole.bottom : 80) - 24,
-            overflowY: "auto",
             background: "rgba(18,18,28,0.72)",
             backdropFilter: "blur(18px)",
             borderRadius: 20,
@@ -380,6 +378,38 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   const [visible, setVisible] = useState(true);
   const phaseTimer = useRef(null);
 
+  // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
+  useEffect(() => {
+    // Slide bottom nav offscreen
+    const style = document.createElement('style');
+    style.id = '__mint_coach_style__';
+    style.textContent = `
+      body > nav {
+        transform: translateY(110%) !important;
+        transition: transform 0.35s cubic-bezier(0.4,0,1,1) !important;
+        pointer-events: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Lock scrolling everywhere
+    const prevBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const appContent = document.querySelector('.app-content');
+    const prevContentOverflow = appContent ? appContent.style.overflow : '';
+    const savedScrollTop = appContent ? appContent.scrollTop : 0;
+    if (appContent) appContent.style.overflow = 'hidden';
+
+    return () => {
+      document.getElementById('__mint_coach_style__')?.remove();
+      document.body.style.overflow = prevBodyOverflow;
+      if (appContent) {
+        appContent.style.overflow = prevContentOverflow;
+        appContent.scrollTop = savedScrollTop;
+      }
+    };
+  }, []);
+
   // Track tab rect (updates on resize)
   useEffect(() => {
     if (!tabRef?.current) return;
@@ -423,8 +453,21 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
       el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
 
+    // After the bottom nav has slid away (~400 ms), scroll main content DOWN
+    // by the navbar height so the card visually occupies the freed space.
+    const t1 = setTimeout(() => {
+      const navHeight =
+        parseInt(getComputedStyle(document.documentElement).getPropertyValue('--navbar-height'), 10) || 75;
+      const appContent = document.querySelector('.app-content');
+      if (appContent) {
+        // Temporarily allow scroll, nudge down, then re-lock
+        appContent.style.overflow = 'hidden';
+        appContent.scrollTop += navHeight;
+      }
+    }, 420);
+
     const t = setTimeout(() => setCardRect(el.getBoundingClientRect()), 950);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); clearTimeout(t1); };
   }, [phase]);
 
   const handleDone = useCallback(() => {
