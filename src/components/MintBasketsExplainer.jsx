@@ -841,16 +841,13 @@ export default function MintBasketsExplainer({
     `;
     document.head.appendChild(style);
 
-    // Lock vertical scrolling
+    // Lock vertical scrolling on body (prevents scroll on the html/body layer)
     const prevBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const appContent = document.querySelector('.app-content');
-    const prevContentOverflow = appContent ? appContent.style.overflow : '';
-    const savedScrollTop = appContent ? appContent.scrollTop : 0;
-    if (appContent) {
-      appContent.style.overflow = 'hidden';
-      appContent.style.overflowY = 'hidden';
-    }
+    // NOTE: we deliberately do NOT set overflow:hidden on .app-content because
+    // doing so prevents programmatic scrollTop assignment later (phase 4→5
+    // needs to scroll the container to position the pending-orders section).
+    // The event-based locks below (wheel/touchmove/keydown) are sufficient.
 
     // Block all scroll input — overflow:hidden alone doesn't stop native
     // touch momentum on iOS/Android, and doesn't stop mouse-wheel or
@@ -879,11 +876,6 @@ export default function MintBasketsExplainer({
     return () => {
       document.getElementById('__mint_coach_style__')?.remove();
       document.body.style.overflow = prevBodyOverflow;
-      if (appContent) {
-        appContent.style.overflow = prevContentOverflow;
-        appContent.style.overflowY = '';
-        appContent.scrollTop = savedScrollTop;
-      }
       document.removeEventListener('touchmove', blockScroll);
       document.removeEventListener('wheel',     blockScroll);
       document.removeEventListener('keydown',   blockKey);
@@ -1082,8 +1074,6 @@ export default function MintBasketsExplainer({
     // 2. Restore scroll + slide nav back in simultaneously
     document.getElementById('__mint_coach_style__')?.remove();
     document.body.style.overflow = '';
-    const appContent = document.querySelector('.app-content');
-    if (appContent) appContent.style.overflow = '';
     // Remove padding added to modal scroll container during phase 2
     if (modalScrollElRef.current) {
       modalScrollElRef.current.style.paddingBottom = '';
@@ -1208,14 +1198,10 @@ export default function MintBasketsExplainer({
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
+                    // Scroll the section into view ~100px from the top of the viewport.
+                    // appContent has overflow-y-auto via CSS class; we never set
+                    // overflow:hidden on it so scrollTop assignment works normally.
                     const appContent = document.querySelector('.app-content');
-                    // Release Y overflow so we can scroll to position the section
-                    if (appContent) appContent.style.overflowY = 'auto';
-                    // Position the section ~100px from the top so it looks centred.
-                    // NOTE: we do NOT re-apply overflowY:'hidden' because doing so
-                    // causes the browser to reset scrollTop back to 0, which would
-                    // move the section off-screen before we can measure it.
-                    // The wheel/touchmove/keydown event locks already prevent user scroll.
                     if (appContent) {
                       const containerRect = appContent.getBoundingClientRect();
                       const elRect = el.getBoundingClientRect();
@@ -1223,8 +1209,7 @@ export default function MintBasketsExplainer({
                       const targetTop = 100; // px from top of viewport
                       appContent.scrollTop = Math.max(0, naturalOffset - targetTop);
                     }
-                    // Capture rect after scroll settles (scrollTop is stable because
-                    // event-based locks prevent any user-initiated scroll)
+                    // Capture rect after scroll settles
                     setTimeout(() => {
                       setPhase5PendingRect(el.getBoundingClientRect());
                       setPhase(5);
