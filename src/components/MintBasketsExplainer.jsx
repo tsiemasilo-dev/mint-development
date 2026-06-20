@@ -835,6 +835,7 @@ export default function MintBasketsExplainer({
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
+  const pendingStickyElRef = useRef(null); // pending section whose sticky is removed during phase 5
   const prevHOverflowsRef = useRef([]);   // saved h-scroll states for partial restore
   const modalScrollElRef  = useRef(null); // modal scroll container padded in phase 2
 
@@ -986,6 +987,12 @@ export default function MintBasketsExplainer({
     // Restore sibling visibility
     hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
     hiddenSiblingsRef.current = [];
+    // Restore sticky positioning on pending section if it was overridden
+    if (pendingStickyElRef.current) {
+      pendingStickyElRef.current.style.position = '';
+      pendingStickyElRef.current.style.top = '';
+      pendingStickyElRef.current = null;
+    }
     // Restore horizontal scroll containers
     prevHOverflowsRef.current.forEach(({ el, overflow, scrollLeft }) => {
       el.style.overflowX = overflow;
@@ -1101,6 +1108,12 @@ export default function MintBasketsExplainer({
       // Restore visibility of sections that were hidden to prevent bleed-through
       hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
       hiddenSiblingsRef.current = [];
+      // Restore sticky positioning on pending section if it was overridden
+      if (pendingStickyElRef.current) {
+        pendingStickyElRef.current.style.position = '';
+        pendingStickyElRef.current.style.top = '';
+        pendingStickyElRef.current = null;
+      }
     }, 180);
     // 4. Unmount after card has settled
     setTimeout(() => {
@@ -1223,6 +1236,12 @@ export default function MintBasketsExplainer({
                       appContentClientHeight: appContent?.clientHeight,
                     });
                     if (appContent) {
+                      // Remove sticky so the element can actually sit at targetTop
+                      // instead of snapping back to the top of the scroll container.
+                      el.style.position = 'relative';
+                      el.style.top = 'auto';
+                      pendingStickyElRef.current = el;
+
                       const targetTop = 220;
                       const newScrollTop = Math.max(0, naturalOffset - targetTop);
                       console.log('[coach-phase5] setting scrollTop:', newScrollTop);
