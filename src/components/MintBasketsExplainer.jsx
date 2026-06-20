@@ -666,18 +666,44 @@ export default function MintBasketsExplainer({
     prevHOverflowsRef.current = [];
   }, []);
 
-  // handleNext: Phase 1 → 2 — restore transforms, open strategy modal, find factsheet btn
+  // handleNext: Phase 1 → 2 — fade out phase 1, restore transforms, open strategy modal,
+  // scroll modal to reveal factsheet btn, then capture its rect
   const handleNext = useCallback(() => {
-    partialCleanup();
-    onOpenStrategyForCoach?.(cardName);
-    // After modal opens and animates, capture the factsheet button rect
-    const t = setTimeout(() => {
-      const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
-      if (!btn) { handleDone(); return; }
-      setPhase2BtnRect(btn.getBoundingClientRect());
-      setPhase(2);
-    }, 750);
-    return () => clearTimeout(t);
+    // 1. Immediately fade out the phase 1 overlay so no text bleeds through
+    setPanelExiting(true);
+
+    // 2. After the phase 1 panel has faded, clean up transforms and open the modal
+    setTimeout(() => {
+      partialCleanup();
+      onOpenStrategyForCoach?.(cardName);
+
+      // 3. Wait for the strategy modal to open and animate in
+      setTimeout(() => {
+        const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
+        if (!btn) { handleDone(); return; }
+
+        // 4. Scroll the modal's scrollable container to bring the button into view
+        const scrollEl = btn.closest('.overflow-y-auto');
+        if (scrollEl) {
+          const btnBottom = btn.getBoundingClientRect().bottom;
+          const containerBottom = scrollEl.getBoundingClientRect().bottom;
+          if (btnBottom > containerBottom) {
+            scrollEl.scrollTo({ top: scrollEl.scrollTop + (btnBottom - containerBottom) + 32, behavior: 'smooth' });
+          }
+        } else {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // 5. After scroll animation completes, capture the rect and show phase 2
+        setTimeout(() => {
+          const freshBtn = document.querySelector('[data-coach-factsheet-btn="true"]');
+          if (!freshBtn) { handleDone(); return; }
+          setPanelExiting(false);
+          setPhase2BtnRect(freshBtn.getBoundingClientRect());
+          setPhase(2);
+        }, 520);
+      }, 800);
+    }, 220);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partialCleanup, cardName, onOpenStrategyForCoach]);
 
