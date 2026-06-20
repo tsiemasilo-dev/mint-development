@@ -949,7 +949,7 @@ export default function MintBasketsExplainer({
     const section = (scrollContainer?.parentElement) ?? null;
     if (section) {
       const currentTop = el.getBoundingClientRect().top;
-      const targetTop  = Math.floor(window.innerHeight * 0.44);
+      const targetTop  = Math.floor(window.innerHeight * 0.38);
       const pushPx     = Math.max(0, targetTop - currentTop);
       section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
       section.style.transform  = `translateY(${pushPx}px)`;
