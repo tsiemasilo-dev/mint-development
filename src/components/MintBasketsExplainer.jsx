@@ -991,6 +991,7 @@ export default function MintBasketsExplainer({
     if (pendingStickyElRef.current) {
       pendingStickyElRef.current.style.position = '';
       pendingStickyElRef.current.style.top = '';
+      pendingStickyElRef.current.style.marginTop = '';
       pendingStickyElRef.current = null;
     }
     // Restore horizontal scroll containers
@@ -1112,6 +1113,7 @@ export default function MintBasketsExplainer({
       if (pendingStickyElRef.current) {
         pendingStickyElRef.current.style.position = '';
         pendingStickyElRef.current.style.top = '';
+        pendingStickyElRef.current.style.marginTop = '';
         pendingStickyElRef.current = null;
       }
     }, 180);
@@ -1236,17 +1238,29 @@ export default function MintBasketsExplainer({
                       appContentClientHeight: appContent?.clientHeight,
                     });
                     if (appContent) {
-                      // Remove sticky so the element can actually sit at targetTop
-                      // instead of snapping back to the top of the scroll container.
+                      // Remove sticky so position:relative lets us shift the element.
                       el.style.position = 'relative';
                       el.style.top = 'auto';
                       pendingStickyElRef.current = el;
 
                       const targetTop = 220;
+
+                      // First try scrolling (works when there is content above to scroll past).
                       const newScrollTop = Math.max(0, naturalOffset - targetTop);
-                      console.log('[coach-phase5] setting scrollTop:', newScrollTop);
                       appContent.scrollTop = newScrollTop;
-                      console.log('[coach-phase5] scrollTop after set:', appContent.scrollTop);
+
+                      // After the scroll, the section may still sit above targetTop because
+                      // it has little or no content above it.  Measure its actual viewport
+                      // position and pad with marginTop so it lands at targetTop.
+                      const freshRect = el.getBoundingClientRect();
+                      const gap = targetTop - freshRect.top;
+                      if (gap > 0) {
+                        el.style.marginTop = `${gap}px`;
+                      }
+                      console.log('[coach-phase5] positioning:', {
+                        naturalOffset, newScrollTop,
+                        freshTop: freshRect.top, gap: Math.max(0, gap),
+                      });
                     }
                     // Hide Market Insights and any siblings below the pending section
                     // so they don't bleed through the spotlight hole
