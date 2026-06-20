@@ -249,20 +249,22 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   const padH = 16;    // horizontal
   const padTop = 60;  // generous top — show the full "Pending orders" header + subtitle above the card
   const padBot = -14; // negative: the -my-3 on the section pulls the next section up ~12px, so we must cut short
-  const hole = {
-    top:    pendingRect.top    - padTop,
-    left:   pendingRect.left   - padH,
-    right:  pendingRect.right  + padH,
-    bottom: pendingRect.bottom + padBot,
-    width:  pendingRect.width  + padH * 2,
-    height: pendingRect.height + padTop + padBot,
-  };
 
   const ringRadius = 24;
   const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
+  const screenH = typeof window !== "undefined" ? window.innerHeight : 844;
+
+  const hole = {
+    top:    Math.max(0, pendingRect.top    - padTop),
+    left:   Math.max(0, pendingRect.left   - padH),
+    right:  Math.min(screenW, pendingRect.right  + padH),
+    bottom: Math.min(screenH, pendingRect.bottom + padBot),
+    get width()  { return this.right - this.left; },
+    get height() { return this.bottom - this.top; },
+  };
   const panelMaxWidth = Math.min(screenW - 40, 420);
 
-  const spaceBelow = (typeof window !== "undefined" ? window.innerHeight : 844) - hole.bottom - 20;
+  const spaceBelow = screenH - hole.bottom - 20;
   const panelTop = spaceBelow > 160
     ? hole.bottom + 12
     : Math.max(20, hole.top - 180);
