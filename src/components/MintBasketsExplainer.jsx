@@ -246,14 +246,16 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
 function PendingOrdersSpotlight({ pendingRect, onDone }) {
   if (!pendingRect) return null;
 
-  const pad = 16;
+  const padH = 16;   // horizontal
+  const padTop = 20; // generous top — show the "Filling" header above the card
+  const padBot = 6;  // tight bottom — don't bleed into the sibling section below
   const hole = {
-    top:    pendingRect.top    - pad,
-    left:   pendingRect.left   - pad,
-    right:  pendingRect.right  + pad,
-    bottom: pendingRect.bottom + pad,
-    width:  pendingRect.width  + pad * 2,
-    height: pendingRect.height + pad * 2,
+    top:    pendingRect.top    - padTop,
+    left:   pendingRect.left   - padH,
+    right:  pendingRect.right  + padH,
+    bottom: pendingRect.bottom + padBot,
+    width:  pendingRect.width  + padH * 2,
+    height: pendingRect.height + padTop + padBot,
   };
 
   const ringRadius = 24;
@@ -1180,12 +1182,12 @@ export default function MintBasketsExplainer({
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     // Wait for scroll to settle, then grab rect and enter phase 5
                     setTimeout(() => {
                       setPhase5PendingRect(el.getBoundingClientRect());
                       setPhase(5);
-                    }, 450);
+                    }, 500);
                     return;
                   }
                   if (++attempts < 100) setTimeout(pollPending, 50);
