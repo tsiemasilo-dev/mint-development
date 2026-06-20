@@ -1915,7 +1915,7 @@ const HomePage = ({
           );
 
           return (
-            <section>
+            <section data-coach-pending-orders="true">
               <div className="flex items-end justify-between px-5 mb-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-slate-900">Pending orders</p>

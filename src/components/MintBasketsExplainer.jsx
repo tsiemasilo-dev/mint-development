@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import PaymentSuccessPage from "../pages/PaymentSuccessPage.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 export const BASKETS_EXPLAINER_KEY = "mint_baskets_explainer_seen";
@@ -225,92 +227,86 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Phase 5 — Pending order → Home balance card illustration
+   Phase 5 — Pending orders spotlight on live Home page
 ───────────────────────────────────────────────────────── */
-function PendingOrderPanel({ onDone }) {
-  const screenW = typeof window !== "undefined" ? window.innerWidth  : 390;
-  const panelW  = Math.min(screenW - 40, 360);
+function PendingOrdersSpotlight({ pendingRect, onDone }) {
+  if (!pendingRect) return null;
+
+  const pad = 16;
+  const hole = {
+    top:    pendingRect.top    - pad,
+    left:   pendingRect.left   - pad,
+    right:  pendingRect.right  + pad,
+    bottom: pendingRect.bottom + pad,
+    width:  pendingRect.width  + pad * 2,
+    height: pendingRect.height + pad * 2,
+  };
+
+  const ringRadius = 24;
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
+  const panelMaxWidth = Math.min(screenW - 40, 420);
+
+  const spaceBelow = (typeof window !== "undefined" ? window.innerHeight : 844) - hole.bottom - 20;
+  const panelTop = spaceBelow > 160
+    ? hole.bottom + 12
+    : Math.max(20, hole.top - 180);
 
   const glassBg = {
-    background: "rgba(8,8,20,0.92)",
-    backdropFilter: "blur(32px)",
-    WebkitBackdropFilter: "blur(32px)",
+    background: "rgba(8,8,20,0.88)",
+    backdropFilter: "blur(28px)",
+    WebkitBackdropFilter: "blur(28px)",
     border: "1px solid rgba(255,255,255,0.14)",
   };
 
   return (
     <>
-      <motion.div
-        className="fixed inset-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.72)", zIndex: 10000 }}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-      />
+      <SingleHoleOverlay hole={hole} onClick={onDone} />
+      <AnimatedRing rect={pendingRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
 
       <div
         className="pointer-events-none fixed z-[10004]"
-        style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: panelW }}
+        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
           className="pointer-events-auto"
-          style={{ ...glassBg, borderRadius: 22, overflow: "hidden" }}
-          initial={{ opacity: 0, scale: 0.90, y: 16 }}
-          animate={{ opacity: 1, scale: 1,    y: 0  }}
-          exit={{ opacity: 0, scale: 0.94 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          style={{ ...glassBg, borderRadius: 20, padding: "16px 18px 14px" }}
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.28, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Two screenshots stacked */}
-          <div style={{ background: "#f0eef8", borderRadius: "18px 18px 0 0", overflow: "hidden", padding: "12px 12px 0" }}>
-            <img
-              src="/image_1781954887916.png"
-              alt="Pending orders on home"
-              style={{ width: "100%", display: "block", borderRadius: "10px 10px 0 0" }}
-            />
-          </div>
-          <div style={{ background: "#f0eef8", overflow: "hidden", padding: "4px 12px 0" }}>
-            <img
-              src="/image_1781955024239.png"
-              alt="Portfolio value card with filled order"
-              style={{ width: "100%", display: "block", borderRadius: 8 }}
-            />
-          </div>
-
-          {/* Text callout */}
-          <div style={{ padding: "16px 18px 18px" }}>
-            <motion.p
-              style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.28, ease: "easeOut" }}
-            >
-              Watch it grow
-            </motion.p>
-            <motion.div
-              style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 9, originX: 0 }}
-              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-              transition={{ delay: 0.38, duration: 0.28 }}
-            />
-            <motion.p
-              style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 14 }}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.46, duration: 0.26, ease: "easeOut" }}
-            >
-              Your strategy will appear as <strong style={{ color: "#fff" }}>Pending</strong> while it's being filled. Once settled, your investment will reflect live on your home balance card — showing your portfolio value and performance in real time.
-            </motion.p>
-            <motion.button
-              onClick={onDone}
-              style={{
-                width: "100%", padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 700,
-                letterSpacing: "0.04em", color: "#fff",
-                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-                border: "none", cursor: "pointer",
-              }}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: 0.72, duration: 0.26 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              Got it →
-            </motion.button>
-          </div>
+          <motion.p
+            style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
+          >
+            Watch it grow
+          </motion.p>
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.48, duration: 0.28 }}
+          />
+          <motion.p
+            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 14 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.56, duration: 0.26, ease: "easeOut" }}
+          >
+            Your strategy appears as <strong style={{ color: "#fff" }}>Pending</strong> while being filled. Once settled, your investment reflects live on your home balance card — showing portfolio value and performance in real time.
+          </motion.p>
+          <motion.button
+            onClick={onDone}
+            style={{
+              width: "100%", padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 700,
+              letterSpacing: "0.04em", color: "#fff",
+              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+              border: "none", cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.72, duration: 0.26 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            Got it →
+          </motion.button>
         </motion.div>
       </div>
     </>
@@ -790,8 +786,7 @@ export default function MintBasketsExplainer({
   tabRef,
   onOpenStrategyForCoach,
   onNavigateToFactsheetForCoach,
-  onNavigateToSuccessForCoach,
-  onHideSuccessPage,
+  onNavigateToHome,
 }) {
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
@@ -807,6 +802,8 @@ export default function MintBasketsExplainer({
   const [phase2BtnRect, setPhase2BtnRect] = useState(null);
   const [phase3BtnRect, setPhase3BtnRect] = useState(null);
   const [phase4CardRect, setPhase4CardRect] = useState(null);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [phase5PendingRect, setPhase5PendingRect] = useState(null);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
@@ -1013,38 +1010,48 @@ export default function MintBasketsExplainer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // handleGoToPhase4: Phase 3 → 4 — navigate to success page overlay, then spotlight the card
+  // handleGoToPhase4: Phase 3 → 4 — show PaymentSuccessPage portal then spotlight its card
   const handleGoToPhase4 = useCallback(() => {
-    // Ask MarketsPage to render the PaymentSuccessPage as a fixed overlay
-    onNavigateToSuccessForCoach?.();
-    // Poll until the tagged card element appears in the DOM
-    let attempts = 0;
-    const MAX = 40; // 2 seconds total
-    const poll = () => {
-      const el = document.querySelector('[data-coach-success-card="true"]');
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        setPhase4CardRect(rect);
-        setPhase(4);
-        return;
-      }
-      attempts++;
-      if (attempts < MAX) {
-        setTimeout(poll, 50);
-      }
-    };
-    setTimeout(poll, 80); // give React one tick to mount the overlay
-  }, [onNavigateToSuccessForCoach]);
+    setShowSuccessOverlay(true);
+  }, []);
 
-  // Auto-advance Phase 4 → 5 after 2 seconds once card rect is captured
+  // Once showSuccessOverlay mounts, capture the card rect (after browser paint)
+  useEffect(() => {
+    if (!showSuccessOverlay) return;
+    const id = requestAnimationFrame(() => {
+      // Give the portal one more frame to actually paint
+      requestAnimationFrame(() => {
+        const el = document.querySelector('[data-coach-success-card="true"]');
+        if (el) {
+          setPhase4CardRect(el.getBoundingClientRect());
+          setPhase(4);
+        }
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showSuccessOverlay]);
+
+  // Auto-advance Phase 4 → 5 after 2.5 s
   useEffect(() => {
     if (phase !== 4 || !phase4CardRect) return;
     const t = setTimeout(() => {
-      onHideSuccessPage?.();
-      setPhase(5);
+      setShowSuccessOverlay(false);
+      // Navigate to Home, then poll for the pending orders section
+      onNavigateToHome?.();
+      let attempts = 0;
+      const pollPending = () => {
+        const el = document.querySelector('[data-coach-pending-orders="true"]');
+        if (el) {
+          setPhase5PendingRect(el.getBoundingClientRect());
+          setPhase(5);
+          return;
+        }
+        if (++attempts < 60) setTimeout(pollPending, 50);
+      };
+      setTimeout(pollPending, 300);
     }, 2500);
     return () => clearTimeout(t);
-  }, [phase, phase4CardRect, onHideSuccessPage]);
+  }, [phase, phase4CardRect, onNavigateToHome]);
 
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
@@ -1080,85 +1087,117 @@ export default function MintBasketsExplainer({
 
   if (!visible) return null;
 
-  return (
-    <AnimatePresence>
-      {phase === 0 && (
-        <motion.div key="phase0" exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-          <TabSpotlight rect={tabRect} onLottieLoad={() => setLottieReady(true)} />
-        </motion.div>
-      )}
-      {phase === 1 && cardRect && (
-        <motion.div
-          key="phase1"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: panelExiting ? 0 : 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+  const content = (
+    <>
+      {/* PaymentSuccessPage overlay — portal so it shows above everything */}
+      {showSuccessOverlay && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9998,
+            background: "#f8f8fb", overflowY: "auto",
+          }}
         >
-          <CardSpotlight
-            cardRect={cardRect}
-            cardRadius={cardRadius}
-            tabRect={tabRect}
-            cardName={cardName}
-            cardDesc={cardDesc}
-            onDone={handleDone}
-            onNext={handleNext}
+          <PaymentSuccessPage
+            strategyName="Famous Brands"
+            onDone={() => setShowSuccessOverlay(false)}
           />
-        </motion.div>
+        </div>
       )}
-      {phase === 2 && phase2BtnRect && (
-        <motion.div
-          key="phase2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: panelExiting ? 0 : 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
-        >
-          <FactsheetBtnSpotlight
-            btnRect={phase2BtnRect}
-            onNext={handleGoToPhase3}
-          />
-        </motion.div>
-      )}
-      {phase === 3 && phase3BtnRect && (
-        <motion.div
-          key="phase3"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: panelExiting ? 0 : 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
-        >
-          <InvestBtnSpotlight
-            btnRect={phase3BtnRect}
-            onNext={handleGoToPhase4}
-          />
-        </motion.div>
-      )}
-      {phase === 4 && phase4CardRect && (
-        <motion.div
-          key="phase4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <SuccessCardSpotlight
-            cardRect={phase4CardRect}
-            onNext={() => { onHideSuccessPage?.(); setPhase(5); }}
-          />
-        </motion.div>
-      )}
-      {phase === 5 && (
-        <motion.div
-          key="phase5"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: panelExiting ? 0 : 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
-        >
-          <PendingOrderPanel onDone={handleDone} />
-        </motion.div>
-      )}
-    </AnimatePresence>
+
+      <AnimatePresence>
+        {phase === 0 && (
+          <motion.div key="phase0" exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+            <TabSpotlight rect={tabRect} onLottieLoad={() => setLottieReady(true)} />
+          </motion.div>
+        )}
+        {phase === 1 && cardRect && (
+          <motion.div
+            key="phase1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: panelExiting ? 0 : 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+          >
+            <CardSpotlight
+              cardRect={cardRect}
+              cardRadius={cardRadius}
+              tabRect={tabRect}
+              cardName={cardName}
+              cardDesc={cardDesc}
+              onDone={handleDone}
+              onNext={handleNext}
+            />
+          </motion.div>
+        )}
+        {phase === 2 && phase2BtnRect && (
+          <motion.div
+            key="phase2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: panelExiting ? 0 : 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+          >
+            <FactsheetBtnSpotlight
+              btnRect={phase2BtnRect}
+              onNext={handleGoToPhase3}
+            />
+          </motion.div>
+        )}
+        {phase === 3 && phase3BtnRect && (
+          <motion.div
+            key="phase3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: panelExiting ? 0 : 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+          >
+            <InvestBtnSpotlight
+              btnRect={phase3BtnRect}
+              onNext={handleGoToPhase4}
+            />
+          </motion.div>
+        )}
+        {phase === 4 && phase4CardRect && (
+          <motion.div
+            key="phase4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <SuccessCardSpotlight
+              cardRect={phase4CardRect}
+              onNext={() => {
+                setShowSuccessOverlay(false);
+                onNavigateToHome?.();
+                let attempts = 0;
+                const pollPending = () => {
+                  const el = document.querySelector('[data-coach-pending-orders="true"]');
+                  if (el) { setPhase5PendingRect(el.getBoundingClientRect()); setPhase(5); return; }
+                  if (++attempts < 60) setTimeout(pollPending, 50);
+                };
+                setTimeout(pollPending, 300);
+              }}
+            />
+          </motion.div>
+        )}
+        {phase === 5 && phase5PendingRect && (
+          <motion.div
+            key="phase5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: panelExiting ? 0 : 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+          >
+            <PendingOrdersSpotlight
+              pendingRect={phase5PendingRect}
+              onDone={handleDone}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
+
+  return createPortal(content, document.body);
 }

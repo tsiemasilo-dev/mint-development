@@ -19,7 +19,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import MintBasketsExplainer, { BASKETS_EXPLAINER_KEY } from "../components/MintBasketsExplainer.jsx";
-import PaymentSuccessPage from "./PaymentSuccessPage.jsx";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -397,7 +396,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [viewMode]);
 
   const [showBasketsExplainer, setShowBasketsExplainer] = useState(false);
-  const [showCoachSuccessPage, setShowCoachSuccessPage] = useState(false);
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
@@ -1414,21 +1412,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
             if (btn) btn.click();
           }}
-          onNavigateToSuccessForCoach={() => setShowCoachSuccessPage(true)}
-          onHideSuccessPage={() => setShowCoachSuccessPage(false)}
+          onNavigateToHome={() => onNavigateToHome?.()}
         />
-      )}
-      {/* Coach-mode success page overlay — rendered here so MintBasketsExplainer stays mounted */}
-      {showCoachSuccessPage && (
-        <div
-          className="fixed inset-0"
-          style={{ zIndex: 9998, background: "#f8f8fb" }}
-        >
-          <PaymentSuccessPage
-            strategyName="Famous Brands"
-            onDone={() => setShowCoachSuccessPage(false)}
-          />
-        </div>
       )}
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
