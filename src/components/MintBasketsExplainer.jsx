@@ -247,7 +247,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   if (!pendingRect) return null;
 
   const padH = 16;    // horizontal
-  const padTop = 20;  // generous top — show the "Filling" header above the card
+  const padTop = 60;  // generous top — show the full "Pending orders" header + subtitle above the card
   const padBot = -14; // negative: the -my-3 on the section pulls the next section up ~12px, so we must cut short
   const hole = {
     top:    pendingRect.top    - padTop,
@@ -1212,11 +1212,19 @@ export default function MintBasketsExplainer({
                       appContentClientHeight: appContent?.clientHeight,
                     });
                     if (appContent) {
-                      const targetTop = 100;
+                      const targetTop = 150;
                       const newScrollTop = Math.max(0, naturalOffset - targetTop);
                       console.log('[coach-phase5] setting scrollTop:', newScrollTop);
                       appContent.scrollTop = newScrollTop;
                       console.log('[coach-phase5] scrollTop after set:', appContent.scrollTop);
+                    }
+                    // Hide Market Insights and any siblings below the pending section
+                    // so they don't bleed through the spotlight hole
+                    let sibling = el.nextElementSibling;
+                    while (sibling) {
+                      sibling.style.visibility = 'hidden';
+                      hiddenSiblingsRef.current.push(sibling);
+                      sibling = sibling.nextElementSibling;
                     }
                     setTimeout(() => {
                       const finalRect = el.getBoundingClientRect();
