@@ -3,105 +3,133 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export const BASKETS_EXPLAINER_KEY = "mint_baskets_explainer_seen";
 
-/* ─────────────────────────────────────────────
-   Phase 0 — Tab Coach Mark
-   Pulsing ring + label around the Mint Baskets tab
-───────────────────────────────────────────── */
-function TabSpotlight({ rect }) {
-  if (!rect) return null;
-  const pad = 9;
-  const top  = rect.top  - pad;
-  const left = rect.left - pad;
-  const w    = rect.width  + pad * 2;
-  const h    = rect.height + pad * 2;
-  const r    = 16;
-
-  return (
-    <>
-      {/* dark overlay with spotlight hole via box-shadow */}
+/* ─────────────────────────────────────────────────────────
+   Blur overlay — 4 perimeter panels leave a clear window
+   at `holeRect`. Light blur + very low dim only.
+───────────────────────────────────────────────────────── */
+function BlurOverlay({ holeRect, onClick }) {
+  if (!holeRect) {
+    // fallback: single light overlay if no rect yet
+    return (
       <motion.div
-        className="pointer-events-none fixed inset-0 z-[999]"
+        className="fixed inset-0 z-[998] pointer-events-auto"
+        style={{ backdropFilter: "blur(6px)", background: "rgba(0,0,0,0.18)" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.35 }}
-        style={{
-          background: "rgba(0,0,0,0)",
-        }}
-      >
-        {/* full-screen dim */}
-        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.68)" }} />
-        {/* spotlight hole — transparent window at tab position */}
-        <div
-          className="absolute"
-          style={{
-            top,
-            left,
-            width: w,
-            height: h,
-            borderRadius: r,
-            background: "transparent",
-            boxShadow: "none",
-            mixBlendMode: "destination-out",
-          }}
-        />
-      </motion.div>
+        onClick={onClick}
+      />
+    );
+  }
 
-      {/* spotlight cut-out + ring, rendered separately on top */}
+  const pad = 8;
+  const top    = holeRect.top    - pad;
+  const left   = holeRect.left   - pad;
+  const right  = holeRect.right  + pad;
+  const bottom = holeRect.bottom + pad;
+
+  const panelStyle = {
+    backdropFilter: "blur(7px)",
+    background: "rgba(0,0,0,0.20)",
+    position: "fixed",
+    zIndex: 998,
+    pointerEvents: "auto",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      style={{ position: "fixed", inset: 0, zIndex: 998, pointerEvents: "none" }}
+      onClick={onClick}
+    >
+      {/* top */}
+      <div style={{ ...panelStyle, top: 0, left: 0, right: 0, height: top }} onClick={onClick} />
+      {/* bottom */}
+      <div style={{ ...panelStyle, top: bottom, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
+      {/* left */}
+      <div style={{ ...panelStyle, top, left: 0, width: left, height: bottom - top }} onClick={onClick} />
+      {/* right */}
+      <div style={{ ...panelStyle, top, left: right, right: 0, height: bottom - top }} onClick={onClick} />
+    </motion.div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   Phase 0 — Tab ring spotlight
+───────────────────────────────────────────────────────── */
+function TabSpotlight({ rect }) {
+  if (!rect) return null;
+  const pad = 9;
+  const holeRect = {
+    top:    rect.top    - pad,
+    left:   rect.left   - pad,
+    right:  rect.right  + pad,
+    bottom: rect.bottom + pad,
+    width:  rect.width  + pad * 2,
+    height: rect.height + pad * 2,
+  };
+
+  return (
+    <>
+      <BlurOverlay holeRect={holeRect} />
+
+      {/* ring at tab position */}
       <motion.div
-        className="pointer-events-none fixed z-[1000]"
-        style={{ top, left, width: w, height: h }}
-        initial={{ opacity: 0, scale: 1.25 }}
+        className="pointer-events-none fixed z-[999]"
+        style={{
+          top:    holeRect.top,
+          left:   holeRect.left,
+          width:  holeRect.width,
+          height: holeRect.height,
+        }}
+        initial={{ opacity: 0, scale: 1.3 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.4, ease: "backOut" }}
       >
         {/* solid ring */}
-        <div
-          className="absolute inset-0 rounded-[16px]"
-          style={{
-            border: "2.5px solid #a78bfa",
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.68), 0 0 20px 4px rgba(167,139,250,0.4)",
-          }}
+        <div className="absolute inset-0 rounded-[16px]"
+          style={{ border: "2px solid rgba(255,255,255,0.9)", boxShadow: "0 0 14px 3px rgba(255,255,255,0.25)" }} />
+        {/* pulse 1 */}
+        <motion.div className="absolute inset-0 rounded-[16px]"
+          style={{ border: "1.5px solid rgba(255,255,255,0.6)" }}
+          animate={{ opacity: [0.7, 0], scale: [1, 1.6] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeOut" }}
         />
-        {/* pulse ring 1 */}
-        <motion.div
-          className="absolute inset-0 rounded-[16px]"
-          style={{ border: "2px solid #a78bfa" }}
-          animate={{ opacity: [0.8, 0], scale: [1, 1.65] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
-        />
-        {/* pulse ring 2 */}
-        <motion.div
-          className="absolute inset-0 rounded-[16px]"
-          style={{ border: "1.5px solid #a78bfa" }}
-          animate={{ opacity: [0.5, 0], scale: [1, 2.0] }}
-          transition={{ duration: 1.5, delay: 0.5, repeat: Infinity, ease: "easeOut" }}
+        {/* pulse 2 */}
+        <motion.div className="absolute inset-0 rounded-[16px]"
+          style={{ border: "1px solid rgba(255,255,255,0.4)" }}
+          animate={{ opacity: [0.5, 0], scale: [1, 1.9] }}
+          transition={{ duration: 1.4, delay: 0.45, repeat: Infinity, ease: "easeOut" }}
         />
       </motion.div>
 
-      {/* label + bouncing arrow below the ring */}
+      {/* label + arrow below ring */}
       <motion.div
-        className="pointer-events-none fixed z-[1001] flex flex-col items-center gap-1"
-        style={{ top: top + h + 10, left: left + w / 2, transform: "translateX(-50%)" }}
-        initial={{ opacity: 0, y: -6 }}
+        className="pointer-events-none fixed z-[1000] flex flex-col items-center gap-1.5"
+        style={{
+          top:  holeRect.top + holeRect.height + 10,
+          left: holeRect.left + holeRect.width / 2,
+          transform: "translateX(-50%)",
+        }}
+        initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
-        transition={{ delay: 0.3, duration: 0.4 }}
+        transition={{ delay: 0.3 }}
       >
-        <motion.div
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 1.1, repeat: Infinity }}
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M9 14 L9 4 M4 9 L9 4 L14 9"
-              stroke="#a78bfa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        <motion.div animate={{ y: [0, -5, 0] }} transition={{ duration: 1.1, repeat: Infinity }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 13 L8 3 M3 8 L8 3 L13 8"
+              stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </motion.div>
-        <span
-          className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
-          style={{ background: "rgba(167,139,250,0.15)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.3)" }}
-        >
+        <span style={{
+          fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+          textTransform: "uppercase", color: "rgba(255,255,255,0.85)",
+        }}>
           Mint Baskets
         </span>
       </motion.div>
@@ -109,216 +137,233 @@ function TabSpotlight({ rect }) {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Phase 1 — Card Spotlight + Callout
-───────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Phase 1 — Card spotlight + left-side callout
+───────────────────────────────────────────────────────── */
 function CardSpotlight({ cardRect, cardName, cardDesc, onDone }) {
   const [pressed, setPressed] = useState(false);
 
   useEffect(() => {
-    // fire the press animation after a short pause
-    const t = setTimeout(() => setPressed(true), 400);
+    const t = setTimeout(() => setPressed(true), 350);
     return () => clearTimeout(t);
   }, []);
 
   if (!cardRect) return null;
 
   const pad = 10;
-  const top  = cardRect.top  - pad;
-  const left = cardRect.left - pad;
-  const w    = cardRect.width  + pad * 2;
-  const h    = cardRect.height + pad * 2;
+  const holeRect = {
+    top:    cardRect.top    - pad,
+    left:   cardRect.left   - pad,
+    right:  cardRect.right  + pad,
+    bottom: cardRect.bottom + pad,
+    width:  cardRect.width  + pad * 2,
+    height: cardRect.height + pad * 2,
+  };
 
-  // Callout on left side of card (inside the spotlight, left 55% of card width)
-  const calloutLeft = cardRect.left + 10;
-  const calloutTop  = cardRect.top  + 10;
-  const calloutWidth = Math.min(200, cardRect.width * 0.58);
+  // callout lives on the left blur panel
+  // horizontally: right edge of callout = holeRect.left - 12
+  // vertically: centred on card
+  const calloutWidth = Math.max(120, holeRect.left - 20);
+  const calloutRight = holeRect.left - 12;
+  const calloutTop   = holeRect.top + (holeRect.height - 260) / 2;
 
+  const lines = [
+    { text: cardName,   delay: 0.50, size: 15, weight: 700, color: "rgba(255,255,255,0.95)", mt: 0 },
+    { text: cardDesc,   delay: 0.65, size: 11, weight: 400, color: "rgba(255,255,255,0.68)", mt: 8 },
+  ];
   const pills = ["JSE-listed", "Expert-built", "From R100"];
 
   return (
     <>
-      {/* dim overlay with spotlight hole */}
-      <motion.div
-        className="fixed inset-0 z-[999] pointer-events-auto"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.4 }}
-        onClick={onDone}
-        style={{
-          background: "rgba(0,0,0,0)",
-        }}
-      >
-        {/* dim layer */}
-        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)" }} />
-      </motion.div>
+      <BlurOverlay holeRect={holeRect} onClick={onDone} />
 
       {/* spotlight ring around card */}
       <motion.div
-        className="pointer-events-none fixed z-[1000]"
-        style={{ top, left, width: w, height: h }}
-        initial={{ opacity: 0, scale: 1.08 }}
-        animate={{ opacity: 1, scale: pressed ? [1, 0.97, 1] : 1 }}
+        className="pointer-events-none fixed z-[999]"
+        style={{ top: holeRect.top, left: holeRect.left, width: holeRect.width, height: holeRect.height }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1, scale: pressed ? [1, 0.975, 1] : 1 }}
         exit={{ opacity: 0 }}
         transition={{
-          opacity: { duration: 0.35 },
-          scale: pressed ? { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } : {},
+          opacity: { duration: 0.3 },
+          scale: pressed ? { duration: 0.38, ease: [0.25, 0.46, 0.45, 0.94] } : {},
         }}
       >
-        <div
-          className="absolute inset-0 rounded-[18px]"
-          style={{
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.72), 0 0 0 2.5px #a78bfa, 0 0 22px 6px rgba(167,139,250,0.35)",
-          }}
-        />
-        {/* subtle violet glow pulse */}
-        <motion.div
-          className="absolute inset-0 rounded-[18px]"
-          style={{ border: "2px solid #a78bfa" }}
+        <div className="absolute inset-0 rounded-[20px]"
+          style={{ border: "2px solid rgba(255,255,255,0.75)", boxShadow: "0 0 20px 4px rgba(255,255,255,0.18)" }} />
+        {/* soft glow pulse */}
+        <motion.div className="absolute inset-0 rounded-[20px]"
+          style={{ border: "1.5px solid rgba(255,255,255,0.5)" }}
           animate={{ opacity: [0.6, 0.15, 0.6] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
         />
       </motion.div>
 
-      {/* Callout — left side of the card */}
-      <motion.div
-        className="pointer-events-auto fixed z-[1001] flex flex-col"
-        style={{
-          top: calloutTop,
-          left: calloutLeft,
-          width: calloutWidth,
-          maxWidth: "calc(100vw - 24px)",
-        }}
-        initial={{ opacity: 0, x: -18 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -12 }}
-        transition={{ delay: pressed ? 0.55 : 0.2, duration: 0.45, ease: "easeOut" }}
-      >
-        {/* glass card */}
-        <div
-          className="rounded-2xl p-3"
+      {/* Left-side text callout — written directly on the blur panel */}
+      {calloutWidth > 40 && (
+        <motion.div
+          className="pointer-events-auto fixed z-[1000] flex flex-col"
           style={{
-            background: "linear-gradient(135deg, rgba(26,15,58,0.97) 0%, rgba(15,11,30,0.97) 100%)",
-            border: "1px solid rgba(167,139,250,0.3)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(167,139,250,0.1)",
-            backdropFilter: "blur(12px)",
+            top:   Math.max(60, calloutTop),
+            right: `calc(100vw - ${calloutRight}px)`,
+            width: calloutWidth,
+            maxWidth: "calc(100vw - 24px)",
           }}
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.2, duration: 0.4, ease: "easeOut" }}
         >
-          {/* top accent */}
-          <div className="mb-2 h-px w-full rounded-full"
-            style={{ background: "linear-gradient(90deg, #a78bfa, transparent)" }} />
-
-          {/* basket name */}
+          {/* Basket label */}
           <motion.p
-            className="text-[9px] font-bold uppercase tracking-[0.2em]"
-            style={{ color: "#a78bfa" }}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.65 }}
+            style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.40 }}
           >
             Mint Basket
           </motion.p>
+
+          {/* Name */}
           <motion.p
-            className="mt-0.5 text-[13px] font-extrabold leading-tight text-white"
-            initial={{ opacity: 0, y: 5 }}
+            style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.25, color: "rgba(255,255,255,0.95)", marginBottom: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.78 }}
+            transition={{ delay: 0.52 }}
           >
             {cardName}
           </motion.p>
 
+          {/* Divider */}
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.2)", marginBottom: 8 }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ delay: 0.62, duration: 0.35 }}
+          />
+
+          {/* Description */}
           <motion.p
-            className="mt-1.5 text-[10px] leading-snug"
-            style={{ color: "rgba(167,139,250,0.7)" }}
+            style={{ fontSize: 11, fontWeight: 400, lineHeight: 1.5, color: "rgba(255,255,255,0.65)", marginBottom: 12 }}
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.90 }}
+            transition={{ delay: 0.70 }}
           >
             {cardDesc}
           </motion.p>
 
-          {/* pills */}
+          {/* Pills */}
           <motion.div
-            className="mt-2 flex flex-wrap gap-1"
+            className="flex flex-col gap-1"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1.05 }}
+            transition={{ delay: 0.85 }}
           >
             {pills.map((pill, i) => (
               <motion.span
                 key={pill}
-                className="rounded-full px-2 py-0.5 text-[8px] font-bold"
                 style={{
-                  background: "rgba(167,139,250,0.12)",
-                  color: "#a78bfa",
-                  border: "1px solid rgba(167,139,250,0.25)",
+                  display: "inline-block",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  color: "rgba(255,255,255,0.7)",
+                  padding: "3px 8px",
+                  borderRadius: 99,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "rgba(255,255,255,0.08)",
+                  alignSelf: "flex-start",
                 }}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.05 + i * 0.1 }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.90 + i * 0.1 }}
               >
                 {pill}
               </motion.span>
             ))}
           </motion.div>
 
-          {/* arrow tip pointing right */}
+          {/* Divider */}
           <motion.div
-            className="mt-2.5 flex items-center gap-1"
-            style={{ color: "#a78bfa" }}
+            style={{ height: 1, background: "rgba(255,255,255,0.15)", margin: "14px 0 12px" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1.3 }}
-          >
-            <motion.div
-              animate={{ x: [0, 4, 0] }}
-              transition={{ duration: 1.0, repeat: Infinity }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6h8M7 3l3 3-3 3" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </motion.div>
-            <span className="text-[9px] font-semibold" style={{ color: "rgba(167,139,250,0.6)" }}>Tap card to explore</span>
-          </motion.div>
-        </div>
+            transition={{ delay: 1.15 }}
+          />
 
-        {/* Got it button below the card */}
-        <motion.button
-          onClick={onDone}
-          className="mt-2 w-full rounded-xl py-2 text-[11px] font-bold tracking-wide text-white"
+          {/* Got it button — clean, minimal */}
+          <motion.button
+            onClick={onDone}
+            style={{
+              alignSelf: "flex-start",
+              padding: "7px 16px",
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              color: "white",
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.35)",
+              cursor: "pointer",
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.25 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Got it
+          </motion.button>
+        </motion.div>
+      )}
+
+      {/* Fallback: if no left space, show bottom floating text */}
+      {calloutWidth <= 40 && (
+        <motion.div
+          className="pointer-events-auto fixed z-[1000]"
           style={{
-            background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-            border: "1px solid rgba(167,139,250,0.4)",
-            boxShadow: "0 4px 14px rgba(124,58,237,0.45)",
+            bottom: 48,
+            left: 16,
+            right: 16,
+            background: "rgba(255,255,255,0.12)",
+            backdropFilter: "blur(12px)",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.2)",
+            padding: "16px 18px",
           }}
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.45 }}
-          whileTap={{ scale: 0.96 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
         >
-          Got it →
-        </motion.button>
-      </motion.div>
+          <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Mint Basket</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "white", marginBottom: 6 }}>{cardName}</p>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.5, marginBottom: 12 }}>{cardDesc}</p>
+          <button
+            onClick={onDone}
+            style={{
+              padding: "7px 16px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+              color: "white", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", cursor: "pointer",
+            }}
+          >Got it</button>
+        </motion.div>
+      )}
     </>
   );
 }
 
-/* ─────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────
    Main component
-───────────────────────────────────────────── */
+───────────────────────────────────────────────────────── */
 export default function MintBasketsExplainer({ onDone, tabRef }) {
-  const [phase, setPhase]       = useState(0);   // 0=tab, 1=card
+  const [phase, setPhase]       = useState(0);
   const [tabRect, setTabRect]   = useState(null);
   const [cardRect, setCardRect] = useState(null);
   const [cardName, setCardName] = useState("Mint Famous Brands");
-  const [cardDesc, setCardDesc] = useState(
-    "SA's most iconic brands — Naspers, Shoprite, Capitec & more. One tap, instant diversification."
-  );
+  const [cardDesc, setCardDesc] = useState("SA's most iconic brands — Naspers, Shoprite, Capitec & more. One tap, instant diversification.");
   const [visible, setVisible]   = useState(true);
   const phaseTimer = useRef(null);
 
-  // Capture tab position
+  // Capture tab rect
   useEffect(() => {
     if (!tabRef?.current) return;
     const update = () => setTabRect(tabRef.current?.getBoundingClientRect() ?? null);
@@ -327,14 +372,14 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     return () => window.removeEventListener("resize", update);
   }, [tabRef]);
 
-  // Auto-advance from phase 0 → 1
+  // Phase 0 → 1 after 2.5s
   useEffect(() => {
     if (phase !== 0) return;
     phaseTimer.current = setTimeout(() => setPhase(1), 2500);
     return () => clearTimeout(phaseTimer.current);
   }, [phase]);
 
-  // Phase 1: scroll target card into view, then capture its rect
+  // Phase 1: find card, scroll it to show left panel space, capture rect
   useEffect(() => {
     if (phase !== 1) return;
 
@@ -342,27 +387,34 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     if (!el) el = document.querySelector('[data-coach-first="true"]');
     if (!el) { handleDone(); return; }
 
-    // Read name & description from the card's data attributes
     const name = el.getAttribute("data-coach-name");
     const desc = el.getAttribute("data-coach-desc");
     if (name) setCardName(name);
     if (desc) setCardDesc(desc);
 
-    // Scroll card into view (smooth, centred horizontally)
-    el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    // Scroll the card to appear on the RIGHT side of screen,
+    // leaving space on the left for the text callout.
+    const scrollContainer = el.closest(".overflow-x-auto");
+    if (scrollContainer) {
+      const cardOffsetLeft = el.offsetLeft;
+      // target: card left edge ≈ 42% from screen left
+      const targetScrollLeft = cardOffsetLeft - Math.floor(window.innerWidth * 0.42);
+      scrollContainer.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: "smooth" });
+    } else {
+      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
 
-    // Wait for scroll to complete then capture position
     const t = setTimeout(() => {
       const rect = el.getBoundingClientRect();
       setCardRect(rect);
-    }, 900);
+    }, 950);
 
     return () => clearTimeout(t);
   }, [phase]);
 
   const handleDone = useCallback(() => {
     setVisible(false);
-    setTimeout(() => onDone?.(), 350);
+    setTimeout(() => onDone?.(), 320);
   }, [onDone]);
 
   if (!visible) return null;
