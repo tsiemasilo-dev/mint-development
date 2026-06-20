@@ -631,6 +631,14 @@ const HomePage = ({
     return true;
   });
 
+  // Re-render trigger for coach-tour simulated pending order
+  const [coachSimTick, setCoachSimTick] = useState(0);
+  useEffect(() => {
+    const handler = () => setCoachSimTick(t => t + 1);
+    window.addEventListener('mint-coach-sim-update', handler);
+    return () => window.removeEventListener('mint-coach-sim-update', handler);
+  }, []);
+
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);

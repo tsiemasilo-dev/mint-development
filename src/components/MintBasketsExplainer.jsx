@@ -1187,6 +1187,7 @@ export default function MintBasketsExplainer({
                 onCloseStrategyForCoach?.();
                 // 3. Signal HomePage to show a simulated pending order
                 sessionStorage.setItem('mint_coach_pending_sim', 'MINT Famous Brands');
+                window.dispatchEvent(new CustomEvent('mint-coach-sim-update'));
                 // 4. Hide the success page overlay
                 setShowSuccessOverlay(false);
                 // 5. Switch to Home tab
@@ -1198,20 +1199,29 @@ export default function MintBasketsExplainer({
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
-                    // Scroll the section into view ~100px from the top of the viewport.
-                    // appContent has overflow-y-auto via CSS class; we never set
-                    // overflow:hidden on it so scrollTop assignment works normally.
                     const appContent = document.querySelector('.app-content');
+                    const elRect = el.getBoundingClientRect();
+                    const containerRect = appContent ? appContent.getBoundingClientRect() : { top: 0 };
+                    const scrollTop = appContent ? appContent.scrollTop : 0;
+                    const naturalOffset = elRect.top - containerRect.top + scrollTop;
+                    console.log('[coach-phase5] el found:', {
+                      elTop: elRect.top, elBottom: elRect.bottom, elHeight: elRect.height,
+                      containerTop: containerRect.top, scrollTop,
+                      naturalOffset,
+                      appContentScrollHeight: appContent?.scrollHeight,
+                      appContentClientHeight: appContent?.clientHeight,
+                    });
                     if (appContent) {
-                      const containerRect = appContent.getBoundingClientRect();
-                      const elRect = el.getBoundingClientRect();
-                      const naturalOffset = elRect.top - containerRect.top + appContent.scrollTop;
-                      const targetTop = 100; // px from top of viewport
-                      appContent.scrollTop = Math.max(0, naturalOffset - targetTop);
+                      const targetTop = 100;
+                      const newScrollTop = Math.max(0, naturalOffset - targetTop);
+                      console.log('[coach-phase5] setting scrollTop:', newScrollTop);
+                      appContent.scrollTop = newScrollTop;
+                      console.log('[coach-phase5] scrollTop after set:', appContent.scrollTop);
                     }
-                    // Capture rect after scroll settles
                     setTimeout(() => {
-                      setPhase5PendingRect(el.getBoundingClientRect());
+                      const finalRect = el.getBoundingClientRect();
+                      console.log('[coach-phase5] finalRect:', { top: finalRect.top, bottom: finalRect.bottom, height: finalRect.height });
+                      setPhase5PendingRect(finalRect);
                       setPhase(5);
                     }, 120);
                     return;
