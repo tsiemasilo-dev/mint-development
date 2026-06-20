@@ -396,6 +396,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [viewMode]);
 
   const [showBasketsExplainer, setShowBasketsExplainer] = useState(false);
+  const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
       if (!localStorage.getItem(BASKETS_EXPLAINER_KEY)) {
@@ -1390,7 +1391,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
       {showBasketsExplainer && (
-        <MintBasketsExplainer onDone={() => setShowBasketsExplainer(false)} />
+        <MintBasketsExplainer onDone={() => setShowBasketsExplainer(false)} tabRef={basketsTabRef} />
       )}
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
@@ -1429,6 +1430,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {viewMode !== "news" && !childFilter && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
+                ref={basketsTabRef}
                 onClick={() => {
                   setViewMode("openstrategies");
                   setActiveChips(buildChipsFromFilters(_savedStrat));
