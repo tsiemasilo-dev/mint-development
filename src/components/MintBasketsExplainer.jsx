@@ -147,9 +147,176 @@ function WordReveal({ text, baseDelay = 0, wordStyle }) {
 }
 
 /* ─────────────────────────────────────────────────────────
+   Phase 4 — Purchase Successful illustration
+───────────────────────────────────────────────────────── */
+function PurchaseSuccessPanel({ onNext }) {
+  const screenW = typeof window !== "undefined" ? window.innerWidth  : 390;
+  const screenH = typeof window !== "undefined" ? window.innerHeight : 844;
+  const panelW  = Math.min(screenW - 40, 360);
+
+  const glassBg = {
+    background: "rgba(8,8,20,0.92)",
+    backdropFilter: "blur(32px)",
+    WebkitBackdropFilter: "blur(32px)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  };
+
+  return (
+    <>
+      {/* Full dim overlay */}
+      <motion.div
+        className="fixed inset-0 pointer-events-none"
+        style={{ background: "rgba(0,0,0,0.72)", zIndex: 10000 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.35 }}
+      />
+
+      {/* Centred panel */}
+      <div
+        className="pointer-events-none fixed z-[10004]"
+        style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: panelW }}
+      >
+        <motion.div
+          style={{ ...glassBg, borderRadius: 22, overflow: "hidden" }}
+          initial={{ opacity: 0, scale: 0.90, y: 16 }}
+          animate={{ opacity: 1, scale: 1,    y: 0  }}
+          exit={{ opacity: 0, scale: 0.94 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Screenshot */}
+          <div style={{ background: "#f4f4f8", borderRadius: "18px 18px 0 0", overflow: "hidden" }}>
+            <img
+              src="/image_1781954687781.png"
+              alt="Purchase Successful"
+              style={{ width: "100%", display: "block" }}
+            />
+          </div>
+
+          {/* Text callout */}
+          <div style={{ padding: "16px 18px 18px" }}>
+            <motion.p
+              style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
+            >
+              Purchase Successful!
+            </motion.p>
+            <motion.div
+              style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 9, originX: 0 }}
+              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+              transition={{ delay: 0.48, duration: 0.28 }}
+            />
+            <motion.p
+              style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 0 }}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.56, duration: 0.26, ease: "easeOut" }}
+            >
+              Your order has been placed and is being processed — you'll be notified as soon as it's confirmed.
+            </motion.p>
+          </div>
+        </motion.div>
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   Phase 5 — Pending order → Home balance card illustration
+───────────────────────────────────────────────────────── */
+function PendingOrderPanel({ onDone }) {
+  const screenW = typeof window !== "undefined" ? window.innerWidth  : 390;
+  const panelW  = Math.min(screenW - 40, 360);
+
+  const glassBg = {
+    background: "rgba(8,8,20,0.92)",
+    backdropFilter: "blur(32px)",
+    WebkitBackdropFilter: "blur(32px)",
+    border: "1px solid rgba(255,255,255,0.14)",
+  };
+
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 pointer-events-none"
+        style={{ background: "rgba(0,0,0,0.72)", zIndex: 10000 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      />
+
+      <div
+        className="pointer-events-none fixed z-[10004]"
+        style={{ top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: panelW }}
+      >
+        <motion.div
+          className="pointer-events-auto"
+          style={{ ...glassBg, borderRadius: 22, overflow: "hidden" }}
+          initial={{ opacity: 0, scale: 0.90, y: 16 }}
+          animate={{ opacity: 1, scale: 1,    y: 0  }}
+          exit={{ opacity: 0, scale: 0.94 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Two screenshots stacked */}
+          <div style={{ background: "#f0eef8", borderRadius: "18px 18px 0 0", overflow: "hidden", padding: "12px 12px 0" }}>
+            <img
+              src="/image_1781954887916.png"
+              alt="Pending orders on home"
+              style={{ width: "100%", display: "block", borderRadius: "10px 10px 0 0" }}
+            />
+          </div>
+          <div style={{ background: "#f0eef8", overflow: "hidden", padding: "4px 12px 0" }}>
+            <img
+              src="/image_1781955024239.png"
+              alt="Portfolio value card with filled order"
+              style={{ width: "100%", display: "block", borderRadius: 8 }}
+            />
+          </div>
+
+          {/* Text callout */}
+          <div style={{ padding: "16px 18px 18px" }}>
+            <motion.p
+              style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.28, ease: "easeOut" }}
+            >
+              Watch it grow
+            </motion.p>
+            <motion.div
+              style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 9, originX: 0 }}
+              initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+              transition={{ delay: 0.38, duration: 0.28 }}
+            />
+            <motion.p
+              style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 14 }}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.46, duration: 0.26, ease: "easeOut" }}
+            >
+              Your strategy will appear as <strong style={{ color: "#fff" }}>Pending</strong> while it's being filled. Once settled, your investment will reflect live on your home balance card — showing your portfolio value and performance in real time.
+            </motion.p>
+            <motion.button
+              onClick={onDone}
+              style={{
+                width: "100%", padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 700,
+                letterSpacing: "0.04em", color: "#fff",
+                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                border: "none", cursor: "pointer",
+              }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: 0.72, duration: 0.26 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Got it →
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    Phase 3 — Invest Now button spotlight
 ───────────────────────────────────────────────────────── */
-function InvestBtnSpotlight({ btnRect, onDone }) {
+function InvestBtnSpotlight({ btnRect, onNext }) {
   if (!btnRect) return null;
 
   const pad = 12;
@@ -176,7 +343,7 @@ function InvestBtnSpotlight({ btnRect, onDone }) {
 
   return (
     <>
-      <SingleHoleOverlay hole={hole} onClick={onDone} />
+      <SingleHoleOverlay hole={hole} onClick={onNext} />
       <AnimatedRing rect={btnRect} pad={pad} borderRadius={ringRadius} zIndex={10001} pulse={true} />
 
       {/* Bouncing arrow pointing at the button */}
@@ -230,7 +397,7 @@ function InvestBtnSpotlight({ btnRect, onDone }) {
             />
           </p>
           <motion.button
-            onClick={onDone}
+            onClick={onNext}
             style={{
               padding: "8px 22px", borderRadius: 10, fontSize: 12, fontWeight: 700,
               letterSpacing: "0.04em", color: "#fff",
@@ -241,7 +408,7 @@ function InvestBtnSpotlight({ btnRect, onDone }) {
             transition={{ delay: 1.05, duration: 0.26 }}
             whileTap={{ scale: 0.93 }}
           >
-            Got it →
+            Next →
           </motion.button>
         </motion.div>
       </div>
@@ -839,6 +1006,18 @@ export default function MintBasketsExplainer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // handleGoToPhase4: Phase 3 → 4 — Purchase Successful illustration
+  const handleGoToPhase4 = useCallback(() => {
+    setPhase(4);
+  }, []);
+
+  // Auto-advance Phase 4 → 5 after 2 seconds
+  useEffect(() => {
+    if (phase !== 4) return;
+    const t = setTimeout(() => setPhase(5), 2000);
+    return () => clearTimeout(t);
+  }, [phase]);
+
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
     setPanelExiting(true);
@@ -923,8 +1102,30 @@ export default function MintBasketsExplainer({
         >
           <InvestBtnSpotlight
             btnRect={phase3BtnRect}
-            onDone={handleDone}
+            onNext={handleGoToPhase4}
           />
+        </motion.div>
+      )}
+      {phase === 4 && (
+        <motion.div
+          key="phase4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <PurchaseSuccessPanel onNext={() => setPhase(5)} />
+        </motion.div>
+      )}
+      {phase === 5 && (
+        <motion.div
+          key="phase5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: panelExiting ? 0 : 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+        >
+          <PendingOrderPanel onDone={handleDone} />
         </motion.div>
       )}
     </AnimatePresence>
