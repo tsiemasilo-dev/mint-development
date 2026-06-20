@@ -246,9 +246,9 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
 function PendingOrdersSpotlight({ pendingRect, onDone }) {
   if (!pendingRect) return null;
 
-  const padH = 16;   // horizontal
-  const padTop = 20; // generous top — show the "Filling" header above the card
-  const padBot = 6;  // tight bottom — don't bleed into the sibling section below
+  const padH = 16;    // horizontal
+  const padTop = 20;  // generous top — show the "Filling" header above the card
+  const padBot = -14; // negative: the -my-3 on the section pulls the next section up ~12px, so we must cut short
   const hole = {
     top:    pendingRect.top    - padTop,
     left:   pendingRect.left   - padH,
@@ -295,7 +295,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
           >
-            Watch it grow
+            Pending orders
           </motion.p>
           <motion.div
             style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 9, originX: 0 }}
