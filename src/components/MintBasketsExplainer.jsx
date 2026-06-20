@@ -247,7 +247,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone }) {
   if (!pendingRect) return null;
 
   const padH = 16;    // horizontal
-  const padTop = 8;   // tight top — just enough to not clip the "Pending orders" heading
+  const padTop = 22;  // slight breathing room above the "Pending orders" heading border
   const padBot = 20;  // clone has margin:0 so we add positive bottom padding inside the hole
 
   const ringRadius = 24;
