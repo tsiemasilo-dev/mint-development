@@ -987,11 +987,17 @@ export default function MintBasketsExplainer({
     // Restore sibling visibility
     hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
     hiddenSiblingsRef.current = [];
-    // Restore sticky positioning on pending section if it was overridden
+    // Remove the cloned pending section and restore the original
     if (pendingStickyElRef.current) {
-      pendingStickyElRef.current.style.position = '';
-      pendingStickyElRef.current.style.top = '';
-      pendingStickyElRef.current.style.marginTop = '';
+      const p = pendingStickyElRef.current;
+      if (p.clone) {
+        p.clone.remove();
+        p.original.style.visibility = '';
+      } else {
+        p.style.position = '';
+        p.style.top = '';
+        p.style.marginTop = '';
+      }
       pendingStickyElRef.current = null;
     }
     // Restore horizontal scroll containers
@@ -1109,11 +1115,17 @@ export default function MintBasketsExplainer({
       // Restore visibility of sections that were hidden to prevent bleed-through
       hiddenSiblingsRef.current.forEach(el => { el.style.visibility = ''; });
       hiddenSiblingsRef.current = [];
-      // Restore sticky positioning on pending section if it was overridden
+      // Remove the cloned pending section and restore the original
       if (pendingStickyElRef.current) {
-        pendingStickyElRef.current.style.position = '';
-        pendingStickyElRef.current.style.top = '';
-        pendingStickyElRef.current.style.marginTop = '';
+        const p = pendingStickyElRef.current;
+        if (p.clone) {
+          p.clone.remove();
+          p.original.style.visibility = '';
+        } else {
+          p.style.position = '';
+          p.style.top = '';
+          p.style.marginTop = '';
+        }
         pendingStickyElRef.current = null;
       }
     }, 180);
@@ -1225,57 +1237,39 @@ export default function MintBasketsExplainer({
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) {
-                    const appContent = document.querySelector('.app-content');
-                    const elRect = el.getBoundingClientRect();
-                    const containerRect = appContent ? appContent.getBoundingClientRect() : { top: 0 };
-                    const scrollTop = appContent ? appContent.scrollTop : 0;
-                    const naturalOffset = elRect.top - containerRect.top + scrollTop;
-                    console.log('[coach-phase5] el found:', {
-                      elTop: elRect.top, elBottom: elRect.bottom, elHeight: elRect.height,
-                      containerTop: containerRect.top, scrollTop,
-                      naturalOffset,
-                      appContentScrollHeight: appContent?.scrollHeight,
-                      appContentClientHeight: appContent?.clientHeight,
-                    });
-                    if (appContent) {
-                      // Remove sticky so position:relative lets us shift the element.
-                      el.style.position = 'relative';
-                      el.style.top = 'auto';
-                      pendingStickyElRef.current = el;
+                    // ── Clone-and-lift approach ─────────────────────────────────
+                    // Clone the pending section and render it at a fixed, known Y
+                    // so we never fight sticky/scroll positioning.
+                    const targetTop = 130; // px from top of viewport
 
-                      const targetTop = 220;
+                    const clone = el.cloneNode(true);
+                    // Override only the layout-critical props; class styles are preserved.
+                    clone.style.position = 'fixed';
+                    clone.style.top = `${targetTop}px`;
+                    clone.style.left = '0';
+                    clone.style.right = '0';
+                    clone.style.margin = '0';
+                    clone.style.zIndex = '10003';
+                    document.body.appendChild(clone);
 
-                      // First try scrolling (works when there is content above to scroll past).
-                      const newScrollTop = Math.max(0, naturalOffset - targetTop);
-                      appContent.scrollTop = newScrollTop;
-
-                      // After the scroll, the section may still sit above targetTop because
-                      // it has little or no content above it.  Measure its actual viewport
-                      // position and pad with marginTop so it lands at targetTop.
-                      const freshRect = el.getBoundingClientRect();
-                      const gap = targetTop - freshRect.top;
-                      if (gap > 0) {
-                        el.style.marginTop = `${gap}px`;
-                      }
-                      console.log('[coach-phase5] positioning:', {
-                        naturalOffset, newScrollTop,
-                        freshTop: freshRect.top, gap: Math.max(0, gap),
-                      });
-                    }
-                    // Hide Market Insights and any siblings below the pending section
-                    // so they don't bleed through the spotlight hole
+                    // Hide the original and any siblings below it
+                    el.style.visibility = 'hidden';
                     let sibling = el.nextElementSibling;
                     while (sibling) {
                       sibling.style.visibility = 'hidden';
                       hiddenSiblingsRef.current.push(sibling);
                       sibling = sibling.nextElementSibling;
                     }
+
+                    // Store clone + original for cleanup
+                    pendingStickyElRef.current = { clone, original: el };
+
                     setTimeout(() => {
-                      const finalRect = el.getBoundingClientRect();
-                      console.log('[coach-phase5] finalRect:', { top: finalRect.top, bottom: finalRect.bottom, height: finalRect.height });
-                      setPhase5PendingRect(finalRect);
+                      const cloneRect = clone.getBoundingClientRect();
+                      console.log('[coach-phase5] cloneRect:', { top: cloneRect.top, bottom: cloneRect.bottom, height: cloneRect.height });
+                      setPhase5PendingRect(cloneRect);
                       setPhase(5);
-                    }, 120);
+                    }, 80);
                     return;
                   }
                   if (++attempts < 100) setTimeout(pollPending, 50);
