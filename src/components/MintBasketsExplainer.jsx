@@ -916,7 +916,12 @@ export default function MintBasketsExplainer({
     return () => clearTimeout(phaseTimer.current);
   }, [phase, lottieReady]);
 
-  // Phase 1: find card, scroll it to right, capture rect + border radius
+  // Phase 1: smooth-scroll to the target card, then position + spotlight it.
+  //
+  // The scroll lock applied at mount sets overflowX:'hidden' on all horizontal
+  // containers — which would cause scrollTo({behavior:'smooth'}) to jump
+  // instantly.  So we temporarily re-enable the target container for the
+  // scroll animation, then re-lock it once the card is in position.
   useEffect(() => {
     if (phase !== 1) return;
 
@@ -929,49 +934,58 @@ export default function MintBasketsExplainer({
     if (name) setCardName(name);
     if (desc) setCardDesc(desc);
 
-    // Read the card's actual border radius
     const computed = window.getComputedStyle(el);
     const rawRadius = parseFloat(computed.borderRadius || computed.borderTopLeftRadius || "20");
     setCardRadius(isNaN(rawRadius) ? 20 : rawRadius);
 
-    // Horizontal scroll: bring card into view
     const scrollContainer = el.closest(".overflow-x-auto");
+    const section = scrollContainer?.parentElement ?? null;
+
+    // ── Step 1: re-enable the scroll container and animate to the card ────
     if (scrollContainer) {
+      scrollContainer.style.overflowX = 'auto';
       const targetLeft = el.offsetLeft - Math.floor(window.innerWidth * 0.42);
       scrollContainer.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-    } else {
-      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
 
-    // Push the card section DOWN with CSS transform so the text panel has room
-    // above it. scrollTop can't go negative (card is near top of page), so we
-    // move the container element instead. We push by enough to hit ~68 % vh.
-    const section = (scrollContainer?.parentElement) ?? null;
-    if (section) {
-      const currentTop = el.getBoundingClientRect().top;
-      const targetTop  = Math.floor(window.innerHeight * 0.55);
-      const pushPx     = targetTop - currentTop; // allow negative to pull card up
-      section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
-      section.style.transform  = `translateY(${pushPx}px)`;
-      cardSectionRef.current   = section;
+    // ── Step 2: after scroll settles, position + hide everything else ─────
+    const t1 = setTimeout(() => {
+      // Re-lock the scroll container
+      if (scrollContainer) scrollContainer.style.overflowX = 'hidden';
 
-      // Hide every DOM sibling BELOW this section so they don't bleed
-      // through the spotlight hole after the translateY push overlaps them.
-      const hidden = [];
-      let next = section.nextElementSibling;
-      while (next) {
-        hidden.push(next);
-        next.style.visibility = 'hidden';
-        next = next.nextElementSibling;
+      // Translate the section so the card lands at ~55% vh
+      if (section) {
+        const currentTop = el.getBoundingClientRect().top;
+        const targetTop  = Math.floor(window.innerHeight * 0.55);
+        const pushPx     = targetTop - currentTop;
+        section.style.transition = 'transform 0.55s cubic-bezier(0.4,0,0.2,1)';
+        section.style.transform  = `translateY(${pushPx}px)`;
+        cardSectionRef.current   = section;
       }
 
-      // Also hide the other strategy cards within the same list so they
-      // don't bleed through the spotlight hole around the highlighted card.
-      // Use opacity:0 + pointer-events:none (visibility:hidden alone doesn't
-      // prevent overflow-x containers from painting sibling content).
+      const hidden = [];
+
+      // Hide ALL sibling sections — both above AND below — so no other
+      // strategy category bleeds through the spotlight overlay.
+      if (section) {
+        let prev = section.previousElementSibling;
+        while (prev) {
+          prev.style.visibility = 'hidden';
+          hidden.push(prev);
+          prev = prev.previousElementSibling;
+        }
+        let next = section.nextElementSibling;
+        while (next) {
+          next.style.visibility = 'hidden';
+          hidden.push(next);
+          next = next.nextElementSibling;
+        }
+      }
+
+      // Hide sibling cards within the same row (opacity so the layout is
+      // preserved but nothing bleeds through the hole).
       const cardList = el.parentElement;
       if (cardList) {
-        // Clip the scroll container so no sibling content bleeds outside it
         cardList.dataset.coachOverflow = cardList.style.overflow;
         cardList.style.overflow = 'hidden';
         Array.from(cardList.children).forEach(sibling => {
@@ -984,10 +998,14 @@ export default function MintBasketsExplainer({
       }
 
       hiddenSiblingsRef.current = hidden;
-    }
 
-    const t = setTimeout(() => setCardRect(el.getBoundingClientRect()), 950);
-    return () => { clearTimeout(t); };
+      // ── Step 3: capture rect after transform animation finishes ─────────
+      const t2 = setTimeout(() => setCardRect(el.getBoundingClientRect()), 600);
+      timers.push(t2);
+    }, 750);
+
+    const timers = [t1];
+    return () => timers.forEach(clearTimeout);
   }, [phase]);
 
   // partialCleanup: restores Phase 1 transforms/scroll but keeps the explainer mounted
