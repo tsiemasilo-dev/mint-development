@@ -1875,6 +1875,25 @@ const HomePage = ({
             };
           });
 
+          // Inject a simulated pending order during the coach tour
+          const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
+          if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
+            stratGroups.unshift({
+              key: 'coach-sim',
+              strat: {
+                id: 'coach-sim',
+                name: coachSimName,
+                shortName: coachSimName,
+                risk_level: 'Growth',
+                image_url: null,
+                icon_url: null,
+                investedAmount: 500,
+                isPending: true,
+              },
+              txs: [null],
+            });
+          }
+
           const totalGroups = stratGroups.length + pendingAssetItems.length;
           if (totalGroups === 0) return null;
 

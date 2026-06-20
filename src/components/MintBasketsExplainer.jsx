@@ -1048,6 +1048,8 @@ export default function MintBasketsExplainer({
   // Phase 4 — no auto-advance; user proceeds via the "Next" button in SuccessCardSpotlight
 
   const handleDone = useCallback(() => {
+    // Clear any simulated pending order from the coach tour
+    sessionStorage.removeItem('mint_coach_pending_sim');
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
     setPanelExiting(true);
     // 2. Restore scroll + slide nav back in simultaneously
@@ -1162,15 +1164,17 @@ export default function MintBasketsExplainer({
             <SuccessCardSpotlight
               cardRect={phase4CardRect}
               onNext={() => {
+                // Signal HomePage to show a simulated pending order
+                sessionStorage.setItem('mint_coach_pending_sim', 'MINT Famous Brands');
                 setShowSuccessOverlay(false);
                 onNavigateToHome?.();
                 let attempts = 0;
                 const pollPending = () => {
                   const el = document.querySelector('[data-coach-pending-orders="true"]');
                   if (el) { setPhase5PendingRect(el.getBoundingClientRect()); setPhase(5); return; }
-                  if (++attempts < 60) setTimeout(pollPending, 50);
+                  if (++attempts < 80) setTimeout(pollPending, 50);
                 };
-                setTimeout(pollPending, 300);
+                setTimeout(pollPending, 400);
               }}
             />
           </motion.div>
