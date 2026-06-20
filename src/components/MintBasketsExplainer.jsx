@@ -523,6 +523,7 @@ export default function MintBasketsExplainer({
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
   const prevHOverflowsRef = useRef([]);   // saved h-scroll states for partial restore
+  const modalScrollElRef  = useRef(null); // modal scroll container padded in phase 2
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
@@ -689,12 +690,15 @@ export default function MintBasketsExplainer({
         if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'instant' });
 
         // 6. After the 1-second pause at the top, smooth-scroll down to the factsheet btn.
-        //    Stop 90px short of scrollHeight so the button sits comfortably above the edge,
-        //    mirroring how the strategy card is pushed down in Phase 1.
+        //    Add padding-bottom to the scroll container BEFORE scrolling so there is
+        //    90px of empty space below the button — this lifts the button 90px above
+        //    the bottom edge of the modal when scrolled to the end.
         setTimeout(() => {
           if (scrollEl) {
-            const target = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight - 90);
-            scrollEl.scrollTo({ top: target, behavior: 'smooth' });
+            // Store ref so cleanup can remove the padding when tour ends
+            modalScrollElRef.current = scrollEl;
+            scrollEl.style.paddingBottom = '90px';
+            scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' });
           } else {
             btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
@@ -733,6 +737,11 @@ export default function MintBasketsExplainer({
     document.body.style.overflow = '';
     const appContent = document.querySelector('.app-content');
     if (appContent) appContent.style.overflow = '';
+    // Remove padding added to modal scroll container during phase 2
+    if (modalScrollElRef.current) {
+      modalScrollElRef.current.style.paddingBottom = '';
+      modalScrollElRef.current = null;
+    }
     // 3. After overlay has faded (~180 ms), THEN slide the card back up
     //    — card is invisible behind the faded overlay, so there is no overlap
     setTimeout(() => {
