@@ -632,6 +632,7 @@ export default function MintBasketsExplainer({
   const [panelExiting, setPanelExiting] = useState(false);
   const [lottieReady, setLottieReady]  = useState(false);
   const [phase2BtnRect, setPhase2BtnRect] = useState(null);
+  const [phase3BtnRect, setPhase3BtnRect] = useState(null);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
@@ -829,18 +830,14 @@ export default function MintBasketsExplainer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partialCleanup, cardName, onOpenStrategyForCoach]);
 
-  // handleViewFactsheet: Phase 2 → 3 — set flag, fade out, navigate to factsheet
-  const handleViewFactsheet = useCallback(() => {
-    sessionStorage.setItem('coach_factsheet_pending', '1');
-    setPanelExiting(true);
-    // Navigate after overlay has started fading
-    setTimeout(() => { onNavigateToFactsheetForCoach?.(); }, 200);
-    // Unmount the explainer overlay
-    setTimeout(() => {
-      setVisible(false);
-      setTimeout(() => onDone?.(), 200);
-    }, 640);
-  }, [onNavigateToFactsheetForCoach, onDone]);
+  // handleGoToPhase3: Phase 2 → 3 — spotlight the Invest button
+  const handleGoToPhase3 = useCallback(() => {
+    const investBtn = document.querySelector('[data-coach-invest-btn="true"]');
+    if (!investBtn) { handleDone(); return; }
+    setPhase3BtnRect(investBtn.getBoundingClientRect());
+    setPhase(3);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDone = useCallback(() => {
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
@@ -912,7 +909,21 @@ export default function MintBasketsExplainer({
         >
           <FactsheetBtnSpotlight
             btnRect={phase2BtnRect}
-            onNext={handleViewFactsheet}
+            onNext={handleGoToPhase3}
+          />
+        </motion.div>
+      )}
+      {phase === 3 && phase3BtnRect && (
+        <motion.div
+          key="phase3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: panelExiting ? 0 : 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: panelExiting ? 0.16 : 0.3 }}
+        >
+          <InvestBtnSpotlight
+            btnRect={phase3BtnRect}
+            onDone={handleDone}
           />
         </motion.div>
       )}
