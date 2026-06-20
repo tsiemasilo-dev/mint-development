@@ -1800,7 +1800,7 @@ const HomePage = ({
           );
 
           return (
-            <section data-coach-pending-orders="true" className="sticky top-0 z-20 py-3 -my-3" style={{ background: '#f8f6fa' }}>
+            <section data-coach-pending-orders="true" className="sticky top-0 z-20 pb-3 -mb-3" style={{ background: '#f8f6fa' }}>
               <div className="flex items-end justify-between px-5 mb-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-slate-900">Pending orders</p>
