@@ -404,6 +404,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setShowBasketsExplainer(false);
     }
   }, [viewMode, childFilter]);
+
+  // Pre-fetch Lottie JSON on page mount so the browser cache is warm
+  // before the user presses the invest button
+  useEffect(() => {
+    fetch("https://lottie.host/abde670e-c9ef-40b6-9009-6dfb6bbebc0a/1ank9HLrmf.json")
+      .catch(() => {});
+  }, []);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);

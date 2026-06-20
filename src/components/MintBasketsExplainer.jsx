@@ -141,7 +141,7 @@ function WordReveal({ text, baseDelay = 0, wordStyle }) {
 /* ─────────────────────────────────────────────────────────
    Phase 0 — Tab coach mark
 ───────────────────────────────────────────────────────── */
-function TabSpotlight({ rect }) {
+function TabSpotlight({ rect, onLottieLoad }) {
   if (!rect) return null;
   const pad = 9;
   const hole = {
@@ -153,30 +153,37 @@ function TabSpotlight({ rect }) {
     height: rect.height + pad * 2,
   };
 
+  // Position: 62% of the way from top of screen down to the tab,
+  // centered horizontally — puts it in the lower-middle of the open space.
+  const lottieTop = Math.round(hole.top * 0.62);
+
   return (
     <>
       <SingleHoleOverlay hole={hole} />
       <AnimatedRing rect={rect} pad={pad} borderRadius={16} zIndex={999} />
 
-      {/* Lottie animation — centered in the main content area above the tab */}
+      {/* Lottie animation — lower-centered in the open space above the tab */}
       <motion.div
-        className="pointer-events-none fixed z-[1000] flex items-center justify-center"
+        className="pointer-events-none fixed z-[1000]"
         style={{
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: hole.top,
+          top:  lottieTop,
+          left: "50%",
+          transform: "translate(-50%, -50%)",
         }}
         initial={{ opacity: 0, scale: 0.88 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ delay: 0.25, duration: 0.45, ease: "easeOut" }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
       >
         <DotLottieReact
           src="https://lottie.host/abde670e-c9ef-40b6-9009-6dfb6bbebc0a/1ank9HLrmf.json"
           loop
           autoplay
           style={{ width: 260, height: 260 }}
+          dotLottieRefCallback={(dLottie) => {
+            if (!dLottie) return;
+            dLottie.addEventListener("load", () => onLottieLoad?.());
+          }}
         />
       </motion.div>
 
@@ -446,6 +453,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
   );
   const [visible, setVisible]         = useState(true);
   const [panelExiting, setPanelExiting] = useState(false);
+  const [lottieReady, setLottieReady]  = useState(false);
   const phaseTimer    = useRef(null);
   const cardSectionRef = useRef(null); // element we translateY to make room
 
@@ -490,12 +498,12 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     return () => window.removeEventListener("resize", update);
   }, [tabRef]);
 
-  // Phase 0 → 1 after 2.5 s
+  // Phase 0 → 1: wait for Lottie to finish loading, THEN wait 2.5 s
   useEffect(() => {
-    if (phase !== 0) return;
+    if (phase !== 0 || !lottieReady) return;
     phaseTimer.current = setTimeout(() => setPhase(1), 2500);
     return () => clearTimeout(phaseTimer.current);
-  }, [phase]);
+  }, [phase, lottieReady]);
 
   // Phase 1: find card, scroll it to right, capture rect + border radius
   useEffect(() => {
@@ -571,7 +579,7 @@ export default function MintBasketsExplainer({ onDone, tabRef }) {
     <AnimatePresence>
       {phase === 0 && (
         <motion.div key="phase0" exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-          <TabSpotlight rect={tabRect} />
+          <TabSpotlight rect={tabRect} onLottieLoad={() => setLottieReady(true)} />
         </motion.div>
       )}
       {phase === 1 && cardRect && (
