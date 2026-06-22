@@ -232,8 +232,8 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
     };
   }, []);
 
-  const startLoginRateLimitCooldown = useCallback(() => {
-    const cooldownTime = LOGIN_COOLDOWN_TIME;
+  const startLoginRateLimitCooldown = useCallback((durationSecs = LOGIN_COOLDOWN_TIME) => {
+    const cooldownTime = durationSecs;
     setLoginCooldown(cooldownTime);
     setLoginCooldownLevel((prev) => prev + 1);
     setShowLoginRateLimitScreen(true);
@@ -586,28 +586,47 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
     
     try {
       if (onPreLogin) onPreLogin();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPassword,
+
+      // Route login through our server so the attempt is recorded server-side
+      // and the account gets locked for real (survives page refreshes).
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       });
-      
-      if (error) {
-        const newAttempts = loginAttempts + 1;
-        setLoginAttempts(newAttempts);
-        
-        if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-          startLoginRateLimitCooldown();
+      const data = await resp.json();
+
+      if (!resp.ok || !data.success) {
+        if (data.locked) {
+          // Server confirmed lockout — sync UI to match
+          setLoginAttempts(MAX_LOGIN_ATTEMPTS);
+          startLoginRateLimitCooldown(data.lockedFor || LOGIN_COOLDOWN_TIME);
           setLoginPassword('');
           setIsLoading(false);
           return;
         }
-        
-        showToast(`Incorrect email or password. ${MAX_LOGIN_ATTEMPTS - newAttempts} attempts remaining.`);
+
+        const remaining = data.attemptsRemaining ?? Math.max(0, MAX_LOGIN_ATTEMPTS - loginAttempts - 1);
+        setLoginAttempts(MAX_LOGIN_ATTEMPTS - remaining);
+
+        if (remaining === 0) {
+          startLoginRateLimitCooldown(data.lockedFor || LOGIN_COOLDOWN_TIME);
+        } else {
+          showToast(`Incorrect email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+        }
         setLoginPassword('');
         setIsLoading(false);
         return;
       }
-      
+
+      // Restore the Supabase session returned by the server
+      if (data.session?.access_token && data.session?.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+
       setLoginAttempts(0);
       const isFirstTimeLogin = isFirstLogin(loginEmail);
       if (isFirstTimeLogin) {

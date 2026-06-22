@@ -40,7 +40,7 @@ const cors = require("cors");
 const crypto = require("crypto");
 const helmet = require("helmet");
 const { Pool } = require("pg");
-const { recordInvestmentSchema, eftDepositSchema, ozowInitiateSchema, ozowRecordSuccessSchema, familyMemberSchema, confirmPairingSchema, validate } = require("./validation.cjs");
+const { loginSchema, recordInvestmentSchema, eftDepositSchema, ozowInitiateSchema, ozowRecordSuccessSchema, familyMemberSchema, confirmPairingSchema, validate } = require("./validation.cjs");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
@@ -1049,6 +1049,30 @@ async function ensureAuditLogsTable() {
   }
 }
 ensureAuditLogsTable();
+
+async function ensureLoginAttemptsTable() {
+  if (!pgPool) return;
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        id           BIGSERIAL PRIMARY KEY,
+        email_hash   TEXT NOT NULL,
+        ip_address   TEXT,
+        attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        success      BOOLEAN NOT NULL DEFAULT FALSE
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_login_attempts_email_hash ON login_attempts(email_hash)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at ON login_attempts(attempted_at DESC)`);
+    console.log('[auth] login_attempts table ready');
+  } catch (e) {
+    console.error('[auth] Failed to create login_attempts table:', e.message);
+  } finally {
+    client.release();
+  }
+}
+ensureLoginAttemptsTable();
 
 // safeError — returns a safe error message for API responses.
 // In production: always returns a generic string so internal details never reach clients.
@@ -2112,6 +2136,128 @@ app.post("/api/sumsub/sync-status", async (req, res) => {
       success: false,
       error: { message: error.message || "Failed to sync status" }
     });
+  }
+});
+
+// ── Server-side login with account lockout ─────────────────────────────────
+// authLimiter is applied automatically via app.use(["/api/auth", ...], authLimiter)
+const LOGIN_MAX_FAILURES  = 5;   // failures before lockout
+const LOGIN_WINDOW_MINS   = 15;  // sliding window to count failures
+const LOGIN_LOCKOUT_SECS  = 1800; // 30-minute lockout
+
+app.post("/api/auth/login", async (req, res) => {
+  const parsed = validate(loginSchema, req.body, res);
+  if (!parsed) return;
+
+  const { email, password } = parsed;
+  const emailHash = crypto.createHash("sha256").update(email.toLowerCase().trim()).digest("hex");
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || null;
+
+  try {
+    if (pgPool) {
+      // 1. Check current failure count in the rolling window
+      const { rows: countRows } = await pgPool.query(
+        `SELECT COUNT(*) AS cnt FROM login_attempts
+         WHERE email_hash = $1 AND success = FALSE
+         AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
+        [emailHash]
+      );
+      const failCount = parseInt(countRows[0].cnt, 10);
+
+      if (failCount >= LOGIN_MAX_FAILURES) {
+        // Find the timestamp of the Nth failure to calculate unlock time
+        const { rows: nthRows } = await pgPool.query(
+          `SELECT attempted_at FROM login_attempts
+           WHERE email_hash = $1 AND success = FALSE
+           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'
+           ORDER BY attempted_at ASC LIMIT 1 OFFSET ${LOGIN_MAX_FAILURES - 1}`,
+          [emailHash]
+        );
+        if (nthRows.length > 0) {
+          const nthFailAt   = new Date(nthRows[0].attempted_at);
+          const unlockedAt  = new Date(nthFailAt.getTime() + LOGIN_LOCKOUT_SECS * 1000);
+          const secondsLeft = Math.ceil((unlockedAt - Date.now()) / 1000);
+          if (secondsLeft > 0) {
+            console.warn(`[auth/login] Account locked for ${emailHash.slice(0, 8)}… — ${secondsLeft}s remaining`);
+            return res.status(429).json({
+              success: false,
+              locked: true,
+              lockedFor: secondsLeft,
+              error: `Account temporarily locked. Try again in ${Math.ceil(secondsLeft / 60)} minutes.`,
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Attempt the login via Supabase (anon client — signInWithPassword requires it)
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    // 3. Record the attempt
+    if (pgPool) {
+      await pgPool.query(
+        `INSERT INTO login_attempts (email_hash, ip_address, success) VALUES ($1, $2, $3)`,
+        [emailHash, ipAddress, !error]
+      ).catch(e => console.error("[auth/login] Failed to record attempt:", e.message));
+
+      // Prune old records to keep the table small (runs async, non-blocking)
+      pgPool.query(`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '2 hours'`)
+        .catch(() => {});
+    }
+
+    if (error) {
+      // Count remaining attempts after recording
+      let attemptsRemaining = LOGIN_MAX_FAILURES;
+      if (pgPool) {
+        const { rows } = await pgPool.query(
+          `SELECT COUNT(*) AS cnt FROM login_attempts
+           WHERE email_hash = $1 AND success = FALSE
+           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
+          [emailHash]
+        );
+        attemptsRemaining = Math.max(0, LOGIN_MAX_FAILURES - parseInt(rows[0].cnt, 10));
+      }
+
+      const justLocked = attemptsRemaining === 0;
+      console.warn(`[auth/login] Failed for ${emailHash.slice(0, 8)}… — remaining: ${attemptsRemaining}`);
+      return res.status(401).json({
+        success: false,
+        locked: justLocked,
+        attemptsRemaining,
+        lockedFor: justLocked ? LOGIN_LOCKOUT_SECS : null,
+        error: justLocked
+          ? "Account temporarily locked after too many failed attempts. Try again in 30 minutes."
+          : "Incorrect email or password.",
+      });
+    }
+
+    // 4. Success — clear failure records so they get a fresh slate
+    if (pgPool) {
+      pgPool.query(
+        `DELETE FROM login_attempts WHERE email_hash = $1 AND success = FALSE`,
+        [emailHash]
+      ).catch(() => {});
+    }
+
+    writeAuditLog(null, {
+      userId: data.user?.id,
+      action: "auth.login.success",
+      amountCents: null,
+      ipAddress,
+      metadata: null,
+    });
+
+    console.log(`[auth/login] Success for user ${data.user?.id}`);
+    return res.json({
+      success: true,
+      session: data.session,
+      user: { id: data.user.id, email: data.user.email },
+      attemptsRemaining: LOGIN_MAX_FAILURES,
+    });
+
+  } catch (err) {
+    console.error("[auth/login] Unexpected error:", err.message);
+    return res.status(500).json({ success: false, error: safeError(err) });
   }
 });
 

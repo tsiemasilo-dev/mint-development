@@ -100,7 +100,13 @@ function validate(schema, rawBody, res) {
   return result.data;
 }
 
+const loginSchema = z.object({
+  email:    z.string().email("email must be a valid email address"),
+  password: z.string().min(6, "password must be at least 6 characters").max(256),
+});
+
 module.exports = {
+  loginSchema,
   recordInvestmentSchema,
   eftDepositSchema,
   ozowInitiateSchema,
