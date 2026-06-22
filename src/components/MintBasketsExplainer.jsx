@@ -1559,6 +1559,18 @@ export default function MintBasketsExplainer({
 
   const content = (
     <>
+      {/* Persistent full-screen interaction blocker — active for the entire coach.
+          Sits at z-index 10000, ABOVE the strategy sheet (9999) and backdrop (9998)
+          but BELOW the overlay panels and callout boxes (10001+).
+          This prevents any tap on underlying UI during ALL phases, including the
+          gap phase (1.5) when the strategy sheet is opening but no overlay renders.
+          Being first in the DOM at the same z-index as the panels, the panels render
+          on top of it; but in the hole areas where panels are absent it wins. */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 10000,
+        background: "transparent", pointerEvents: "auto",
+      }} />
+
       {/* Phase 6 — self-contained mock balance card aligned to real card's position */}
       {showMockCard && <MockBalanceCard cardRef={mockCardRef} hBounds={mockCardHBounds} />}
 
