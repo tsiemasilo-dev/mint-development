@@ -1624,7 +1624,7 @@ const SwipeableBalanceCard = ({
   const TrendIcon = isLoss ? TrendingDown : TrendingUp;
 
   return (
-    <div className="rounded-3xl gradient-hero-card shadow-hero p-4 relative overflow-hidden border border-white/5">
+    <div data-coach-balance-card="true" className="rounded-3xl gradient-hero-card shadow-hero p-4 relative overflow-hidden border border-white/5">
       {/* Ambient glows */}
       <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-accent/30 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
