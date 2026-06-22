@@ -1088,16 +1088,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           return;
         }
 
-        // Calculate cumulative returns
+        // Calculate cumulative returns — skip rows with null 1d_pct to avoid flat tails
         const cumulativeData = [];
         let cumulative = 0;
 
         dailyReturns.forEach((day) => {
-          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0; // Convert percentage to decimal
+          if (day["1d_pct"] == null) return; // skip days with no data
+          const dailyReturn = day["1d_pct"] / 100;
           cumulative += dailyReturn;
           cumulativeData.push({
             d: day.as_of_date,
-            v: Number((cumulative * 100).toFixed(2)) // Convert back to percentage for display
+            v: Number((cumulative * 100).toFixed(2))
           });
         });
 
