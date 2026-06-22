@@ -1470,27 +1470,41 @@ export default function MintBasketsExplainer({
   const handleDone = useCallback(() => {
     // Clear any simulated pending order from the coach tour
     sessionStorage.removeItem('mint_coach_pending_sim');
-    // Unmount the phase 6 mock card (if shown)
+
+    // ── Step 1: Fade the coach overlay out, restore scroll ──
     setShowMockCard(false);
-    // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
     setPanelExiting(true);
-    // 2. Restore scroll + slide nav back in simultaneously
     document.getElementById('__mint_coach_style__')?.remove();
     document.body.style.overflow = '';
-    // Remove padding added to modal scroll container during phase 2
     if (modalScrollElRef.current) {
       modalScrollElRef.current.style.paddingBottom = '';
       modalScrollElRef.current = null;
     }
-    // 3. After overlay has faded (~180 ms), THEN slide the card back up
-    //    — card is invisible behind the faded overlay, so there is no overlap
+
+    // ── Step 2: Build an imperative full-screen exit curtain on document.body ──
+    //    This lives outside React's tree so it persists past component unmount.
+    const curtain = document.createElement('div');
+    curtain.id = '__mint_exit_curtain__';
+    Object.assign(curtain.style, {
+      position:   'fixed',
+      inset:      '0',
+      zIndex:     '10300',
+      background: 'linear-gradient(160deg,#080814 0%,#1a0a3a 60%,#3b1060 100%)',
+      opacity:    '0',
+      transition: 'opacity 0.38s cubic-bezier(0.4,0,0.2,1)',
+      pointerEvents: 'all',
+    });
+    document.body.appendChild(curtain);
+    // Trigger fade-in on the very next paint
+    requestAnimationFrame(() => requestAnimationFrame(() => { curtain.style.opacity = '1'; }));
+
+    // ── Step 3: While curtain is fading in, restore underlying DOM state ──
     setTimeout(() => {
       if (cardSectionRef.current) {
         cardSectionRef.current.style.transition = 'transform 0.45s cubic-bezier(0.4,0,0.2,1)';
         cardSectionRef.current.style.transform  = '';
         cardSectionRef.current = null;
       }
-      // Restore visibility of sections that were hidden to prevent bleed-through
       hiddenSiblingsRef.current.forEach(el => {
         el.style.transition  = '';
         el.style.maxHeight   = '';
@@ -1500,13 +1514,11 @@ export default function MintBasketsExplainer({
         el.style.pointerEvents = '';
       });
       hiddenSiblingsRef.current = [];
-      // Restore card list overflow
       const cardList2 = document.querySelector('[data-coach-overflow]');
       if (cardList2) {
         cardList2.style.overflow = cardList2.dataset.coachOverflow || '';
         delete cardList2.dataset.coachOverflow;
       }
-      // Remove the cloned pending section and restore the original
       if (pendingStickyElRef.current) {
         const p = pendingStickyElRef.current;
         if (p.clone) {
@@ -1514,20 +1526,26 @@ export default function MintBasketsExplainer({
           p.original.style.visibility = '';
         } else {
           p.style.position = '';
-          p.style.top = '';
+          p.style.top      = '';
           p.style.marginTop = '';
         }
         pendingStickyElRef.current = null;
       }
-    }, 180);
-    // 4. Unmount after card has settled, then navigate back to invest page
+    }, 160);
+
+    // ── Step 4: Once curtain is fully opaque (≈420ms) — navigate + unmount ──
     setTimeout(() => {
       setVisible(false);
+      onDone?.();
+      onNavigateToInvest?.();
+
+      // ── Step 5: After navigation renders beneath the curtain, fade it out ──
       setTimeout(() => {
-        onDone?.();
-        onNavigateToInvest?.();
-      }, 200);
-    }, 640);
+        curtain.style.transition = 'opacity 0.42s cubic-bezier(0.4,0,0.2,1)';
+        curtain.style.opacity    = '0';
+        setTimeout(() => curtain.remove(), 480);
+      }, 80);
+    }, 500);
   }, [onDone, onNavigateToInvest]);
 
   if (!visible) return null;

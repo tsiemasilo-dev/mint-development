@@ -2402,6 +2402,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <div className="mt-6 flex flex-col gap-2">
                 <button
                   onClick={() => {
+                    if (showBasketsExplainer) return;
                     const hArr = getHoldingsArray(selectedStrategy);
                     const enrichedHoldings = hArr.map(h => {
                       const sym = h.ticker || h.symbol || h;
@@ -2419,6 +2420,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 </button>
                 <button
                   onClick={() => {
+                    if (showBasketsExplainer) return;
                     setSelectedStrategy(null);
                     const hArr = getHoldingsArray(selectedStrategy);
                     const enrichedHoldings = hArr.map(h => {
