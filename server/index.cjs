@@ -6359,6 +6359,28 @@ app.get("/api/debug/user-investments", async (req, res) => {
 
 let lastCreditCheckDebug = null;
 
+// Per-user in-memory rate limit for /api/credit-check
+// Limit: 3 calls per 15 minutes per authenticated user ID
+// Each entry: { count: number, resetAt: timestamp }
+const CREDIT_CHECK_USER_WINDOW_MS = 15 * 60 * 1000;
+const CREDIT_CHECK_USER_MAX = 3;
+const creditCheckUserStore = new Map();
+
+function checkCreditCheckUserLimit(userId) {
+  const now = Date.now();
+  const entry = creditCheckUserStore.get(userId);
+  if (!entry || now > entry.resetAt) {
+    creditCheckUserStore.set(userId, { count: 1, resetAt: now + CREDIT_CHECK_USER_WINDOW_MS });
+    return { allowed: true };
+  }
+  if (entry.count >= CREDIT_CHECK_USER_MAX) {
+    const retryAfterSec = Math.ceil((entry.resetAt - now) / 1000);
+    return { allowed: false, retryAfterSec };
+  }
+  entry.count += 1;
+  return { allowed: true };
+}
+
 app.post("/api/credit-check", async (req, res) => {
   try {
     // Dynamic import for ESM service modules
@@ -6401,6 +6423,18 @@ app.post("/api/credit-check", async (req, res) => {
       }
     }
     if (!userId) userId = 'anon-dev';
+
+    // Per-user rate limit — only enforced for authenticated users
+    if (userId !== 'anon-dev') {
+      const limitResult = checkCreditCheckUserLimit(userId);
+      if (!limitResult.allowed) {
+        console.warn(`[credit-check] per-user rate limit hit for userId=${userId}, retry in ${limitResult.retryAfterSec}s`);
+        res.set("Retry-After", String(limitResult.retryAfterSec));
+        return res.status(429).json({
+          error: `Credit check limit reached. Please wait ${Math.ceil(limitResult.retryAfterSec / 60)} minute(s) before trying again.`,
+        });
+      }
+    }
 
     let loanApplicationId = body.loanApplicationId || body.loan_application_id || null;
     const applicationId = body.applicationId || loanApplicationId || `app_${Date.now()}`;
