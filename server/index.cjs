@@ -385,6 +385,10 @@ const REPLIT_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-\d+-\d+-[a-z0-9]+(\.\w+)*\.repli
 
 const app = express();
 
+// Trust the first proxy hop (Replit / Vercel reverse-proxy) so that
+// express-rate-limit reads the real client IP from X-Forwarded-For.
+app.set("trust proxy", 1);
+
 // ── Security headers (helmet) ──────────────────────────────────────────────
 // contentSecurityPolicy disabled — server sets a custom CSP below
 // crossOriginEmbedderPolicy disabled — app embeds TruID / Ozow iframes
