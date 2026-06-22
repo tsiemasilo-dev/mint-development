@@ -347,16 +347,20 @@ function PendingOrdersSpotlight({ pendingRect, onDone, onNext }) {
 const MOCK_LINE = "M 0,44 L 28,40 L 50,42 L 74,33 L 94,29 L 114,33 L 136,24 L 158,20 L 176,23 L 198,12 L 222,8 L 248,11 L 280,2";
 const MOCK_FILL = `${MOCK_LINE} L 280,50 L 0,50 Z`;
 
-function MockBalanceCard({ cardRef }) {
+function MockBalanceCard({ cardRef, hBounds }) {
+  // hBounds = { left, width, top } from the real balance card's getBoundingClientRect()
+  // This ensures the mock card aligns pixel-perfectly with where the real card sits
+  // regardless of viewport width or how the app is embedded.
+  const posStyle = hBounds
+    ? { top: hBounds.top, left: hBounds.left, width: hBounds.width }
+    : { top: 52, left: "50%", transform: "translateX(-50%)", width: "min(calc(100vw - 32px), 440px)" };
+
   return (
     <motion.div
       ref={cardRef}
       className="pointer-events-none fixed z-[10003]"
       style={{
-        top: 52,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(calc(100vw - 32px), 440px)",
+        ...posStyle,
         borderRadius: 24,
         background: "linear-gradient(135deg, hsl(270 55% 30%) 0%, hsl(265 45% 22%) 45%, hsl(260 40% 15%) 100%)",
         boxShadow: "0 20px 60px -20px hsl(270 60% 35% / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.06)",
@@ -473,21 +477,16 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
   if (!cardRect) return null;
 
   const pad = 14;
-  const hole = {
-    top:    cardRect.top    - pad,
-    left:   cardRect.left   - pad,
-    right:  cardRect.right  + pad,
-    bottom: cardRect.bottom + pad,
-    width:  cardRect.width  + pad * 2,
-    height: cardRect.height + pad * 2,
-  };
-
   const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
   const screenH = typeof window !== "undefined" ? window.innerHeight : 844;
   const panelMaxWidth = Math.min(screenW - 40, 440);
 
   // Always place the callout below the mock card
-  const panelTop = Math.min(hole.bottom + 14, screenH - 180);
+  const panelTop = Math.min(cardRect.bottom + pad + 14, screenH - 180);
+
+  // Center the callout horizontally over the card (not the full viewport)
+  const cardCenterX = cardRect.left + cardRect.width / 2;
+  const panelLeft = Math.max(16, Math.min(cardCenterX - panelMaxWidth / 2, screenW - panelMaxWidth - 16));
 
   const glassBg = {
     background: "rgba(8,8,20,0.92)",
@@ -498,12 +497,18 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
 
   return (
     <>
-      <SingleHoleOverlay hole={hole} onClick={onDone} />
+      {/* Solid full-dim overlay — no hole, so real home content never bleeds through.
+          The MockBalanceCard sits above this at z-index 10003. */}
+      <div
+        className="fixed inset-0 z-[10000]"
+        style={{ background: "rgba(0,0,0,0.72)" }}
+        onClick={onDone}
+      />
       <AnimatedRing rect={cardRect} pad={pad} borderRadius={26} zIndex={10004} pulse={true} />
 
       <div
         className="pointer-events-none fixed z-[10005]"
-        style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
+        style={{ top: panelTop, left: panelLeft, width: panelMaxWidth }}
       >
         <motion.div
           className="pointer-events-auto"
@@ -1048,6 +1053,7 @@ export default function MintBasketsExplainer({
   const [phase5PendingRect, setPhase5PendingRect] = useState(null);
   const [phase6BalanceRect, setPhase6BalanceRect] = useState(null);
   const [showMockCard, setShowMockCard] = useState(false);
+  const [mockCardHBounds, setMockCardHBounds] = useState(null);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
@@ -1397,7 +1403,17 @@ export default function MintBasketsExplainer({
     });
     hiddenSiblingsRef.current = [];
 
-    // 3. Mount the self-contained MockBalanceCard via React state.
+    // 3. Capture the real balance card's pixel position so the mock card
+    //    aligns exactly with it regardless of viewport / embedding width.
+    const realCard = document.querySelector('[data-coach-balance-card="true"]');
+    if (realCard) {
+      const r = realCard.getBoundingClientRect();
+      // Keep the card at the same horizontal position as the real card,
+      // but snap to top: 52 so it's always fully visible.
+      setMockCardHBounds({ left: r.left, width: r.width, top: 52 });
+    }
+
+    // 4. Mount the self-contained MockBalanceCard via React state.
     //    The useEffect above captures its rect and advances to phase 6.
     setShowMockCard(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1467,8 +1483,8 @@ export default function MintBasketsExplainer({
 
   const content = (
     <>
-      {/* Phase 6 — self-contained mock balance card, centered, with mock data */}
-      {showMockCard && <MockBalanceCard cardRef={mockCardRef} />}
+      {/* Phase 6 — self-contained mock balance card aligned to real card's position */}
+      {showMockCard && <MockBalanceCard cardRef={mockCardRef} hBounds={mockCardHBounds} />}
 
       {/* PaymentSuccessPage overlay — portal so it shows above everything */}
       {showSuccessOverlay && (
