@@ -232,3 +232,47 @@
 body.child-article-open > nav {
   display: none !important;
 }
+
+/* ── iOS / Android safe-area & notch handling ─────────────────────────── */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+/* Full-screen app shell must respect notch / home indicator */
+#root {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Bottom navigation bar sits above the home indicator */
+nav.bottom-nav,
+[data-bottom-nav] {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+/* Keyboard open — push content up */
+body.keyboard-open #root {
+  padding-bottom: 0;
+}
+
+/* Utility classes */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left   { padding-left:   env(safe-area-inset-left,   0px); }
+.safe-right  { padding-right:  env(safe-area-inset-right,  0px); }
+
+/* Prevent iOS rubber-band bounce on non-scrollable containers */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tap highlight removal for native feel */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
