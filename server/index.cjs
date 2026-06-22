@@ -38,6 +38,7 @@ loadEnvFile(path.join(root, ".env.local")) || loadEnvFile(path.join(root, ".env"
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+const helmet = require("helmet");
 const { Pool } = require("pg");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
@@ -382,6 +383,16 @@ const MINT_ALLOWED_ORIGINS = [
 const REPLIT_ORIGIN_RE = /^https:\/\/[a-z0-9-]+-\d+-\d+-[a-z0-9]+(\.\w+)*\.replit\.dev$/;
 
 const app = express();
+
+// ── Security headers (helmet) ──────────────────────────────────────────────
+// contentSecurityPolicy disabled — server sets a custom CSP below
+// crossOriginEmbedderPolicy disabled — app embeds TruID / Ozow iframes
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+}));
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser (server-to-server) requests and same-origin
@@ -1009,6 +1020,46 @@ async function ensureUserSessionsTable() {
   }
 }
 ensureUserSessionsTable();
+
+// ── Audit log table ────────────────────────────────────────────────────────
+async function ensureAuditLogsTable() {
+  if (!pgPool) return;
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id            BIGSERIAL PRIMARY KEY,
+        user_id       UUID,
+        action        TEXT NOT NULL,
+        amount_cents  BIGINT,
+        ip_address    TEXT,
+        metadata      JSONB,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)`);
+    console.log('[audit] audit_logs table ready');
+  } catch (e) {
+    console.error('[audit] Failed to create audit_logs table:', e.message);
+  } finally {
+    client.release();
+  }
+}
+ensureAuditLogsTable();
+
+// writeAuditLog — fire-and-forget helper. Does NOT throw; never blocks a response.
+// amountCents: integer cents (e.g. 50000 = R500.00), or null if not financial.
+// metadata: any extra JSON context (strategyId, symbol, paymentMethod, etc.)
+function writeAuditLog(db, { userId, action, amountCents, ipAddress, metadata } = {}) {
+  if (!pgPool) return;
+  const payload = { user_id: userId || null, action, amount_cents: amountCents || null, ip_address: ipAddress || null, metadata: metadata ? JSON.stringify(metadata) : null };
+  pgPool.query(
+    `INSERT INTO audit_logs (user_id, action, amount_cents, ip_address, metadata) VALUES ($1,$2,$3,$4,$5::jsonb)`,
+    [payload.user_id, payload.action, payload.amount_cents, payload.ip_address, payload.metadata]
+  ).catch(err => console.error('[audit] writeAuditLog error:', err.message));
+}
 
 runFuneralCoverMigration(pgPool).catch(err => {
   console.warn("[funeral-cover] Migration skipped — DB unreachable:", err.message);
@@ -2675,7 +2726,33 @@ app.get("/api/truid/status", async (req, res) => {
 });
 
 app.post("/api/truid/webhook", async (req, res) => {
+  // Verify shared secret if TRUID_WEBHOOK_SECRET is configured.
+  // TruID must be configured to send this value in the X-TruID-Signature header.
+  const truidSecret = process.env.TRUID_WEBHOOK_SECRET;
+  if (truidSecret) {
+    const incomingSignature = req.headers["x-truid-signature"] || req.headers["x-webhook-secret"];
+    if (!incomingSignature) {
+      console.warn("[TruID Webhook] Missing signature header — rejecting");
+      return res.status(401).json({ error: "Missing signature" });
+    }
+    const expected = crypto.createHmac("sha256", truidSecret).update(JSON.stringify(req.body)).digest("hex");
+    if (!crypto.timingSafeEqual(Buffer.from(incomingSignature), Buffer.from(expected))) {
+      console.warn("[TruID Webhook] Signature mismatch — rejecting");
+      return res.status(403).json({ error: "Invalid signature" });
+    }
+  }
+
   console.log("TruID webhook received:", JSON.stringify(req.body, null, 2));
+
+  const { event, userId, status } = req.body || {};
+  writeAuditLog(null, {
+    userId: userId || null,
+    action: "bank.linked",
+    amountCents: null,
+    ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+    metadata: { event, status },
+  });
+
   res.status(200).json({ received: true });
 });
 
@@ -4930,6 +5007,13 @@ app.post("/api/record-investment", async (req, res) => {
     sendOrderConfirmationEmail(db, confirmEmailData).catch(() => { });
 
     console.log("[record-investment] === SUCCESS === Holding:", JSON.stringify(holdingResult.data));
+    writeAuditLog(null, {
+      userId,
+      action: "investment.created",
+      amountCents: Math.round(Number(amount) * 100),
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      metadata: { strategyId, symbol, paymentMethod, paymentReference },
+    });
     res.json({
       success: true,
       holding: holdingResult.data,
@@ -7723,6 +7807,14 @@ app.get("/api/settlement/config", (req, res) => {
 });
 
 app.post("/api/webhooks/csdp", async (req, res) => {
+  const csdpSecret = process.env.CSDP_WEBHOOK_SECRET;
+  if (csdpSecret) {
+    const sig = req.headers["x-csdp-signature"] || req.headers["authorization"];
+    if (!sig || sig !== `Bearer ${csdpSecret}`) {
+      console.warn("[CSDP Webhook] Invalid or missing secret — rejecting");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
   console.log("[CSDP Webhook] Received:", JSON.stringify(req.body));
 
   if (!settlementConfig.csdpEnabled) {
@@ -7774,6 +7866,14 @@ app.post("/api/webhooks/csdp", async (req, res) => {
 });
 
 app.post("/api/webhooks/broker", async (req, res) => {
+  const brokerSecret = process.env.BROKER_WEBHOOK_SECRET;
+  if (brokerSecret) {
+    const sig = req.headers["x-broker-signature"] || req.headers["authorization"];
+    if (!sig || sig !== `Bearer ${brokerSecret}`) {
+      console.warn("[Broker Webhook] Invalid or missing secret — rejecting");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
   console.log("[Broker Webhook] Received:", JSON.stringify(req.body));
 
   if (!settlementConfig.brokerEnabled) {
@@ -8219,6 +8319,13 @@ app.post("/api/ozow/record-success", async (req, res) => {
     }
 
     console.log(`[ozow/record-success] Investment recorded for user=${userId} strategy=${strategyId} amount=${amountZAR} ref=${transactionRef}`);
+    writeAuditLog(null, {
+      userId,
+      action: "investment.ozow.recorded",
+      amountCents: Math.round(amountZAR * 100),
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      metadata: { strategyId, transactionRef, paymentMethod: "ozow" },
+    });
     return res.json({ success: true });
   } catch (err) {
     console.error("[ozow/record-success] error:", err);
@@ -8388,6 +8495,13 @@ app.post("/api/ozow/notify", async (req, res) => {
         created_at: new Date().toISOString(),
       });
       console.log(`[ozow/notify] Transaction recorded for ref=${TransactionReference}`);
+      writeAuditLog(null, {
+        userId,
+        action: "investment.ozow.confirmed",
+        amountCents: Math.round(amountZAR * 100),
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+        metadata: { strategyId, transactionRef: TransactionReference, paymentMethod: "ozow" },
+      });
 
       // Upsert user_strategies
       const { data: existingUS } = await db
@@ -8738,6 +8852,13 @@ app.post('/api/family-members', async (req, res) => {
         };
         if (!emailSent) responsePayload.fallback_code = pairingCode;
 
+        writeAuditLog(null, {
+          userId: primary_user_id,
+          action: "family.spouse.linked",
+          amountCents: null,
+          ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+          metadata: { relationship, masked_email: masked, email_sent: emailSent },
+        });
         return res.status(200).json(responsePayload);
       }
 
@@ -8869,6 +8990,7 @@ app.post('/api/family-members', async (req, res) => {
           vals
         );
         const member = rows[0];
+        writeAuditLog(null, { userId: primary_user_id, action: "family.child.added", amountCents: null, ipAddress: req.ip || req.headers["x-forwarded-for"] || null, metadata: { relationship, memberId: member.id } });
         return res.status(201).json({ member: { ...member, id_number: childIdClean || member.id_number } });
       }
 
@@ -8878,10 +9000,13 @@ app.post('/api/family-members', async (req, res) => {
         if (e2 && e2.message?.includes('certificate_url')) {
           const { data: d3, error: e3 } = await db.from('family_members').insert(basePayload).select().single();
           if (e3) throw e3;
+          writeAuditLog(null, { userId: primary_user_id, action: "family.child.added", amountCents: null, ipAddress: req.ip || req.headers["x-forwarded-for"] || null, metadata: { relationship, memberId: d3.id } });
           return res.status(201).json({ member: { ...d3, id_number: childIdClean || d3.id_number } });
         } else if (e2) { throw e2; }
+        writeAuditLog(null, { userId: primary_user_id, action: "family.child.added", amountCents: null, ipAddress: req.ip || req.headers["x-forwarded-for"] || null, metadata: { relationship, memberId: d2.id } });
         return res.status(201).json({ member: { ...d2, id_number: childIdClean || d2.id_number } });
       }
+      writeAuditLog(null, { userId: primary_user_id, action: "family.child.added", amountCents: null, ipAddress: req.ip || req.headers["x-forwarded-for"] || null, metadata: { relationship, memberId: d1.id } });
       return res.status(201).json({ member: { ...d1, id_number: childIdClean || d1.id_number } });
     }
   } catch (e) {

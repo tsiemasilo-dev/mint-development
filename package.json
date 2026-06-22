@@ -41,6 +41,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "framer-motion": "^11.18.2",
+    "helmet": "^8.2.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.451.0",
