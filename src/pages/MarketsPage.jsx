@@ -363,7 +363,7 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
@@ -1414,6 +1414,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           }}
           onCloseStrategyForCoach={() => setSelectedStrategy(null)}
           onNavigateToHome={() => onNavigateToHome?.()}
+          onNavigateToInvest={() => onNavigateToInvest?.()}
         />
       )}
       {/* Header */}

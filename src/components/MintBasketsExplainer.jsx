@@ -17,13 +17,12 @@ const PANEL = {
 /* ─────────────────────────────────────────────────────────
    Single-hole 4-panel overlay (Phase 0 — tab only)
 ───────────────────────────────────────────────────────── */
-function SingleHoleOverlay({ hole, onClick }) {
+function SingleHoleOverlay({ hole }) {
   if (!hole) return (
     <motion.div
       className="fixed inset-0 pointer-events-auto"
       style={{ ...PANEL, zIndex: 10000 }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={onClick}
     />
   );
 
@@ -35,10 +34,10 @@ function SingleHoleOverlay({ hole, onClick }) {
       transition={{ duration: 0.3 }}
       style={{ position: "fixed", inset: 0, zIndex: 10000, pointerEvents: "none" }}
     >
-      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: t }} onClick={onClick} />
-      <div style={{ ...PANEL, top: b, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
-      <div style={{ ...PANEL, top: t, left: 0, width: l, height: b - t }} onClick={onClick} />
-      <div style={{ ...PANEL, top: t, left: r, right: 0, height: b - t }} onClick={onClick} />
+      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: t }} />
+      <div style={{ ...PANEL, top: b, left: 0, right: 0, bottom: 0 }} />
+      <div style={{ ...PANEL, top: t, left: 0, width: l, height: b - t }} />
+      <div style={{ ...PANEL, top: t, left: r, right: 0, height: b - t }} />
     </motion.div>
   );
 }
@@ -47,13 +46,12 @@ function SingleHoleOverlay({ hole, onClick }) {
    Dual-hole overlay (Phase 1 — tab + card both clear)
    7 panels: top / tab-left / tab-right / middle / card-left / card-right / bottom
 ───────────────────────────────────────────────────────── */
-function DualHoleOverlay({ tabHole, cardHole, onClick }) {
+function DualHoleOverlay({ tabHole, cardHole }) {
   if (!tabHole || !cardHole) return (
     <motion.div
       className="fixed inset-0 pointer-events-auto"
       style={{ ...PANEL, zIndex: 10000 }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={onClick}
     />
   );
 
@@ -67,19 +65,19 @@ function DualHoleOverlay({ tabHole, cardHole, onClick }) {
       style={{ position: "fixed", inset: 0, zIndex: 10000, pointerEvents: "none" }}
     >
       {/* above tab */}
-      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: tt }} onClick={onClick} />
+      <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: tt }} />
       {/* tab row — left of tab */}
-      <div style={{ ...PANEL, top: tt, left: 0, width: tl, height: tb - tt }} onClick={onClick} />
+      <div style={{ ...PANEL, top: tt, left: 0, width: tl, height: tb - tt }} />
       {/* tab row — right of tab */}
-      <div style={{ ...PANEL, top: tt, left: tr, right: 0, height: tb - tt }} onClick={onClick} />
+      <div style={{ ...PANEL, top: tt, left: tr, right: 0, height: tb - tt }} />
       {/* between tab and card */}
-      <div style={{ ...PANEL, top: tb, left: 0, right: 0, height: Math.max(0, ct - tb) }} onClick={onClick} />
+      <div style={{ ...PANEL, top: tb, left: 0, right: 0, height: Math.max(0, ct - tb) }} />
       {/* card row — left of card */}
-      <div style={{ ...PANEL, top: ct, left: 0, width: cl, height: cb - ct }} onClick={onClick} />
+      <div style={{ ...PANEL, top: ct, left: 0, width: cl, height: cb - ct }} />
       {/* card row — right of card */}
-      <div style={{ ...PANEL, top: ct, left: cr, right: 0, height: cb - ct }} onClick={onClick} />
+      <div style={{ ...PANEL, top: ct, left: cr, right: 0, height: cb - ct }} />
       {/* below card */}
-      <div style={{ ...PANEL, top: cb, left: 0, right: 0, bottom: 0 }} onClick={onClick} />
+      <div style={{ ...PANEL, top: cb, left: 0, right: 0, bottom: 0 }} />
     </motion.div>
   );
 }
@@ -513,7 +511,7 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
   const panelLeft = Math.max(16, Math.min(cardCenterX - panelMaxWidth / 2, screenW - panelMaxWidth - 16));
 
   const glassBg = {
-    background: "rgba(8,8,20,0.92)",
+    background: "rgba(8,8,20,0.88)",
     backdropFilter: "blur(28px)",
     WebkitBackdropFilter: "blur(28px)",
     border: "1px solid rgba(255,255,255,0.14)",
@@ -526,7 +524,6 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
       <div
         className="fixed inset-0 z-[10000]"
         style={{ background: "rgba(0,0,0,0.72)" }}
-        onClick={onDone}
       />
       <AnimatedRing rect={cardRect} pad={pad} borderRadius={26} zIndex={10004} pulse={true} />
 
@@ -671,14 +668,14 @@ function InvestBtnSpotlight({ btnRect, onNext }) {
           <motion.button
             onClick={onNext}
             style={{
-              padding: "8px 22px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-              letterSpacing: "0.04em", color: "#fff",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.38)", cursor: "pointer",
+              width: "100%", padding: "10px 0", borderRadius: 12,
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+              border: "none", cursor: "pointer",
             }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 1.05, duration: 0.26 }}
-            whileTap={{ scale: 0.93 }}
+            whileTap={{ scale: 0.97 }}
           >
             Next →
           </motion.button>
@@ -876,14 +873,14 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
           <motion.button
             onClick={onNext}
             style={{
-              padding: "8px 22px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-              letterSpacing: "0.04em", color: "#fff",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.38)", cursor: "pointer",
+              width: "100%", padding: "10px 0", borderRadius: 12,
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+              border: "none", cursor: "pointer",
             }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 1.05, duration: 0.26 }}
-            whileTap={{ scale: 0.93 }}
+            whileTap={{ scale: 0.97 }}
           >
             Next →
           </motion.button>
@@ -951,15 +948,15 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
 
   // Shared glass panel style
   const glassBg = {
-    background: "rgba(10,10,22,0.80)",
-    backdropFilter: "blur(24px)",
-    WebkitBackdropFilter: "blur(24px)",
-    border: "1px solid rgba(255,255,255,0.13)",
+    background: "rgba(8,8,20,0.88)",
+    backdropFilter: "blur(28px)",
+    WebkitBackdropFilter: "blur(28px)",
+    border: "1px solid rgba(255,255,255,0.14)",
   };
 
   return (
     <>
-      <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} onClick={onDone} />
+      <DualHoleOverlay tabHole={tabHole} cardHole={cardHole} />
 
       {/* Tab ring stays alive */}
       <AnimatedRing rect={tabRect} pad={tpad} borderRadius={16} zIndex={10003} pulse={true} />
@@ -1038,14 +1035,14 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           <motion.button
             onClick={onNext ?? onDone}
             style={{
-              padding: "7px 20px", borderRadius: 9, fontSize: 12, fontWeight: 600,
-              letterSpacing: "0.04em", color: "#fff",
-              background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.36)", cursor: "pointer",
+              width: "100%", padding: "10px 0", borderRadius: 12,
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+              border: "none", cursor: "pointer",
             }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 0.90, duration: 0.24 }}
-            whileTap={{ scale: 0.93 }}
+            whileTap={{ scale: 0.97 }}
           >
             Next →
           </motion.button>
@@ -1065,6 +1062,7 @@ export default function MintBasketsExplainer({
   onNavigateToFactsheetForCoach,
   onNavigateToHome,
   onCloseStrategyForCoach,
+  onNavigateToInvest,
 }) {
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
@@ -1102,6 +1100,12 @@ export default function MintBasketsExplainer({
       body > nav {
         transform: translateY(110%) !important;
         transition: transform 0.35s cubic-bezier(0.4,0,1,1) !important;
+        pointer-events: none !important;
+      }
+      [data-coach-target="true"],
+      [data-coach-first="true"],
+      [data-coach-factsheet-btn="true"],
+      [data-coach-invest-btn="true"] {
         pointer-events: none !important;
       }
     `;
@@ -1419,6 +1423,10 @@ export default function MintBasketsExplainer({
 
   // handleGoToPhase6: Phase 5 → 6 — clean up pending clone, show self-contained mock card
   const handleGoToPhase6 = useCallback(() => {
+    // Clear the simulated pending order so it stops showing on the home tab
+    sessionStorage.removeItem('mint_coach_pending_sim');
+    window.dispatchEvent(new CustomEvent('mint-coach-sim-update'));
+
     // 1. Remove the phase 5 pending clone + restore the original element
     if (pendingStickyElRef.current) {
       const p = pendingStickyElRef.current;
@@ -1512,12 +1520,15 @@ export default function MintBasketsExplainer({
         pendingStickyElRef.current = null;
       }
     }, 180);
-    // 4. Unmount after card has settled
+    // 4. Unmount after card has settled, then navigate back to invest page
     setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDone?.(), 200);
+      setTimeout(() => {
+        onDone?.();
+        onNavigateToInvest?.();
+      }, 200);
     }, 640);
-  }, [onDone]);
+  }, [onDone, onNavigateToInvest]);
 
   if (!visible) return null;
 
@@ -1537,6 +1548,7 @@ export default function MintBasketsExplainer({
           <PaymentSuccessPage
             strategyName="Famous Brands"
             onDone={() => setShowSuccessOverlay(false)}
+            isCoachMode={true}
           />
         </div>
       )}

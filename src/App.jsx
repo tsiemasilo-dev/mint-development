@@ -1433,6 +1433,7 @@ const App = () => {
                   onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
                   childFilter={marketsChildFilter}
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
+                  onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
                 />
               </AppLayout>
             )}
