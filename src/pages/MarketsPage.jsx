@@ -2179,18 +2179,18 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <motion.div
                 key="preview-backdrop"
                 className="fixed inset-0"
-                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)" }}
+                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)", pointerEvents: showBasketsExplainer ? "none" : undefined }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                onClick={() => setSelectedStrategy(null)}
+                onClick={() => { if (showBasketsExplainer) return; setSelectedStrategy(null); }}
               />
               {/* Sheet */}
               <motion.div
                 key="preview-sheet"
                 className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
-                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                style={{ zIndex: 9999, maxHeight: "92dvh", pointerEvents: showBasketsExplainer ? "none" : undefined }}
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
