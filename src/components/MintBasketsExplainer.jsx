@@ -149,6 +149,28 @@ function WordReveal({ text, baseDelay = 0, wordStyle }) {
 }
 
 /* ─────────────────────────────────────────────────────────
+   Step progress dots — shown at the top of every callout
+───────────────────────────────────────────────────────── */
+function StepDots({ step, total = 6 }) {
+  return (
+    <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 10 }}>
+      {Array.from({ length: total }, (_, i) => {
+        const active = i + 1 === step;
+        return (
+          <div key={i} style={{
+            width: active ? 18 : 6,
+            height: 6,
+            borderRadius: 3,
+            background: active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.22)",
+            transition: "width 0.3s ease",
+          }} />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    Phase 4 — Purchase Successful card spotlight
 ───────────────────────────────────────────────────────── */
 function SuccessCardSpotlight({ cardRect, onNext }) {
@@ -198,6 +220,7 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
           exit={{ opacity: 0 }}
           transition={{ delay: 0.28, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={4} />
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -301,6 +324,7 @@ function PendingOrdersSpotlight({ pendingRect, onDone, onNext }) {
           exit={{ opacity: 0 }}
           transition={{ delay: 0.28, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={5} />
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -517,6 +541,7 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
           exit={{ opacity: 0 }}
           transition={{ delay: 0.30, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={6} />
           <motion.p
             style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.15, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -617,6 +642,7 @@ function InvestBtnSpotlight({ btnRect, onNext }) {
           exit={{ opacity: 0 }}
           transition={{ delay: 0.32, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={3} />
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -814,6 +840,7 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
           exit={{ opacity: 0 }}
           transition={{ delay: 0.32, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={2} />
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
               letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
@@ -978,6 +1005,7 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
           exit={{ opacity: 0 }}
           transition={{ delay: 0.28, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
+          <StepDots step={1} />
           <motion.p
             style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1,
               letterSpacing: "-0.02em", color: "#fff", marginBottom: 7 }}
@@ -1224,8 +1252,17 @@ export default function MintBasketsExplainer({
         });
       }
 
-      // Capture the final rect for the spotlight
-      const t3 = setTimeout(() => setCardRect(el.getBoundingClientRect()), 200);
+      // Push the card section DOWN to open up gap for the callout panel.
+      // Without this, the gap between the tab ring and the card top is only ~200px
+      // — too small for the ~230px callout. Pushing 90px creates a clean buffer.
+      if (section) {
+        cardSectionRef.current = section;
+        section.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1)';
+        section.style.transform  = 'translateY(90px)';
+      }
+
+      // Capture rect AFTER the push animation settles (0.38s push + margin)
+      const t3 = setTimeout(() => setCardRect(el.getBoundingClientRect()), 480);
       timers.push(t3);
     }, 1350);
 
