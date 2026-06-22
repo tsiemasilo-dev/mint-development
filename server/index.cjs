@@ -40,6 +40,7 @@ const cors = require("cors");
 const crypto = require("crypto");
 const helmet = require("helmet");
 const { Pool } = require("pg");
+const { recordInvestmentSchema, eftDepositSchema, ozowInitiateSchema, ozowRecordSuccessSchema, familyMemberSchema, confirmPairingSchema, validate } = require("./validation.cjs");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
@@ -4501,7 +4502,9 @@ app.post("/api/record-investment", async (req, res) => {
     const db = getAuthenticatedDb(token);
     console.log("[record-investment] Using DB client:", supabaseAdmin ? "admin (service role)" : "anon");
 
-    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown, childUserId, childFamilyMemberId } = req.body;
+    const parsed = validate(recordInvestmentSchema, req.body, res);
+    if (!parsed) return;
+    const { securityId, symbol, name, amount, baseAmount, strategyId, paymentReference, shareCount, paymentMethod, feesBreakdown, childUserId, childFamilyMemberId } = parsed;
     rollbackPaymentMethod = paymentMethod;
     // baseAmount = investment amount excluding fees; amount = total charged including fees
     const investAmount = (baseAmount && baseAmount > 0) ? baseAmount : amount;
@@ -5060,9 +5063,9 @@ app.post("/api/eft-deposit", async (req, res) => {
 
     const db = getAuthenticatedDb(token);
     const userId = user.id;
-    const { amount, reference, securityId, symbol, name, strategyId, baseAmount, shareCount } = req.body;
-
-    if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, error: "Invalid amount" });
+    const parsedEft = validate(eftDepositSchema, req.body, res);
+    if (!parsedEft) return;
+    const { amount, reference, securityId, symbol, name, strategyId, baseAmount, shareCount } = parsedEft;
 
     const amountCents = Math.round(Number(amount) * 100);
     const eftRef = reference || `EFT-${Date.now()}`;
@@ -8089,17 +8092,15 @@ app.get('/api/diagnose/news-articles', async (req, res) => {
 
 app.post("/api/ozow/initiate", async (req, res) => {
   try {
-    const { amount, strategyName, strategyId, userId, userEmail, successUrl, cancelUrl, errorUrl, notifyUrl } = req.body;
+    const parsedOzow = validate(ozowInitiateSchema, req.body, res);
+    if (!parsedOzow) return;
+    const { amount, strategyName, strategyId, userId, userEmail, successUrl, cancelUrl, errorUrl, notifyUrl } = parsedOzow;
 
     const siteCode = process.env.OZOW_SITE_CODE;
     const privateKey = process.env.OZOW_PRIVATE_KEY;
 
     if (!siteCode || !privateKey) {
       return res.status(500).json({ success: false, error: "Ozow not configured. Please add OZOW_SITE_CODE and OZOW_PRIVATE_KEY." });
-    }
-
-    if (!amount || Number(amount) <= 0) {
-      return res.status(400).json({ success: false, error: "Invalid payment amount." });
     }
 
     const crypto = require("crypto");
@@ -8183,17 +8184,10 @@ app.post("/api/ozow/record-success", async (req, res) => {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
-    const { transactionRef, strategyId, amount } = req.body;
+    const parsedRS = validate(ozowRecordSuccessSchema, req.body, res);
+    if (!parsedRS) return;
+    const { transactionRef, strategyId, amount } = parsedRS;
     const userId = user.id;
-
-    if (!transactionRef || !strategyId || !amount || Number(amount) <= 0) {
-      return res.status(400).json({ success: false, error: "Missing required fields" });
-    }
-
-    // Only accept refs we generated
-    if (!transactionRef.startsWith("MINT-")) {
-      return res.status(400).json({ success: false, error: "Invalid transaction reference" });
-    }
 
     const db = getAuthenticatedDb(token);
     if (!db) return res.status(500).json({ success: false, error: "DB unavailable" });
@@ -8692,13 +8686,9 @@ app.get('/api/family-members', async (req, res) => {
 });
 
 app.post('/api/family-members', async (req, res) => {
-  const { primary_user_id, relationship, first_name, last_name, date_of_birth, id_number, email, certificate_url, certificate_verification_status } = req.body || {};
-  if (!primary_user_id || !relationship) {
-    return res.status(400).json({ error: 'primary_user_id and relationship required' });
-  }
-  if (!['spouse', 'child'].includes(relationship)) {
-    return res.status(400).json({ error: 'relationship must be spouse or child' });
-  }
+  const parsedFM = validate(familyMemberSchema, req.body, res);
+  if (!parsedFM) return;
+  const { primary_user_id, relationship, first_name, last_name, date_of_birth, id_number, email, certificate_url, certificate_verification_status } = parsedFM;
   try {
     const db = supabaseAdmin || supabase;
 
@@ -9016,8 +9006,9 @@ app.post('/api/family-members', async (req, res) => {
 });
 
 app.post('/api/family-members/confirm-pairing', async (req, res) => {
-  const { member_id, code } = req.body || {};
-  if (!member_id || !code) return res.status(400).json({ error: 'member_id and code required' });
+  const parsedCP = validate(confirmPairingSchema, req.body, res);
+  if (!parsedCP) return;
+  const { member_id, code } = parsedCP;
 
   try {
     const db = supabaseAdmin || supabase;
