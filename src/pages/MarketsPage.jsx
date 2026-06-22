@@ -399,7 +399,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      setShowBasketsExplainer(true);
+      // Only show the coach once per session — switching back to this tab
+      // after visiting the Markets tab must not re-trigger the animation.
+      if (!sessionStorage.getItem("mint_baskets_coach_shown")) {
+        sessionStorage.setItem("mint_baskets_coach_shown", "1");
+        setShowBasketsExplainer(true);
+      }
     } else {
       setShowBasketsExplainer(false);
     }
@@ -1446,7 +1451,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-bold tracking-[0.18em] uppercase"}>{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
