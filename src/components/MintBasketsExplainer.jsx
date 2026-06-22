@@ -1326,7 +1326,9 @@ export default function MintBasketsExplainer({
 
   // Phase 4 — no auto-advance; user proceeds via the "Next" button in SuccessCardSpotlight
 
-  // handleGoToPhase6: Phase 5 → 6 — clean up pending clone, scroll to top, spotlight balance card
+  // handleGoToPhase6: Phase 5 → 6 — clean up pending clone, clone-and-lift balance card
+  // Uses the same fixed-position clone technique as phase 5 so the card is always
+  // fully visible at a known viewport position regardless of scroll state.
   const handleGoToPhase6 = useCallback(() => {
     // 1. Remove the phase 5 pending clone + restore the original element
     if (pendingStickyElRef.current) {
@@ -1352,27 +1354,36 @@ export default function MintBasketsExplainer({
     });
     hiddenSiblingsRef.current = [];
 
-    // 3. Scroll the app content smoothly back to the top
-    const appContent = document.querySelector('.app-content');
-    if (appContent) {
-      appContent.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    // 3. Find the balance card, clone it, and pin it near the top of the viewport
+    const el = document.querySelector('[data-coach-balance-card="true"]');
+    if (!el) { handleDone(); return; }
 
-    // 4. After scroll settles, poll for the balance card and capture its rect
-    let attempts = 0;
-    const pollBalanceCard = () => {
-      const el = document.querySelector('[data-coach-balance-card="true"]');
-      if (el) {
-        setTimeout(() => {
-          setPhase6BalanceRect(el.getBoundingClientRect());
-          setPhase(6);
-        }, 250);
-        return;
-      }
-      if (++attempts < 50) setTimeout(pollBalanceCard, 50);
-      else handleDone();
-    };
-    setTimeout(pollBalanceCard, 700);
+    const screenW = typeof window !== 'undefined' ? window.innerWidth : 390;
+    const targetTop = 56; // px from top — leaves room for status bar / notch
+
+    const clone = el.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.top = `${targetTop}px`;
+    clone.style.left = '16px';
+    clone.style.right = '16px';
+    clone.style.width = `${Math.min(screenW - 32, 480)}px`;
+    clone.style.margin = '0';
+    clone.style.zIndex = '10003';
+    clone.style.pointerEvents = 'none';
+    document.body.appendChild(clone);
+
+    // Hide the original so there's no double-render
+    el.style.visibility = 'hidden';
+
+    // Store for cleanup in handleDone
+    pendingStickyElRef.current = { clone, original: el };
+
+    // 4. Capture the clone's rect and advance to phase 6
+    setTimeout(() => {
+      const cloneRect = clone.getBoundingClientRect();
+      setPhase6BalanceRect(cloneRect);
+      setPhase(6);
+    }, 80);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
