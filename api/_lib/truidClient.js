@@ -3,7 +3,10 @@ import https from 'https';
 
 const readEnv = (key) => process.env[key] || process.env[`VITE_${key}`];
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+// Only skip TLS verification in non-production (UAT certs are self-signed)
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: process.env.EXPERIAN_ENV === 'production' || process.env.NODE_ENV === 'production',
+});
 
 class TruIDClient {
   constructor() {
@@ -105,7 +108,14 @@ class TruIDClient {
     };
 
     console.log(`truID API Call: ${method} ${url}`);
-    if (body) console.log(`truID Request Body:`, JSON.stringify(body, null, 2));
+    if (body) {
+      const safeBody = { ...body };
+      if (safeBody.idNumber) safeBody.idNumber = '[REDACTED]';
+      if (safeBody.name) safeBody.name = '[REDACTED]';
+      if (safeBody.email) safeBody.email = '[REDACTED]';
+      if (safeBody.mobile) safeBody.mobile = '[REDACTED]';
+      console.log(`truID Request Body:`, JSON.stringify(safeBody, null, 2));
+    }
 
     try {
       const response = await axios({
@@ -163,7 +173,8 @@ class TruIDClient {
       ...(this.webhookUrl && { webhookUrl: this.webhookUrl })
     };
 
-    console.log('[truID] createCollection literal payload:', JSON.stringify(payload, null, 2));
+    const safePayload = { ...payload, idNumber: '[REDACTED]', name: '[REDACTED]', ...(payload.email && { email: '[REDACTED]' }), ...(payload.mobile && { mobile: '[REDACTED]' }) };
+    console.log('[truID] createCollection payload (PII redacted):', JSON.stringify(safePayload, null, 2));
 
     try {
       const response = await this.fetchApi('consultant-api', 'POST', '/collections', payload);
