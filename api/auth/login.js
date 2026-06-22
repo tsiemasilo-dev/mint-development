@@ -1,9 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
-import pkg from "pg";
 import { z } from "zod";
-
-const { Pool } = pkg;
 
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MINS  = 15;
@@ -14,37 +11,69 @@ const loginSchema = z.object({
   password: z.string().min(6, "password must be at least 6 characters").max(256),
 });
 
-function getSupabaseAnonClient() {
+function getClients() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const anon  = url && anonKey  ? createClient(url, anonKey)  : null;
+  const admin = url && serviceKey ? createClient(url, serviceKey) : null;
+  return { anon, admin };
 }
 
-let _pool = null;
-function getPgPool() {
-  if (!_pool && process.env.DATABASE_URL) {
-    _pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
-  }
-  return _pool;
-}
+// ── Supabase-backed attempt tracking ──────────────────────────────────────
+// Falls back gracefully if the login_attempts table doesn't exist yet.
 
-async function ensureLoginAttemptsTable(pool) {
-  const client = await pool.connect();
+async function countRecentFailures(admin, emailHash) {
   try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS login_attempts (
-        id           BIGSERIAL PRIMARY KEY,
-        email_hash   TEXT NOT NULL,
-        ip_address   TEXT,
-        attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        success      BOOLEAN NOT NULL DEFAULT FALSE
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_login_attempts_email_hash ON login_attempts(email_hash)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at ON login_attempts(attempted_at DESC)`);
-  } finally {
-    client.release();
+    const since = new Date(Date.now() - LOGIN_WINDOW_MINS * 60 * 1000).toISOString();
+    const { data, error } = await admin
+      .from("login_attempts")
+      .select("id, attempted_at", { count: "exact" })
+      .eq("email_hash", emailHash)
+      .eq("success", false)
+      .gte("attempted_at", since);
+    if (error) return null;
+    return data?.length ?? 0;
+  } catch {
+    return null;
+  }
+}
+
+async function getOldestFailureTime(admin, emailHash) {
+  try {
+    const since = new Date(Date.now() - LOGIN_WINDOW_MINS * 60 * 1000).toISOString();
+    const { data, error } = await admin
+      .from("login_attempts")
+      .select("attempted_at")
+      .eq("email_hash", emailHash)
+      .eq("success", false)
+      .gte("attempted_at", since)
+      .order("attempted_at", { ascending: true })
+      .range(LOGIN_MAX_FAILURES - 1, LOGIN_MAX_FAILURES - 1);
+    if (error || !data?.length) return null;
+    return new Date(data[0].attempted_at);
+  } catch {
+    return null;
+  }
+}
+
+async function recordAttempt(admin, emailHash, ipAddress, success) {
+  try {
+    await admin.from("login_attempts").insert({ email_hash: emailHash, ip_address: ipAddress, success });
+    // Prune old rows async — ignore errors
+    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    admin.from("login_attempts").delete().lt("attempted_at", cutoff).then(() => {});
+  } catch {
+    // Non-fatal
+  }
+}
+
+async function clearFailures(admin, emailHash) {
+  try {
+    await admin.from("login_attempts").delete().eq("email_hash", emailHash).eq("success", false);
+  } catch {
+    // Non-fatal
   }
 }
 
@@ -66,36 +95,26 @@ export default async function handler(req, res) {
 
   const { email, password } = parsed.data;
   const emailHash = createHash("sha256").update(email.toLowerCase().trim()).digest("hex");
-  const ipAddress = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null;
+  const ipAddress = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || null;
 
-  const pool = getPgPool();
+  const { anon, admin } = getClients();
+
+  if (!anon) {
+    return res.status(500).json({ success: false, error: "Auth service not configured." });
+  }
 
   try {
-    if (pool) {
-      await ensureLoginAttemptsTable(pool).catch(() => {});
+    // 1. Check lockout (only when admin client is available)
+    if (admin) {
+      const failCount = await countRecentFailures(admin, emailHash);
 
-      const { rows: countRows } = await pool.query(
-        `SELECT COUNT(*) AS cnt FROM login_attempts
-         WHERE email_hash = $1 AND success = FALSE
-         AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
-        [emailHash]
-      );
-      const failCount = parseInt(countRows[0].cnt, 10);
-
-      if (failCount >= LOGIN_MAX_FAILURES) {
-        const { rows: nthRows } = await pool.query(
-          `SELECT attempted_at FROM login_attempts
-           WHERE email_hash = $1 AND success = FALSE
-           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'
-           ORDER BY attempted_at ASC LIMIT 1 OFFSET ${LOGIN_MAX_FAILURES - 1}`,
-          [emailHash]
-        );
-        if (nthRows.length > 0) {
-          const nthFailAt  = new Date(nthRows[0].attempted_at);
-          const unlockedAt = new Date(nthFailAt.getTime() + LOGIN_LOCKOUT_SECS * 1000);
+      if (failCount !== null && failCount >= LOGIN_MAX_FAILURES) {
+        const nthFailAt = await getOldestFailureTime(admin, emailHash);
+        if (nthFailAt) {
+          const unlockedAt  = new Date(nthFailAt.getTime() + LOGIN_LOCKOUT_SECS * 1000);
           const secondsLeft = Math.ceil((unlockedAt - Date.now()) / 1000);
           if (secondsLeft > 0) {
-            console.warn(`[auth/login] Account locked for ${emailHash.slice(0, 8)}… — ${secondsLeft}s remaining`);
+            console.warn(`[auth/login] Locked ${emailHash.slice(0, 8)}… — ${secondsLeft}s left`);
             return res.status(429).json({
               success: false,
               locked: true,
@@ -107,53 +126,44 @@ export default async function handler(req, res) {
       }
     }
 
-    const supabase = getSupabaseAnonClient();
-    if (!supabase) {
-      return res.status(500).json({ success: false, error: "Auth service not configured." });
-    }
+    // 2. Attempt Supabase sign-in
+    const { data, error } = await anon.auth.signInWithPassword({ email, password });
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (pool) {
-      pool.query(
-        `INSERT INTO login_attempts (email_hash, ip_address, success) VALUES ($1, $2, $3)`,
-        [emailHash, ipAddress, !error]
-      ).catch(e => console.error("[auth/login] Failed to record attempt:", e.message));
-
-      pool.query(`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '2 hours'`)
-        .catch(() => {});
+    // 3. Record the attempt
+    if (admin) {
+      await recordAttempt(admin, emailHash, ipAddress, !error);
     }
 
     if (error) {
-      let attemptsRemaining = LOGIN_MAX_FAILURES;
-      if (pool) {
-        const { rows } = await pool.query(
-          `SELECT COUNT(*) AS cnt FROM login_attempts
-           WHERE email_hash = $1 AND success = FALSE
-           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
-          [emailHash]
-        );
-        attemptsRemaining = Math.max(0, LOGIN_MAX_FAILURES - parseInt(rows[0].cnt, 10));
+      let attemptsRemaining = null; // null = client uses its own counter
+
+      if (admin) {
+        const failCount = await countRecentFailures(admin, emailHash);
+        if (failCount !== null) {
+          attemptsRemaining = Math.max(0, LOGIN_MAX_FAILURES - failCount);
+        }
       }
 
       const justLocked = attemptsRemaining === 0;
-      console.warn(`[auth/login] Failed for ${emailHash.slice(0, 8)}… — remaining: ${attemptsRemaining}`);
-      return res.status(401).json({
+      console.warn(`[auth/login] Failed ${emailHash.slice(0, 8)}… remaining: ${attemptsRemaining ?? "unknown"}`);
+
+      const resp = {
         success: false,
         locked: justLocked,
-        attemptsRemaining,
         lockedFor: justLocked ? LOGIN_LOCKOUT_SECS : null,
         error: justLocked
           ? "Account temporarily locked after too many failed attempts. Try again in 30 minutes."
           : "Incorrect email or password.",
-      });
+      };
+      // Only include attemptsRemaining when we actually know it (prevents client counter reset)
+      if (attemptsRemaining !== null) resp.attemptsRemaining = attemptsRemaining;
+
+      return res.status(401).json(resp);
     }
 
-    if (pool) {
-      pool.query(
-        `DELETE FROM login_attempts WHERE email_hash = $1 AND success = FALSE`,
-        [emailHash]
-      ).catch(() => {});
+    // 4. Success — clear failure records
+    if (admin) {
+      await clearFailures(admin, emailHash);
     }
 
     console.log(`[auth/login] Success for user ${data.user?.id}`);

@@ -606,13 +606,14 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
           return;
         }
 
-        const remaining = data.attemptsRemaining ?? Math.max(0, MAX_LOGIN_ATTEMPTS - loginAttempts - 1);
+        // If server didn't return attemptsRemaining (no DB available), use local counter
+        const remaining = data.attemptsRemaining != null
+          ? data.attemptsRemaining
+          : Math.max(0, MAX_LOGIN_ATTEMPTS - loginAttempts - 1);
         setLoginAttempts(MAX_LOGIN_ATTEMPTS - remaining);
 
         if (remaining === 0) {
           startLoginRateLimitCooldown(data.lockedFor || LOGIN_COOLDOWN_TIME);
-        } else {
-          showToast(`Incorrect email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
         }
         setLoginPassword('');
         setIsLoading(false);
