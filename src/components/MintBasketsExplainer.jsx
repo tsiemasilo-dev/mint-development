@@ -38,6 +38,13 @@ function SingleHoleOverlay({ hole }) {
       <div style={{ ...PANEL, top: b, left: 0, right: 0, bottom: 0 }} />
       <div style={{ ...PANEL, top: t, left: 0, width: l, height: b - t }} />
       <div style={{ ...PANEL, top: t, left: r, right: 0, height: b - t }} />
+      {/* Transparent blocker over the hole — absorbs taps so the spotlighted
+          button cannot be pressed. z-index above the ring (10001) so it wins. */}
+      <div style={{
+        position: "fixed", zIndex: 10002,
+        top: t, left: l, width: r - l, height: b - t,
+        background: "transparent", pointerEvents: "auto",
+      }} />
     </motion.div>
   );
 }
