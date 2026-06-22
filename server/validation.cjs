@@ -80,6 +80,56 @@ const familyMemberSchema = z.object({
   mode:                           z.enum(["link", "invite"]).optional(),
 });
 
+const accountDeleteSchema = z.object({
+  password:     z.string().min(1, "password is required").max(256),
+  reason:       z.string().min(1, "reason is required").max(200),
+  reason_other: z.string().max(500).optional().nullable(),
+}).strict();
+
+const saveEmploymentSchema = z.object({
+  existing_onboarding_id:  z.string().uuid("existing_onboarding_id must be a valid UUID").optional().nullable(),
+  employment_status:       z.enum(
+    ["employed", "self_employed", "unemployed", "student", "retired", "not_provided"],
+    { errorMap: () => ({ message: "employment_status must be one of: employed, self_employed, unemployed, student, retired, not_provided" }) }
+  ).optional().default("not_provided"),
+  employer_name:           z.string().max(200).optional().nullable(),
+  employer_industry:       z.string().max(200).optional().nullable(),
+  employment_type:         z.string().max(100).optional().nullable(),
+  institution_name:        z.string().max(200).optional().nullable(),
+  course_name:             z.string().max(200).optional().nullable(),
+  graduation_date:         z.string().max(50).optional().nullable(),
+  annual_income_amount:    z.number().nonnegative("annual_income_amount must be zero or positive").optional().nullable(),
+  annual_income_currency:  z.string().max(10).optional().nullable(),
+});
+
+// Light validation — accepts many field-name aliases intentionally, so no .strict()
+const creditCheckSchema = z.object({
+  userData:            z.record(z.unknown()).optional(),
+  loanApplicationId:   z.string().max(200).optional().nullable(),
+  loan_application_id: z.string().max(200).optional().nullable(),
+  applicationId:       z.string().max(200).optional().nullable(),
+  identity_number:     z.string().max(20).optional().nullable(),
+  id_number:           z.string().max(20).optional().nullable(),
+  identityNumber:      z.string().max(20).optional().nullable(),
+  surname:             z.string().max(100).optional().nullable(),
+  last_name:           z.string().max(100).optional().nullable(),
+  lastName:            z.string().max(100).optional().nullable(),
+  forename:            z.string().max(100).optional().nullable(),
+  first_name:          z.string().max(100).optional().nullable(),
+  firstName:           z.string().max(100).optional().nullable(),
+  date_of_birth:       z.string().max(20).optional().nullable(),
+  dateOfBirth:         z.string().max(20).optional().nullable(),
+  address1:            z.string().max(500).optional().nullable(),
+  address:             z.string().max(500).optional().nullable(),
+  postal_code:         z.string().max(20).optional().nullable(),
+  postalCode:          z.string().max(20).optional().nullable(),
+  postcode:            z.string().max(20).optional().nullable(),
+  zip:                 z.string().max(20).optional().nullable(),
+  zip_code:            z.string().max(20).optional().nullable(),
+  contract_type:       z.string().max(100).optional().nullable(),
+  contractType:        z.string().max(100).optional().nullable(),
+});
+
 const confirmPairingSchema = z.object({
   member_id: z.union([z.string().min(1), z.number()]),
   code:      z.string().regex(/^\d{6}$/, "code must be exactly 6 digits"),
@@ -112,6 +162,9 @@ module.exports = {
   ozowInitiateSchema,
   ozowRecordSuccessSchema,
   familyMemberSchema,
+  accountDeleteSchema,
+  saveEmploymentSchema,
+  creditCheckSchema,
   confirmPairingSchema,
   validate,
 };

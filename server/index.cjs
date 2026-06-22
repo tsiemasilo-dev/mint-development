@@ -40,7 +40,7 @@ const cors = require("cors");
 const crypto = require("crypto");
 const helmet = require("helmet");
 const { Pool } = require("pg");
-const { loginSchema, recordInvestmentSchema, eftDepositSchema, ozowInitiateSchema, ozowRecordSuccessSchema, familyMemberSchema, confirmPairingSchema, validate } = require("./validation.cjs");
+const { loginSchema, recordInvestmentSchema, eftDepositSchema, ozowInitiateSchema, ozowRecordSuccessSchema, familyMemberSchema, confirmPairingSchema, accountDeleteSchema, saveEmploymentSchema, creditCheckSchema, validate } = require("./validation.cjs");
 const truIDClient = require("./truidClient.cjs");
 const { Resend } = require("resend");
 const { runFuneralCoverMigration } = require("./funeralCoverMigration.cjs");
@@ -3805,9 +3805,9 @@ app.post("/api/account/delete", async (req, res) => {
     const { data: { user }, error: authErr } = await db.auth.getUser(token);
     if (authErr || !user) return res.status(401).json({ error: "Invalid session" });
 
-    const { password, reason, reason_other } = req.body || {};
-    if (!password) return res.status(400).json({ error: "Password is required" });
-    if (!reason) return res.status(400).json({ error: "Please select a reason for closing your account" });
+    const body = validate(accountDeleteSchema, req.body || {}, res);
+    if (!body) return;
+    const { password, reason, reason_other } = body;
 
     // Verify password using the anon client (not admin — signInWithPassword requires anon key)
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: user.email, password });
@@ -6384,6 +6384,9 @@ app.post("/api/credit-check", async (req, res) => {
       try { body = JSON.parse(body || '{}'); } catch { body = {}; }
     }
 
+    const validated = validate(creditCheckSchema, body, res);
+    if (!validated) return;
+
     const authHeader = req.headers.authorization || '';
     const accessToken = authHeader.startsWith('Bearer ')
       ? authHeader.slice('Bearer '.length).trim()
@@ -7359,6 +7362,9 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
 
 app.post("/api/onboarding/save-employment", async (req, res) => {
   try {
+    const body = validate(saveEmploymentSchema, req.body || {}, res);
+    if (!body) return;
+
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, error: "Missing token" });
@@ -7379,7 +7385,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
       graduation_date,
       annual_income_amount,
       annual_income_currency,
-    } = req.body || {};
+    } = body;
 
     const payload = {
       user_id: user.id,
@@ -7406,7 +7412,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
         .select("id");
       if (error) {
         console.error("[Onboarding] Update employment error:", error.message);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: safeError(error) });
       }
       if (!updated || updated.length === 0) {
         return res.status(404).json({ success: false, error: "Onboarding record not found" });
@@ -7429,7 +7435,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
           .eq("user_id", user.id);
         if (error) {
           console.error("[Onboarding] Update existing employment error:", error.message);
-          return res.status(500).json({ success: false, error: error.message });
+          return res.status(500).json({ success: false, error: safeError(error) });
         }
         savedId = existingRecord.id;
       } else {
@@ -7440,7 +7446,7 @@ app.post("/api/onboarding/save-employment", async (req, res) => {
           .maybeSingle();
         if (error) {
           console.error("[Onboarding] Insert employment error:", error.message);
-          return res.status(500).json({ success: false, error: error.message });
+          return res.status(500).json({ success: false, error: safeError(error) });
         }
         savedId = data?.id;
       }
