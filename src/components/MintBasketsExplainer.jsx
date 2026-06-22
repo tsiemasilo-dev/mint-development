@@ -341,17 +341,138 @@ function PendingOrdersSpotlight({ pendingRect, onDone, onNext }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Phase 6 — Balance card performance spotlight
+   Phase 6 — Self-contained mock balance card (portal-rendered)
+   Centred on all screen sizes, mock data baked in.
 ───────────────────────────────────────────────────────── */
-const MOCK_CHART_W = 280;
-const MOCK_CHART_H = 60;
-const MOCK_PATH = "M 0,54 L 28,50 L 50,52 L 74,43 L 94,39 L 114,43 L 136,34 L 158,30 L 176,33 L 198,22 L 222,18 L 248,21 L 280,8";
-const MOCK_AREA = `${MOCK_PATH} L 280,60 L 0,60 Z`;
+const MOCK_LINE = "M 0,44 L 28,40 L 50,42 L 74,33 L 94,29 L 114,33 L 136,24 L 158,20 L 176,23 L 198,12 L 222,8 L 248,11 L 280,2";
+const MOCK_FILL = `${MOCK_LINE} L 280,50 L 0,50 Z`;
 
+function MockBalanceCard({ cardRef }) {
+  return (
+    <motion.div
+      ref={cardRef}
+      className="pointer-events-none fixed z-[10003]"
+      style={{
+        top: 52,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "min(calc(100vw - 32px), 440px)",
+        borderRadius: 24,
+        background: "linear-gradient(135deg, hsl(270 55% 30%) 0%, hsl(265 45% 22%) 45%, hsl(260 40% 15%) 100%)",
+        boxShadow: "0 20px 60px -20px hsl(270 60% 35% / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.06)",
+        padding: "14px 16px",
+        border: "1px solid rgba(255,255,255,0.06)",
+        overflow: "hidden",
+      }}
+      initial={{ opacity: 0, y: -10, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {/* Ambient glows */}
+      <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(139,92,246,0.28)", filter: "blur(40px)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: -48, left: -32, width: 128, height: 128, borderRadius: "50%", background: "rgba(109,40,217,0.15)", filter: "blur(40px)", pointerEvents: "none" }} />
+
+      {/* Top row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.6)" }}>PORTFOLIO VALUE</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e" }} />
+          <span style={{ fontSize: 9, letterSpacing: "0.1em", color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>LIVE</span>
+        </div>
+      </div>
+
+      {/* Balance + YTD row */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 8 }}>
+        <div>
+          <motion.h2
+            style={{ fontSize: 30, fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1, marginBottom: 4 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.28 }}
+          >
+            R12,450.00
+          </motion.h2>
+          <motion.div
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(74,222,128,0.14)", borderRadius: 20, padding: "3px 10px" }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.30, duration: 0.24 }}
+          >
+            <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>↑ YTD: +R1,558.90</span>
+            <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>+14.2%</span>
+          </motion.div>
+        </div>
+        <motion.span
+          style={{ fontSize: 9, color: "rgba(167,139,250,0.7)", fontWeight: 600, letterSpacing: "0.1em", paddingBottom: 2 }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ delay: 0.35, duration: 0.2 }}
+        >
+          SIMULATION
+        </motion.span>
+      </div>
+
+      {/* Timeframe pills */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+        {["5D", "M", "YTD", "All"].map((label, i) => (
+          <span key={label} style={{
+            flex: 1, textAlign: "center", padding: "5px 0", borderRadius: 20,
+            fontSize: 12, fontWeight: 600,
+            color: i === 2 ? "#1a0a2e" : "rgba(255,255,255,0.55)",
+            background: i === 2 ? "#fff" : "transparent",
+          }}>{label}</span>
+        ))}
+      </div>
+
+      {/* Animated equity curve */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ delay: 0.22, duration: 0.30 }}
+        style={{ marginBottom: 10 }}
+      >
+        <svg viewBox="0 0 280 50" width="100%" height={48} style={{ overflow: "visible", display: "block" }}>
+          <defs>
+            <linearGradient id="mock6-card-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.38" />
+              <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <motion.path d={MOCK_FILL} fill="url(#mock6-card-grad)"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.55, duration: 0.5 }}
+          />
+          <motion.path d={MOCK_LINE} fill="none" stroke="#a78bfa" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+            transition={{ delay: 0.30, duration: 1.4, ease: "easeInOut" }}
+          />
+          <motion.circle cx={280} cy={2} r={3.5} fill="#a78bfa"
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 1.65, duration: 0.22 }}
+          />
+        </svg>
+      </motion.div>
+
+      {/* Footer: CASH / SIMULATION label */}
+      <div style={{ display: "flex", gap: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", marginBottom: 2 }}>CASH</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>R3,200.00</div>
+        </div>
+        <div style={{ width: 1, background: "rgba(255,255,255,0.08)" }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.45)", letterSpacing: "0.12em", marginBottom: 2 }}>INVESTED</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>R9,250.00</div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   Phase 6 — Callout panel that sits below the mock card
+───────────────────────────────────────────────────────── */
 function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
   if (!cardRect) return null;
 
-  const pad = 16;
+  const pad = 14;
   const hole = {
     top:    cardRect.top    - pad,
     left:   cardRect.left   - pad,
@@ -363,12 +484,10 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
 
   const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
   const screenH = typeof window !== "undefined" ? window.innerHeight : 844;
-  const panelMaxWidth = Math.min(screenW - 40, 420);
+  const panelMaxWidth = Math.min(screenW - 40, 440);
 
-  const spaceBelow = screenH - hole.bottom - 20;
-  const panelTop = spaceBelow > 220
-    ? hole.bottom + 20
-    : Math.max(20, hole.top - 280);
+  // Always place the callout below the mock card
+  const panelTop = Math.min(hole.bottom + 14, screenH - 180);
 
   const glassBg = {
     background: "rgba(8,8,20,0.92)",
@@ -380,131 +499,41 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
   return (
     <>
       <SingleHoleOverlay hole={hole} onClick={onDone} />
-      <AnimatedRing rect={cardRect} pad={pad} borderRadius={28} zIndex={10001} pulse={true} />
+      <AnimatedRing rect={cardRect} pad={pad} borderRadius={26} zIndex={10004} pulse={true} />
 
       <div
-        className="pointer-events-none fixed z-[10004]"
+        className="pointer-events-none fixed z-[10005]"
         style={{ top: panelTop, left: "50%", transform: "translateX(-50%)", width: panelMaxWidth }}
       >
         <motion.div
           className="pointer-events-auto"
-          style={{ ...glassBg, borderRadius: 20, padding: "16px 18px 16px" }}
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          style={{ ...glassBg, borderRadius: 18, padding: "14px 16px 14px" }}
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ delay: 0.28, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ delay: 0.30, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Title row + mock gain badge */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-            <motion.p
-              style={{ fontSize: 19, fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.02em", color: "#fff" }}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.38, duration: 0.28, ease: "easeOut" }}
-            >
-              Your Performance
-            </motion.p>
-            <motion.span
-              style={{
-                fontSize: 11, fontWeight: 700, color: "#4ade80",
-                background: "rgba(74,222,128,0.13)", borderRadius: 8,
-                padding: "3px 9px", letterSpacing: "0.02em",
-              }}
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: 0.62, duration: 0.24 }}
-            >
-              +14.2% YTD
-            </motion.span>
-          </div>
-
-          <motion.div
-            style={{ height: 1, background: "rgba(255,255,255,0.22)", marginBottom: 10, originX: 0 }}
-            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-            transition={{ delay: 0.48, duration: 0.28 }}
-          />
-
-          {/* Mock balance value */}
-          <motion.div
-            style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.54, duration: 0.26 }}
-          >
-            <span style={{ fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>
-              R12,450.00
-            </span>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", fontWeight: 500, letterSpacing: "0.02em" }}>
-              MOCK DATA
-            </span>
-          </motion.div>
-
-          {/* Animated equity curve */}
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 0.60, duration: 0.30 }}
-          >
-            <svg
-              viewBox={`0 0 ${MOCK_CHART_W} ${MOCK_CHART_H}`}
-              width="100%"
-              height={MOCK_CHART_H}
-              style={{ overflow: "visible", display: "block" }}
-            >
-              <defs>
-                <linearGradient id="coach6-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.40" />
-                  <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.02" />
-                </linearGradient>
-              </defs>
-              <motion.path
-                d={MOCK_AREA}
-                fill="url(#coach6-grad)"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                transition={{ delay: 0.90, duration: 0.55 }}
-              />
-              <motion.path
-                d={MOCK_PATH}
-                fill="none"
-                stroke="#a78bfa"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-                transition={{ delay: 0.70, duration: 1.3, ease: "easeInOut" }}
-              />
-              <motion.circle
-                cx={280} cy={8} r={3.5}
-                fill="#a78bfa"
-                initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.95, duration: 0.22 }}
-              />
-            </svg>
-
-            {/* Timeframe pills (visual only) */}
-            <div style={{ display: "flex", gap: 5, marginTop: 8, marginBottom: 12 }}>
-              {["5D", "1M", "YTD", "ALL"].map((label, i) => (
-                <span
-                  key={label}
-                  style={{
-                    fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 7,
-                    color: i === 2 ? "#fff" : "rgba(255,255,255,0.35)",
-                    background: i === 2 ? "rgba(124,58,237,0.55)" : "rgba(255,255,255,0.05)",
-                    border: i === 2 ? "1px solid rgba(167,139,250,0.40)" : "1px solid rgba(255,255,255,0.06)",
-                  }}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-
           <motion.p
-            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.70)", marginBottom: 14 }}
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.78, duration: 0.26, ease: "easeOut" }}
+            style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.15, letterSpacing: "-0.02em", color: "#fff", marginBottom: 6 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.40, duration: 0.26, ease: "easeOut" }}
+          >
+            Your Performance Over Time
+          </motion.p>
+          <motion.div
+            style={{ height: 1, background: "rgba(255,255,255,0.20)", marginBottom: 8, originX: 0 }}
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ delay: 0.50, duration: 0.26 }}
+          />
+          <motion.p
+            style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.65, color: "rgba(255,255,255,0.72)", marginBottom: 12 }}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.58, duration: 0.24, ease: "easeOut" }}
           >
             <WordReveal
-              text="Once you invest, this card tracks your total portfolio value and returns over time. Switch timeframes to see how your wealth is growing — day by day."
-              baseDelay={0.86}
+              text="Once you invest, your balance card tracks your portfolio value and gains in real time. Switch timeframes — 5D, Monthly, YTD or All-time — to see exactly how your wealth is growing."
+              baseDelay={0.66}
             />
           </motion.p>
-
           <motion.button
             onClick={onDone}
             style={{
@@ -514,7 +543,7 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
               border: "none", cursor: "pointer",
             }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ delay: 2.1, duration: 0.26 }}
+            transition={{ delay: 1.80, duration: 0.26 }}
             whileTap={{ scale: 0.97 }}
           >
             Got it →
@@ -1018,12 +1047,14 @@ export default function MintBasketsExplainer({
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [phase5PendingRect, setPhase5PendingRect] = useState(null);
   const [phase6BalanceRect, setPhase6BalanceRect] = useState(null);
+  const [showMockCard, setShowMockCard] = useState(false);
   const phaseTimer    = useRef(null);
   const cardSectionRef    = useRef(null); // element we translateY to make room
   const hiddenSiblingsRef = useRef([]);   // sibling sections hidden during push
   const pendingStickyElRef = useRef(null); // pending section whose sticky is removed during phase 5
   const prevHOverflowsRef = useRef([]);   // saved h-scroll states for partial restore
   const modalScrollElRef  = useRef(null); // modal scroll container padded in phase 2
+  const mockCardRef       = useRef(null); // ref to MockBalanceCard DOM node for phase 6
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
@@ -1326,9 +1357,21 @@ export default function MintBasketsExplainer({
 
   // Phase 4 — no auto-advance; user proceeds via the "Next" button in SuccessCardSpotlight
 
-  // handleGoToPhase6: Phase 5 → 6 — clean up pending clone, clone-and-lift balance card
-  // Uses the same fixed-position clone technique as phase 5 so the card is always
-  // fully visible at a known viewport position regardless of scroll state.
+  // Phase 6: when showMockCard becomes true the MockBalanceCard mounts and we read its rect
+  useEffect(() => {
+    if (!showMockCard) return;
+    // Give the component one frame to paint before measuring
+    const id = setTimeout(() => {
+      const el = mockCardRef.current;
+      if (el) {
+        setPhase6BalanceRect(el.getBoundingClientRect());
+        setPhase(6);
+      }
+    }, 80);
+    return () => clearTimeout(id);
+  }, [showMockCard]);
+
+  // handleGoToPhase6: Phase 5 → 6 — clean up pending clone, show self-contained mock card
   const handleGoToPhase6 = useCallback(() => {
     // 1. Remove the phase 5 pending clone + restore the original element
     if (pendingStickyElRef.current) {
@@ -1354,42 +1397,17 @@ export default function MintBasketsExplainer({
     });
     hiddenSiblingsRef.current = [];
 
-    // 3. Find the balance card, clone it, and pin it near the top of the viewport
-    const el = document.querySelector('[data-coach-balance-card="true"]');
-    if (!el) { handleDone(); return; }
-
-    const screenW = typeof window !== 'undefined' ? window.innerWidth : 390;
-    const targetTop = 56; // px from top — leaves room for status bar / notch
-
-    const clone = el.cloneNode(true);
-    clone.style.position = 'fixed';
-    clone.style.top = `${targetTop}px`;
-    clone.style.left = '16px';
-    clone.style.right = '16px';
-    clone.style.width = `${Math.min(screenW - 32, 480)}px`;
-    clone.style.margin = '0';
-    clone.style.zIndex = '10003';
-    clone.style.pointerEvents = 'none';
-    document.body.appendChild(clone);
-
-    // Hide the original so there's no double-render
-    el.style.visibility = 'hidden';
-
-    // Store for cleanup in handleDone
-    pendingStickyElRef.current = { clone, original: el };
-
-    // 4. Capture the clone's rect and advance to phase 6
-    setTimeout(() => {
-      const cloneRect = clone.getBoundingClientRect();
-      setPhase6BalanceRect(cloneRect);
-      setPhase(6);
-    }, 80);
+    // 3. Mount the self-contained MockBalanceCard via React state.
+    //    The useEffect above captures its rect and advances to phase 6.
+    setShowMockCard(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDone = useCallback(() => {
     // Clear any simulated pending order from the coach tour
     sessionStorage.removeItem('mint_coach_pending_sim');
+    // Unmount the phase 6 mock card (if shown)
+    setShowMockCard(false);
     // 1. Instantly fade the entire overlay (dim + text + rings) before moving anything
     setPanelExiting(true);
     // 2. Restore scroll + slide nav back in simultaneously
@@ -1449,6 +1467,9 @@ export default function MintBasketsExplainer({
 
   const content = (
     <>
+      {/* Phase 6 — self-contained mock balance card, centered, with mock data */}
+      {showMockCard && <MockBalanceCard cardRef={mockCardRef} />}
+
       {/* PaymentSuccessPage overlay — portal so it shows above everything */}
       {showSuccessOverlay && (
         <div
