@@ -5,7 +5,7 @@ import {
   Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
   PieChart, Pie, Cell, ReferenceLine,
 } from "recharts";
-import { useUserStrategies, useStrategyChartData, useStrategyPeriodReturns } from "../lib/useUserStrategies";
+import { useUserStrategies, useStrategyChartData, useStrategyLivePeriodReturn } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
 
@@ -78,8 +78,8 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
     selectedStrategy?.firstInvestedDate || null,
     profile?.id, familyMemberId
   );
-  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyPeriodReturns(
-    profile?.id, selectedStrategy?.strategyId, timeFilter, familyMemberId
+  const { returnData: periodReturnData, loading: periodReturnLoading } = useStrategyLivePeriodReturn(
+    profile?.id, selectedStrategy?.strategyId, timeFilter, 0, familyMemberId
   );
 
   // which time period tabs have enough data to show
