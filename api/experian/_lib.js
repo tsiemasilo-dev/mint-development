@@ -70,7 +70,8 @@ export function experianRequest(url, body, extraHeaders = {}) {
         "Content-Length": Buffer.byteLength(postData),
         ...extraHeaders,
       },
-      rejectUnauthorized: false, // UAT cert is self-signed; safe for non-prod
+      // Only disable TLS verification in non-production (UAT certs are self-signed)
+      rejectUnauthorized: process.env.EXPERIAN_ENV === 'production' || process.env.NODE_ENV === 'production',
     };
     const req = https.request(options, (resp) => {
       let raw = "";

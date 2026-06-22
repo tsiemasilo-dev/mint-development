@@ -24,3 +24,9 @@ id = "gnsAIwN3qr6vOgs6Sz09s"
 uri = "file://ytdStrategy.md"
 type = "text"
 title = "ytdStrategy — Methodology & Full Comparison (1225 lines)"
+
+[[outputs]]
+id = "OFLWsFWma5IWh604l-LN-"
+uri = "file://Security.md"
+type = "text"
+title = "Mint App — Security Document"

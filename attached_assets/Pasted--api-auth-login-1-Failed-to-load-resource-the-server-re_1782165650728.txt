@@ -1,0 +1,67 @@
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+/api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+AuthPage-BrgjwSRr.js:1  POST https://mint-development-git-securitymeasure-tsie-masilos-projects.vercel.app/api/auth/login 404 (Not Found)
+rt @ AuthPage-BrgjwSRr.js:1
+Ok @ vendor-recharts-ZrShCYZL.js:5
+Ak @ vendor-recharts-ZrShCYZL.js:5
+_k @ vendor-recharts-ZrShCYZL.js:5
+wg @ vendor-recharts-ZrShCYZL.js:5
+bg @ vendor-recharts-ZrShCYZL.js:5
+(anonymous) @ vendor-recharts-ZrShCYZL.js:5
+Dd @ vendor-recharts-ZrShCYZL.js:8
+Ay @ vendor-recharts-ZrShCYZL.js:5
+Df @ vendor-recharts-ZrShCYZL.js:5
+mf @ vendor-recharts-ZrShCYZL.js:5
+Uk @ vendor-recharts-ZrShCYZL.js:5
+AuthPage-BrgjwSRr.js:1  POST https://mint-development-git-securitymeasure-tsie-masilos-projects.vercel.app/api/auth/login 404 (Not Found)
+rt @ AuthPage-BrgjwSRr.js:1
+Ok @ vendor-recharts-ZrShCYZL.js:5
+Ak @ vendor-recharts-ZrShCYZL.js:5
+_k @ vendor-recharts-ZrShCYZL.js:5
+wg @ vendor-recharts-ZrShCYZL.js:5
+bg @ vendor-recharts-ZrShCYZL.js:5
+(anonymous) @ vendor-recharts-ZrShCYZL.js:5
+Dd @ vendor-recharts-ZrShCYZL.js:8
+Ay @ vendor-recharts-ZrShCYZL.js:5
+Df @ vendor-recharts-ZrShCYZL.js:5
+mf @ vendor-recharts-ZrShCYZL.js:5
+Uk @ vendor-recharts-ZrShCYZL.js:5
+AuthPage-BrgjwSRr.js:1  POST https://mint-development-git-securitymeasure-tsie-masilos-projects.vercel.app/api/auth/login 404 (Not Found)
+rt @ AuthPage-BrgjwSRr.js:1
+Ok @ vendor-recharts-ZrShCYZL.js:5
+Ak @ vendor-recharts-ZrShCYZL.js:5
+_k @ vendor-recharts-ZrShCYZL.js:5
+wg @ vendor-recharts-ZrShCYZL.js:5
+bg @ vendor-recharts-ZrShCYZL.js:5
+(anonymous) @ vendor-recharts-ZrShCYZL.js:5
+Dd @ vendor-recharts-ZrShCYZL.js:8
+Ay @ vendor-recharts-ZrShCYZL.js:5
+Df @ vendor-recharts-ZrShCYZL.js:5
+mf @ vendor-recharts-ZrShCYZL.js:5
+Uk @ vendor-recharts-ZrShCYZL.js:5

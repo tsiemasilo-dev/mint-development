@@ -5,6 +5,9 @@ import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
@@ -477,6 +480,36 @@ const App = () => {
   }, [currentPage]);
 
   const canSwipeBack = !mainTabs.includes(currentPage);
+
+  // ── Mobile native initialisation (runs once on native platforms) ──────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const initMobile = async () => {
+      try {
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#0f0b1e' });
+      } catch (_) {}
+
+      try {
+        await SplashScreen.hide({ fadeOutDuration: 400 });
+      } catch (_) {}
+
+      if (Capacitor.getPlatform() === 'ios') {
+        try {
+          Keyboard.addListener('keyboardWillShow', () => {
+            document.body.classList.add('keyboard-open');
+          });
+          Keyboard.addListener('keyboardWillHide', () => {
+            document.body.classList.remove('keyboard-open');
+          });
+        } catch (_) {}
+      }
+    };
+
+    initMobile();
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const lastBackPressRef = useRef(0);
 
