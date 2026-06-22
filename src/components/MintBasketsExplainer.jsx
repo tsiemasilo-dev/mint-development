@@ -899,12 +899,15 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   } : null;
 
   // Callout vertically centred in the gap between the highlighted tab and the
-  // highlighted card — never hugging the tab edge. estimatedPanelHeight is a
-  // conservative approximation; the panel will never go above tabHole.bottom+12.
+  // highlighted card — never hugging the tab edge and never overlapping the card.
+  // estimatedPanelHeight must match the actual rendered height (title + desc +
+  // explanation + button + padding ≈ 230px).
   const gapTop    = tabHole ? tabHole.bottom + 12 : 80;
   const gapBottom = cardHole.top - 12;
-  const estimatedPanelHeight = 168;
-  const panelTop = Math.max(gapTop, Math.round((gapTop + gapBottom) / 2 - estimatedPanelHeight / 2));
+  const estimatedPanelHeight = 230;
+  // Centre the panel in the gap, but clamp so it never extends into the card hole.
+  const panelTopCentered = Math.round((gapTop + gapBottom) / 2 - estimatedPanelHeight / 2);
+  const panelTop = Math.max(gapTop, Math.min(panelTopCentered, gapBottom - estimatedPanelHeight));
   const panelMaxWidth = 460;
   const panelWidth = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : panelMaxWidth, panelMaxWidth);
 
