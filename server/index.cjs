@@ -3846,10 +3846,19 @@ app.post("/api/account/delete", async (req, res) => {
     }
 
     console.log(`[account/delete] Closure requested by ${user.email} (${user.id}). Reason: ${reason}`);
+
+    writeAuditLog(null, {
+      userId: user.id,
+      action: "account.delete.requested",
+      amountCents: null,
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      metadata: { reason },
+    });
+
     return res.json({ success: true });
   } catch (e) {
     console.error("[account/delete] POST error:", e.message);
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: safeError(e) });
   }
 });
 
@@ -6344,7 +6353,7 @@ app.get("/api/debug/user-investments", async (req, res) => {
     });
   } catch (error) {
     console.error("Debug user investments error:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: safeError(error) });
   }
 });
 
@@ -7015,6 +7024,8 @@ app.get("/api/sessions/validate", async (req, res) => {
 });
 
 app.post("/api/migrate/goal-columns", async (req, res) => {
+  // Dev-only migration helper — blocked in production
+  if (process.env.NODE_ENV === "production") return res.status(404).json({ error: "Not found" });
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return res.json({ error: "Missing Supabase credentials" });
@@ -7035,7 +7046,7 @@ ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS invested_amount numeric DE
 ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS linked_asset_name text;
 ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS target_date date;`;
 
-      const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+      await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -7046,21 +7057,19 @@ ALTER TABLE investment_goals ADD COLUMN IF NOT EXISTS target_date date;`;
         body: JSON.stringify({ sql_query: sql }),
       });
 
-      res.json({
-        status: "columns_missing",
-        column_test_error: testResult.error.message,
-        sql_to_run: sql.trim(),
-      });
+      res.json({ status: "columns_missing", sql_to_run: sql.trim() });
     } else {
       res.json({ status: "columns_exist" });
     }
   } catch (e) {
     console.error("[migrate/goal-columns] Error:", e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: safeError(e) });
   }
 });
 
 app.post("/api/migrate/onboarding-columns", async (req, res) => {
+  // Dev-only migration helper — blocked in production
+  if (process.env.NODE_ENV === "production") return res.status(404).json({ error: "Not found" });
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return res.json({ error: "Missing Supabase credentials" });
@@ -7084,8 +7093,7 @@ ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_name text;
 ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_account_number text;
 ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_branch_code text;`;
 
-      // Try via Supabase SQL API  
-      const response = await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+      await globalThis.fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -7096,37 +7104,45 @@ ALTER TABLE user_onboarding ADD COLUMN IF NOT EXISTS bank_branch_code text;`;
         body: JSON.stringify({ sql_query: sql }),
       });
 
-      res.json({
-        status: "columns_missing",
-        column_test_error: testResult.error.message,
-        sql_to_run: sql.trim(),
-      });
+      res.json({ status: "columns_missing", sql_to_run: sql.trim() });
     } else {
-      res.json({ status: "columns_exist", data: testResult.data });
+      res.json({ status: "columns_exist" });
     }
   } catch (e) {
-    res.json({ error: e.message });
+    console.error("[migrate/onboarding-columns] Error:", e);
+    res.status(500).json({ error: safeError(e) });
   }
 });
 
 app.get("/api/debug/onboarding/:userId", async (req, res) => {
+  // Restricted to dev environment only — never expose in production
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ error: "Not found" });
+  }
   try {
+    const { user, error: authErr } = await authenticateUser(req);
+    if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+
+    // Users may only inspect their own onboarding data
+    const requestedId = req.params.userId;
+    if (user.id !== requestedId) return res.status(403).json({ error: "Forbidden" });
+
     const db = supabaseAdmin || supabase;
     if (!db) return res.json({ error: "no db" });
     const { data: onboarding, error: e1 } = await db
       .from("user_onboarding")
       .select("*")
-      .eq("user_id", req.params.userId)
+      .eq("user_id", requestedId)
       .order("created_at", { ascending: false })
       .limit(5);
     const { data: actions, error: e2 } = await db
       .from("required_actions")
       .select("*")
-      .eq("user_id", req.params.userId)
+      .eq("user_id", requestedId)
       .limit(1);
     res.json({ onboarding, actions, errors: { onboarding: e1?.message, actions: e2?.message } });
   } catch (e) {
-    res.json({ error: e.message });
+    res.status(500).json({ error: safeError(e) });
   }
 });
 
@@ -9527,7 +9543,7 @@ app.post('/api/admin/set-ytd-prices', async (req, res) => {
     return res.json({ success: true, message: 'YTD start prices updated from current last_price values.' });
   } catch (err) {
     console.error('[admin] set-ytd-prices error:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -9617,7 +9633,7 @@ app.post('/api/admin/repair-child-strategy-returns', async (req, res) => {
     return res.json({ success: true, fixed, pairs: pairs.length });
   } catch (err) {
     console.error('[admin/repair-child-strategy-returns] Error:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: safeError(err) });
   }
 });
 
