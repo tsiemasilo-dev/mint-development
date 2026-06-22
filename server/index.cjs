@@ -1050,6 +1050,16 @@ async function ensureAuditLogsTable() {
 }
 ensureAuditLogsTable();
 
+// safeError — returns a safe error message for API responses.
+// In production: always returns a generic string so internal details never reach clients.
+// In development: returns the real message so debugging stays easy.
+function safeError(err, fallback = "Something went wrong. Please try again.") {
+  if (process.env.NODE_ENV !== "production") {
+    return err?.message || fallback;
+  }
+  return fallback;
+}
+
 // writeAuditLog — fire-and-forget helper. Does NOT throw; never blocks a response.
 // amountCents: integer cents (e.g. 50000 = R500.00), or null if not financial.
 // metadata: any extra JSON context (strategyId, symbol, paymentMethod, etc.)
@@ -5050,7 +5060,7 @@ app.post("/api/record-investment", async (req, res) => {
       }
     }
 
-    res.status(500).json({ success: false, error: error.message || "Failed to record investment" });
+    res.status(500).json({ success: false, error: safeError(error, "Failed to record investment") });
   }
 });
 
@@ -5137,7 +5147,7 @@ app.post("/api/eft-deposit", async (req, res) => {
     return res.status(200).json({ success: true, reference: eftRef });
   } catch (err) {
     console.error("[eft-deposit] Error:", err);
-    return res.status(500).json({ success: false, error: err.message || "Failed to record EFT deposit" });
+    return res.status(500).json({ success: false, error: safeError(err, "Failed to record EFT deposit") });
   }
 });
 
@@ -5297,7 +5307,7 @@ app.post("/api/confirm-eft-deposit", async (req, res) => {
     return res.status(200).json({ success: true, reference });
   } catch (err) {
     console.error("[confirm-eft] Error:", err);
-    return res.status(500).json({ success: false, error: err.message || "Failed to confirm EFT deposit" });
+    return res.status(500).json({ success: false, error: safeError(err, "Failed to confirm EFT deposit") });
   }
 });
 
@@ -5378,7 +5388,7 @@ app.post("/api/confirm-deposit", async (req, res) => {
 
   } catch (err) {
     console.error("[confirm-deposit] Error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: safeError(err) });
   }
 });
 
@@ -9342,7 +9352,7 @@ app.post("/api/insurance/send-policy-email", async (req, res) => {
     return res.status(200).json({ success: true, emailId: resp.data?.id });
   } catch (err) {
     console.error("[insurance/send-policy-email] Error:", err);
-    return res.status(500).json({ success: false, error: err.message || "Failed to send policy email" });
+    return res.status(500).json({ success: false, error: safeError(err, "Failed to send policy email") });
   }
 });
 
@@ -11053,7 +11063,7 @@ app.post("/api/prices/refresh", async (req, res) => {
     res.json({ success: true, message: "Intraday price refresh complete" });
   } catch (err) {
     console.error("[intraday-refresh] Manual trigger error:", err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: safeError(err, "Price refresh failed") });
   }
 });
 
@@ -12449,14 +12459,14 @@ app.get('/api/fees-config', async (req, res) => {
     });
   } catch (err) {
     console.error('[fees-config]', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: safeError(err) });
   }
 });
 
 // Global Express error middleware — catches any next(err) or async throws
 app.use((err, req, res, next) => {
   console.error("[GLOBAL_ERROR]", req.method, req.path, err?.message, err?.stack?.split("\n")[1]);
-  if (!res.headersSent) res.status(500).json({ error: err?.message || "Internal server error" });
+  if (!res.headersSent) res.status(500).json({ error: safeError(err) });
 });
 
 // Catch-all 404 handler - MUST be after all route definitions
