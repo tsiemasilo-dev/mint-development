@@ -455,6 +455,7 @@ const PaymentPage = ({
           isOpen={isMethodModalOpen}
           onClose={() => onBack?.()}
           amount={amount}
+          baseAmount={baseAmount}
           strategyName={strategy?.name}
           childFamilyMemberId={childFamilyMemberId}
           childFirstName={isChildWalletPurchase ? childWalletName : null}

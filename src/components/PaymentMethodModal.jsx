@@ -10,6 +10,7 @@ const PaymentMethodModal = ({
   isOpen,
   onClose,
   amount,
+  baseAmount,
   strategyName,
   onSelectOzow,
   onEFTConfirm,
@@ -198,7 +199,7 @@ const PaymentMethodModal = ({
                 <p className="text-xs text-slate-500">
                   Paying{" "}
                   <span className="font-semibold text-slate-700">
-                    {formatAmount(amount)}
+                    {formatAmount(baseAmount ?? amount)}
                   </span>{" "}
                   for{" "}
                   <span className="font-semibold text-slate-700">
