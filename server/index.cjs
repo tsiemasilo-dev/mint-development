@@ -2160,51 +2160,53 @@ app.post("/api/auth/login", async (req, res) => {
   try {
     if (pgPool) {
       // 1. Check current failure count in the rolling window
-      const { rows: countRows } = await pgPool.query(
-        `SELECT COUNT(*) AS cnt FROM login_attempts
-         WHERE email_hash = $1 AND success = FALSE
-         AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
-        [emailHash]
-      );
-      const failCount = parseInt(countRows[0].cnt, 10);
-
-      if (failCount >= LOGIN_MAX_FAILURES) {
-        // Find the timestamp of the Nth failure to calculate unlock time
-        const { rows: nthRows } = await pgPool.query(
-          `SELECT attempted_at FROM login_attempts
+      try {
+        const { rows: countRows } = await pgPool.query(
+          `SELECT COUNT(*) AS cnt FROM login_attempts
            WHERE email_hash = $1 AND success = FALSE
-           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'
-           ORDER BY attempted_at ASC LIMIT 1 OFFSET ${LOGIN_MAX_FAILURES - 1}`,
+           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
           [emailHash]
         );
-        if (nthRows.length > 0) {
-          const nthFailAt   = new Date(nthRows[0].attempted_at);
-          const unlockedAt  = new Date(nthFailAt.getTime() + LOGIN_LOCKOUT_SECS * 1000);
-          const secondsLeft = Math.ceil((unlockedAt - Date.now()) / 1000);
-          if (secondsLeft > 0) {
-            console.warn(`[auth/login] Account locked for ${emailHash.slice(0, 8)}… — ${secondsLeft}s remaining`);
-            return res.status(429).json({
-              success: false,
-              locked: true,
-              lockedFor: secondsLeft,
-              error: `Account temporarily locked. Try again in ${Math.ceil(secondsLeft / 60)} minutes.`,
-            });
+        const failCount = parseInt(countRows[0].cnt, 10);
+
+        if (failCount >= LOGIN_MAX_FAILURES) {
+          const { rows: nthRows } = await pgPool.query(
+            `SELECT attempted_at FROM login_attempts
+             WHERE email_hash = $1 AND success = FALSE
+             AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'
+             ORDER BY attempted_at ASC LIMIT 1 OFFSET ${LOGIN_MAX_FAILURES - 1}`,
+            [emailHash]
+          );
+          if (nthRows.length > 0) {
+            const nthFailAt   = new Date(nthRows[0].attempted_at);
+            const unlockedAt  = new Date(nthFailAt.getTime() + LOGIN_LOCKOUT_SECS * 1000);
+            const secondsLeft = Math.ceil((unlockedAt - Date.now()) / 1000);
+            if (secondsLeft > 0) {
+              console.warn(`[auth/login] Account locked for ${emailHash.slice(0, 8)}… — ${secondsLeft}s remaining`);
+              return res.status(429).json({
+                success: false,
+                locked: true,
+                lockedFor: secondsLeft,
+                error: `Account temporarily locked. Try again in ${Math.ceil(secondsLeft / 60)} minutes.`,
+              });
+            }
           }
         }
+      } catch (dbErr) {
+        console.warn("[auth/login] DB check skipped (unreachable):", dbErr.message);
       }
     }
 
     // 2. Attempt the login via Supabase (anon client — signInWithPassword requires it)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    // 3. Record the attempt
+    // 3. Record the attempt (fire-and-forget — never block the response)
     if (pgPool) {
-      await pgPool.query(
+      pgPool.query(
         `INSERT INTO login_attempts (email_hash, ip_address, success) VALUES ($1, $2, $3)`,
         [emailHash, ipAddress, !error]
-      ).catch(e => console.error("[auth/login] Failed to record attempt:", e.message));
+      ).catch(e => console.warn("[auth/login] Failed to record attempt:", e.message));
 
-      // Prune old records to keep the table small (runs async, non-blocking)
       pgPool.query(`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '2 hours'`)
         .catch(() => {});
     }
@@ -2213,13 +2215,17 @@ app.post("/api/auth/login", async (req, res) => {
       // Count remaining attempts after recording
       let attemptsRemaining = LOGIN_MAX_FAILURES;
       if (pgPool) {
-        const { rows } = await pgPool.query(
-          `SELECT COUNT(*) AS cnt FROM login_attempts
-           WHERE email_hash = $1 AND success = FALSE
-           AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
-          [emailHash]
-        );
-        attemptsRemaining = Math.max(0, LOGIN_MAX_FAILURES - parseInt(rows[0].cnt, 10));
+        try {
+          const { rows } = await pgPool.query(
+            `SELECT COUNT(*) AS cnt FROM login_attempts
+             WHERE email_hash = $1 AND success = FALSE
+             AND attempted_at > NOW() - INTERVAL '${LOGIN_WINDOW_MINS} minutes'`,
+            [emailHash]
+          );
+          attemptsRemaining = Math.max(0, LOGIN_MAX_FAILURES - parseInt(rows[0].cnt, 10));
+        } catch (dbErr) {
+          console.warn("[auth/login] DB count skipped (unreachable):", dbErr.message);
+        }
       }
 
       const justLocked = attemptsRemaining === 0;
