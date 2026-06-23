@@ -76,7 +76,8 @@ const PaymentPage = ({
   }, [childFamilyMemberId, isChildWalletPurchase, profile?.id]);
 
   // Wallet modal state
-  const [walletConfirmOpen, setWalletConfirmOpen] = useState(initialMethod === "wallet");
+  const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
+  const [autoProcessWallet, setAutoProcessWallet] = useState(false);
   const [walletSuccessOpen, setWalletSuccessOpen] = useState(false);
   const [walletNewBalance, setWalletNewBalance] = useState(0);
   const [walletAmountDeducted, setWalletAmountDeducted] = useState(0);
@@ -144,7 +145,7 @@ const PaymentPage = ({
     setIsMethodModalOpen(false);
     if (method === "wallet") {
       setPaymentStatus("wallet-pending");
-      setWalletConfirmOpen(true);
+      setAutoProcessWallet(true);
       return;
     }
     if (method === "ozow") {
@@ -365,6 +366,13 @@ const PaymentPage = ({
     setPaymentStatus("eft-pending");
     setEftSuccessOpen(true);
   };
+
+  useEffect(() => {
+    if (!autoProcessWallet) return;
+    setAutoProcessWallet(false);
+    handleWalletConfirm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoProcessWallet]);
 
   useEffect(() => {
     isMounted.current = true;

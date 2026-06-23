@@ -20,6 +20,7 @@ const PaymentMethodModal = ({
   childFamilyMemberId,
   childFirstName,
   childWalletBalanceCents,
+  fees,
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
@@ -30,14 +31,15 @@ const PaymentMethodModal = ({
   const [confirmStep, setConfirmStep] = useState(null); // null | 'wallet' | 'ozow'
   const [walletConfirming, setWalletConfirming] = useState(false);
   const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE } = useFees();
-  const bufferedBase = (baseAmount || amount || 0) * 1.08;
-  const brokerFee = bufferedBase * 0.0025;
+  const bufferedBase = fees?.bufferedBase ?? (baseAmount || amount || 0) * 1.08;
+  const brokerFee = fees?.brokerAmount ?? bufferedBase * 0.0025;
+  const isinTotal = fees?.isinTotal ?? 0;
   const walletTxFee = bufferedBase * WALLET_TRANSACTION_FEE_RATE;
-  const walletTotal = bufferedBase + brokerFee + walletTxFee;
+  const walletTotal = bufferedBase + brokerFee + isinTotal + walletTxFee;
   const ozowTxFee = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
-  const ozowTotal = bufferedBase + brokerFee + ozowTxFee;
+  const ozowTotal = bufferedBase + brokerFee + isinTotal + ozowTxFee;
   const eftTxFee = bufferedBase * TRANSACTION_FEE_RATE;
-  const eftTotal = bufferedBase + brokerFee + eftTxFee;
+  const eftTotal = bufferedBase + brokerFee + isinTotal + eftTxFee;
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 
   const handleOzow = async (ozowAmount) => {
@@ -240,6 +242,12 @@ const PaymentMethodModal = ({
                       <span className="text-slate-500">Brokerage fee (0.25%)</span>
                       <span className="font-semibold text-slate-900">{formatAmount(brokerFee)}</span>
                     </div>
+                    {isinTotal > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Custody fee</span>
+                        <span className="font-semibold text-slate-900">{formatAmount(isinTotal)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
                       <span className="font-semibold text-slate-900">{formatAmount(walletTxFee)}</span>
@@ -311,6 +319,12 @@ const PaymentMethodModal = ({
                       <span className="text-slate-500">Brokerage fee (0.25%)</span>
                       <span className="font-semibold text-slate-900">{formatAmount(brokerFee)}</span>
                     </div>
+                    {isinTotal > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Custody fee</span>
+                        <span className="font-semibold text-slate-900">{formatAmount(isinTotal)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
                       <span className="font-semibold text-slate-900">{formatAmount(ozowTxFee)}</span>
@@ -487,6 +501,12 @@ const PaymentMethodModal = ({
                               <span>Brokerage fee ({pct(0.0025)})</span>
                               <span className="font-medium">{formatAmount(brokerFee)}</span>
                             </div>
+                            {isinTotal > 0 && (
+                              <div className="flex justify-between text-xs text-slate-600">
+                                <span>Custody fee</span>
+                                <span className="font-medium">{formatAmount(isinTotal)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between text-xs text-slate-600">
                               <span>Transaction fee ({pct(TRANSACTION_FEE_RATE)})</span>
                               <span className="font-medium">{formatAmount(eftTxFee)}</span>
