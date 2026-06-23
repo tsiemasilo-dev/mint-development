@@ -11451,17 +11451,23 @@ console.log("[aum-fee] Scheduled daily AUM accrual + month-end settlement at 21:
 //   POST /api/aum-fee/run            → daily accrual only (safe; just accrues)
 //   POST /api/aum-fee/run {mode:"settle"}  → force a settlement now (moves money)
 //   POST /api/aum-fee/run {mode:"both"}    → accrue then settle now
+// Scope to one account so you don't touch everyone (recommended for UAT):
+//   {"mode":"both","user_id":"<uuid>"}  (optionally "strategy_id":"<uuid>")
 // Auth: Authorization: Bearer <ADMIN_API_KEY|CRON_SECRET>.
 app.post("/api/aum-fee/run", async (req, res) => {
   const authErr = checkAdminKey(req);
   if (authErr) return res.status(401).json({ error: authErr });
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(503).json({ error: "Supabase client not configured" });
-  const mode = String((req.body && req.body.mode) || req.query.mode || "accrual").toLowerCase();
+  const body = req.body || {};
+  const mode = String(body.mode || req.query.mode || "accrual").toLowerCase();
+  const userId = body.user_id || req.query.user_id || null;
+  const strategyId = body.strategy_id || req.query.strategy_id || null;
+  const scope = { userId, strategyId };
   try {
-    const out = {};
-    if (mode === "accrual" || mode === "both") out.accrual = await aumFeeEngine.runDailyAccrual(db, new Date());
-    if (mode === "settle" || mode === "both") out.settlement = await aumFeeEngine.runMonthlySettlement(db, new Date(), { force: true });
+    const out = { scope };
+    if (mode === "accrual" || mode === "both") out.accrual = await aumFeeEngine.runDailyAccrual(db, new Date(), scope);
+    if (mode === "settle" || mode === "both") out.settlement = await aumFeeEngine.runMonthlySettlement(db, new Date(), { force: true, userId, strategyId });
     if (!out.accrual && !out.settlement) return res.status(400).json({ error: 'mode must be "accrual", "settle", or "both"' });
     res.json({ ok: true, mode, ...out });
   } catch (e) {
