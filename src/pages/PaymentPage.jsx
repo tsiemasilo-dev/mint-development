@@ -461,9 +461,18 @@ const PaymentPage = ({
           childFirstName={isChildWalletPurchase ? childWalletName : null}
           childWalletBalanceCents={isChildWalletPurchase ? Math.round(walletBalance * 100) : null}
           onSelectPaystack={() => handleMethodSelection("paystack")}
-          onSelectWallet={() => handleMethodSelection("wallet")}
+          onSelectWallet={(total) => {
+            setSelectedMethod("wallet");
+            setIsMethodModalOpen(false);
+            setPaymentStatus("processing");
+            handleWalletConfirm(total || amount);
+          }}
           onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
-          onSelectOzow={() => handleMethodSelection("ozow")}
+          onSelectOzow={(total) => {
+            setSelectedMethod("ozow");
+            setIsMethodModalOpen(false);
+            handleInitiateOzow(total || amount);
+          }}
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">
