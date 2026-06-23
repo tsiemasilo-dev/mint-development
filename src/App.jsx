@@ -2181,7 +2181,7 @@ const App = () => {
           isOpen={showPaymentMethodModal}
           onClose={() => setShowPaymentMethodModal(false)}
           amount={investmentAmount}
-          baseAmount={investmentFees?.bufferedBase || baseInvestmentAmount}
+          baseAmount={baseInvestmentAmount}
           strategyName={selectedStrategy?.name || "Investment"}
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
