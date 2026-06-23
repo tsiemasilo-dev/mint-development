@@ -464,6 +464,7 @@ const PaymentPage = ({
           onClose={() => onBack?.()}
           amount={amount}
           baseAmount={baseAmount}
+          fees={fees}
           strategyName={strategy?.name}
           childFamilyMemberId={childFamilyMemberId}
           childFirstName={isChildWalletPurchase ? childWalletName : null}

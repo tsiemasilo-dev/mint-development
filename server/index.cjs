@@ -442,15 +442,25 @@ const sensitiveLimiter = rateLimit({
   message: { error: "Rate limit reached for this action — please try again later." },
 });
 
+// Investment recording: higher limit — users can retry legitimately and the
+// endpoint is idempotent (duplicate paymentReference returns 200 immediately).
+const investmentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many investment attempts — please wait a few minutes and try again." },
+});
+
 app.use("/api/", generalLimiter);
 app.use(["/api/auth", "/api/login", "/api/password"], authLimiter);
+app.use("/api/record-investment", investmentLimiter);
 app.use([
   "/api/experian",
   "/api/truid",
   "/api/credit-check",
   "/api/kyc",
   "/api/eft-deposit",
-  "/api/record-investment",
   "/api/gift/claim",
 ], sensitiveLimiter);
 // ──────────────────────────────────────────────────────────────────────────
