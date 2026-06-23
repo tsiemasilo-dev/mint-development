@@ -316,13 +316,6 @@ export default function AdultInvestModal({
                 </div>
               </div>
 
-              {/* Total cost */}
-              <div className="mb-4 rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
-                <div className="flex items-center justify-between px-4 py-3.5">
-                  <p className="text-xs font-bold text-purple-700">Total Due Today</p>
-                  <p className="text-base font-black text-purple-900">R{fmt(fees.totalCost)}</p>
-                </div>
-              </div>
 
 
               {/* Agreement */}
