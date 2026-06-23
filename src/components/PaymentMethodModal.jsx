@@ -28,13 +28,15 @@ const PaymentMethodModal = ({
   const [showEFTPopup, setShowEFTPopup] = useState(false);
   const [ozowLoading, setOzowLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(null); // null | 'wallet' | 'ozow'
-  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE } = useFees();
+  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE } = useFees();
   const bufferedBase = (baseAmount || amount || 0) * 1.08;
   const brokerFee = bufferedBase * 0.0025;
   const walletTxFee = bufferedBase * WALLET_TRANSACTION_FEE_RATE;
   const walletTotal = bufferedBase + brokerFee + walletTxFee;
   const ozowTxFee = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
   const ozowTotal = bufferedBase + brokerFee + ozowTxFee;
+  const eftTxFee = bufferedBase * TRANSACTION_FEE_RATE;
+  const eftTotal = bufferedBase + brokerFee + eftTxFee;
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 
   const handleOzow = async (ozowAmount) => {
@@ -445,6 +447,28 @@ const PaymentMethodModal = ({
                         className="overflow-hidden"
                       >
                         <div className="border-t border-slate-100">
+                          {/* ── Fee breakdown ── */}
+                          <div className="px-4 pt-3 pb-2 space-y-1.5">
+                            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-2">Fee Breakdown</p>
+                            <div className="flex justify-between text-xs text-slate-600">
+                              <span>Investment + 8% reserve</span>
+                              <span className="font-medium">{formatAmount(bufferedBase)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-600">
+                              <span>Brokerage fee ({pct(0.0025)})</span>
+                              <span className="font-medium">{formatAmount(brokerFee)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-600">
+                              <span>Transaction fee ({pct(TRANSACTION_FEE_RATE)})</span>
+                              <span className="font-medium">{formatAmount(eftTxFee)}</span>
+                            </div>
+                            <div className="h-px bg-slate-100 my-1" />
+                            <div className="flex justify-between text-sm font-semibold text-slate-900">
+                              <span>Total to transfer</span>
+                              <span className="text-violet-600">{formatAmount(eftTotal)}</span>
+                            </div>
+                          </div>
+
                           {/* Bank header */}
                           <div className="flex items-center justify-between px-4 py-3 bg-[#001f5b]">
                             <div>
