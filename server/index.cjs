@@ -11430,6 +11430,23 @@ async function saveSecurityEODPrices() {
 cron.schedule("5 15 * * 1-5", saveSecurityEODPrices, { timezone: "UTC" });
 console.log("[eod-returns] Scheduled daily EOD price save at 17:05 SAST (Mon–Fri)");
 
+// ── AUM management fee: daily accrual + month-end settlement ──────────────────
+// Runs every day at 21:30 UTC (after EOD prices are saved). Accrual is idempotent
+// (accrues by elapsed days), and settlement self-skips except on the last calendar
+// day of the month, so a single daily schedule is safe.
+const aumFeeEngine = require("./aumFeeEngine.cjs");
+cron.schedule("30 21 * * *", async () => {
+  const db = supabaseAdmin || supabase;
+  if (!db) { console.warn("[aum-fee] no Supabase client — skipping"); return; }
+  try {
+    await aumFeeEngine.runDailyAccrual(db, new Date());
+    await aumFeeEngine.runMonthlySettlement(db, new Date());
+  } catch (e) {
+    console.error("[aum-fee] cron error:", e?.message || e);
+  }
+}, { timezone: "UTC" });
+console.log("[aum-fee] Scheduled daily AUM accrual + month-end settlement at 21:30 UTC");
+
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
