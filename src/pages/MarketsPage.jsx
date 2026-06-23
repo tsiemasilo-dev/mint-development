@@ -1200,7 +1200,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
     }
 
-    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const labelIndices = series.length ? [series.length - 1] : [];
     const values = series.map((point) => point?.v ?? 0);
     const minValue = values.length ? Math.min(...values) : 0;
     const maxValue = values.length ? Math.max(...values) : 0;
