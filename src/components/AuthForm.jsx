@@ -637,11 +637,17 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
       }
 
       // Restore the Supabase session returned by the server
-      if (data.session?.access_token && data.session?.refresh_token) {
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
+      if (supabase && data.session?.access_token && data.session?.refresh_token) {
+        try {
+          await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+        } catch (sessionErr) {
+          console.warn('[login] setSession failed (continuing):', sessionErr?.message);
+        }
+      } else if (!supabase) {
+        console.warn('[login] Supabase client not initialized — skipping setSession');
       }
 
       setLoginAttempts(0);

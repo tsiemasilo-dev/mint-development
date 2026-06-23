@@ -149,10 +149,12 @@ function createAndPatch() {
   return client;
 }
 
-// Reuse the existing client across HMR reloads; only create once per page load
+// Reuse the existing client across HMR reloads; only create once per page load.
+// Re-attempt initialization on each HMR cycle in case env vars weren't available
+// on the very first module load (e.g. Vite dev server started before secrets).
 if (!globalThis[GLOBAL_CLIENT_KEY] && supabaseUrl && supabaseAnonKey) {
   globalThis[GLOBAL_CLIENT_KEY] = createAndPatch();
 }
 
 export const supabase =
-  supabaseUrl && supabaseAnonKey ? globalThis[GLOBAL_CLIENT_KEY] : null;
+  supabaseUrl && supabaseAnonKey ? (globalThis[GLOBAL_CLIENT_KEY] ?? null) : null;
