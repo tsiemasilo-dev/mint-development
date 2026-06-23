@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3, Zap, Building2 } from "lucide-react";
+import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3 } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "./PdfViewer";
 import OcrScanModal from "./OcrScanModal";
@@ -40,7 +40,6 @@ export default function AdultInvestModal({
   //   'open'     = the invest sheet (agreement/fees/payment) is visible
   // Non-additional buys start — and stay — at 'open'.
   const [gate, setGate] = useState("open");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null); // "wallet-eft" | "instant"
 
   // Load minimum + wallet balance when opened
   useEffect(() => {
@@ -50,7 +49,6 @@ export default function AdultInvestModal({
     setAgreementChecked(false);
     setShowMandateModal(false);
     setIsGift(false);
-    setSelectedPaymentMethod(null);
     // Gate the sheet until we know whether to show the ID-document scan. The scan
     // fires on a SECONDARY strategy purchase — detected here (not just from the
     // isAdditionalStrategy prop) so it works from EVERY buy entry point, not only
@@ -142,7 +140,7 @@ export default function AdultInvestModal({
   const proceed = () => {
     const sharePrice = strategy?.price_per_share || strategy?.pricePerShare || null;
     const shareCount = sharePrice && sharePrice > 0 ? Math.floor(baseAmount / sharePrice) : null;
-    onContinue?.(fees.totalCost, baseAmount, shareCount, fees, selectedPaymentMethod);
+    onContinue?.(fees.totalCost, baseAmount, shareCount, fees);
   };
 
   const handleConfirm = () => {
@@ -356,56 +354,6 @@ export default function AdultInvestModal({
                 </div>
               </div>
 
-              {/* Insufficient funds — payment method selector */}
-              {insufficient && (
-                <div className="mb-4">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-0.5">
-                    Insufficient balance — choose how to pay
-                  </p>
-                  <div className="flex gap-3">
-                    {/* Wallet / EFT */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentMethod("wallet-eft")}
-                      className={`flex-1 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.97] ${
-                        selectedPaymentMethod === "wallet-eft"
-                          ? "border-violet-500 bg-violet-50"
-                          : "border-slate-200 bg-white"
-                      }`}
-                    >
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-xl mb-2 ${
-                        selectedPaymentMethod === "wallet-eft" ? "bg-violet-100" : "bg-slate-100"
-                      }`}>
-                        <Building2 className={`h-4 w-4 ${selectedPaymentMethod === "wallet-eft" ? "text-violet-600" : "text-slate-500"}`} />
-                      </div>
-                      <p className={`text-xs font-bold leading-tight ${selectedPaymentMethod === "wallet-eft" ? "text-violet-900" : "text-slate-800"}`}>
-                        Wallet / EFT
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">Top up wallet or pay via bank transfer</p>
-                    </button>
-                    {/* Instant Funding (Ozow) */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPaymentMethod("instant")}
-                      className={`flex-1 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.97] ${
-                        selectedPaymentMethod === "instant"
-                          ? "border-violet-500 bg-violet-50"
-                          : "border-slate-200 bg-white"
-                      }`}
-                    >
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-xl mb-2 ${
-                        selectedPaymentMethod === "instant" ? "bg-violet-100" : "bg-slate-100"
-                      }`}>
-                        <Zap className={`h-4 w-4 ${selectedPaymentMethod === "instant" ? "text-violet-600" : "text-slate-500"}`} />
-                      </div>
-                      <p className={`text-xs font-bold leading-tight ${selectedPaymentMethod === "instant" ? "text-violet-900" : "text-slate-800"}`}>
-                        Instant Funding
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">Pay securely via Ozow</p>
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Agreement */}
               <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
@@ -463,14 +411,11 @@ export default function AdultInvestModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={isLimitedDiscretion ? false : (
-                    !agreementChecked || !minimum ||
-                    (insufficient && !selectedPaymentMethod)
-                  )}
+                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum)}
                   className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
-                  {insufficient && selectedPaymentMethod === "instant" ? "Continue to Instant Payment" : "Continue"}
+                  Continue
                 </button>
               )}
             </div>

@@ -230,7 +230,6 @@ const App = () => {
   const selectedGoalIdRef = useRef(null);
   const goalInvestAmountRef = useRef(0);
   const pendingPaymentTypeRef = useRef(null);
-  const preselectedPaymentMethodRef = useRef(null);
   const recoveryHandled = useRef(false);
   const { refetch: refetchNotifications, reset: resetNotifications } = useNotificationsContext();
   const [showPinLock, setShowPinLock] = useState(false);
@@ -1535,8 +1534,7 @@ const App = () => {
             onClose={() => setShowAdultInvestModal(false)}
             strategy={selectedStrategy}
             paymentMethod={pendingPaymentMethod}
-            onContinue={(amount, baseAmount, shareCount, fees, paymentMethod) => {
-              preselectedPaymentMethodRef.current = paymentMethod || null;
+            onContinue={(amount, baseAmount, shareCount, fees) => {
               setInvestmentAmount(amount);
               setBaseInvestmentAmount(baseAmount || amount);
               setInvestmentFees(fees);
@@ -2067,8 +2065,7 @@ const App = () => {
           onClose={() => setShowAdultInvestModal(false)}
           strategy={selectedStrategy}
           paymentMethod={pendingPaymentMethod}
-          onContinue={(amount, baseAmount, shareCount, fees, paymentMethod) => {
-            preselectedPaymentMethodRef.current = paymentMethod || null;
+          onContinue={(amount, baseAmount, shareCount, fees) => {
             setInvestmentAmount(amount);
             setBaseInvestmentAmount(baseAmount || amount);
             setInvestmentFees(fees);
@@ -2174,63 +2171,6 @@ const App = () => {
               return;
             }
 
-            // User pre-selected Instant Funding (Ozow) from the confirm modal — go straight to Ozow
-            if (preselectedPaymentMethodRef.current === "instant") {
-              preselectedPaymentMethodRef.current = null;
-              try {
-                const { data: { user } } = await supabase.auth.getUser();
-                const baseUrl = window.location.origin;
-                const resp = await fetch("/api/ozow/initiate", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    amount: investmentAmount,
-                    strategyName: selectedStrategy?.name || "Investment",
-                    strategyId: selectedStrategy?.id || null,
-                    userId: user?.id || null,
-                    userEmail: user?.email || null,
-                    successUrl: `${baseUrl}/?ozow=success`,
-                    cancelUrl: `${baseUrl}/?ozow=cancel`,
-                    errorUrl: `${baseUrl}/?ozow=error`,
-                    abandonedUrl: `${baseUrl}/?ozow=abandoned`,
-                  }),
-                });
-                const data = await resp.json();
-                if (data.success && data.action_url) {
-                  sessionStorage.setItem("ozow_pending", JSON.stringify({
-                    transactionRef: data.TransactionReference,
-                    strategyId: data.Optional1,
-                    amount: data.Amount,
-                    strategyName: selectedStrategy?.name || "Investment",
-                  }));
-                  const form = document.createElement("form");
-                  form.method = "POST";
-                  form.action = data.action_url;
-                  Object.entries(data).forEach(([key, value]) => {
-                    if (["success", "action_url"].includes(key)) return;
-                    const input = document.createElement("input");
-                    input.type = "hidden";
-                    input.name = key;
-                    input.value = value;
-                    form.appendChild(input);
-                  });
-                  document.body.appendChild(form);
-                  form.submit();
-                  document.body.removeChild(form);
-                } else {
-                  alert(data.error || "Failed to initiate Ozow payment. Please try again.");
-                  setShowPaymentMethodModal(true);
-                }
-              } catch (err) {
-                console.error("Ozow error:", err);
-                alert("Could not connect to Ozow. Please try another payment method.");
-                setShowPaymentMethodModal(true);
-              }
-              return;
-            }
-
-            // User pre-selected Wallet/EFT — clear ref and show PaymentMethodModal normally
-            preselectedPaymentMethodRef.current = null;
             setShowPaymentMethodModal(true);
           }}
           investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}

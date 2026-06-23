@@ -465,6 +465,21 @@ const PaymentMethodModal = ({
               </div>
 
               <div className="max-h-[75vh] overflow-y-auto">
+                {/* Insufficient funds notice */}
+                <div className="mx-5 mt-4 mb-1 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-2.5">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 flex-shrink-0 mt-0.5">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width={11} height={11}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-amber-800">Insufficient wallet balance</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                      Your wallet has <span className="font-semibold">{formatAmount(walletBalance)}</span> — please top up via EFT to continue with your investment.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Bank header */}
                 <div className="flex items-center justify-between px-4 py-3 bg-[#001f5b]">
                   <div>
