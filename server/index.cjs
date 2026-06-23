@@ -370,6 +370,8 @@ const pgPool = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL) ? new P
   connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   max: 5,
+  connectionTimeoutMillis: 4000,
+  idleTimeoutMillis: 10000,
 }) : null;
 
 const rateLimit = require("express-rate-limit");
