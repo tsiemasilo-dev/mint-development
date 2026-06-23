@@ -165,7 +165,7 @@ export default function StrategyReturnChart() {
                   dataKey="month"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12 }}
+                  tick={false}
                   tickMargin={12}
                   dy={10}
                 />

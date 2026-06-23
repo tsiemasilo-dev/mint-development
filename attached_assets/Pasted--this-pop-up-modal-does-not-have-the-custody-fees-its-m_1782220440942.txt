@@ -1,0 +1,53 @@
+
+
+-this pop up modal does not have the custody fees its missing
+
+also when i press confirm purchase on the modal a different confirm payment confirm pop up modal shows ( remove this one )
+5 minutes ago
+
+Planning modal display logic (22 seconds)
+Two clear issues: the custody fee is missing from PaymentMethodModal's wallet confirm step, and pressing confirm triggers a second WalletConfirmModal from PaymentPage. Let me trace both at once:
+
+
+3 actions
+Let me read the PaymentPage wallet confirm flow and the fees prop passing:
+
+
+3 actions
+I need to see handleWalletConfirm to safely skip it, and the current PaymentPage props:
+
+
+3 actions
+Now I have all the context I need. Two targeted changes:
+
+Pass fees into PaymentMethodModal so it can show the custody fee, and add the row to all three confirm views
+Add skipWalletConfirm flow so pressing Confirm in PaymentMethodModal bypasses the second WalletConfirmModal in PaymentPage
+Let me do all three files in parallel:
+
+
+3 actions
+I have everything I need. Now making all three files' changes in parallel:
+
+
+2 actions
+Now update the fee calculations and breakdown rows in PaymentMethodModal, plus both App.jsx and PaymentPage.jsx changes — all in parallel:
+
+
+2 actions
+Now add the custody fee row to the wallet confirm breakdown, update App.jsx to pass fees and use "wallet-skip", and update PaymentPage to skip the second modal — all in parallel:
+
+
+2 actions
+Continuing with the remaining changes in parallel — Ozow breakdown custody fee, App.jsx updates, and PaymentPage skip logic:
+
+
+2 actions
+Now App.jsx (fees prop + "wallet-skip") and PaymentPage.jsx (skip logic) in parallel:
+
+
+2 actions
+Now I need to update PaymentPage to handle "wallet-skip". Let me read the area around handleWalletConfirm to place the auto-trigger correctly:
+
+
+2 actions
+Now I have everything I need. Let me apply the PaymentPage changes all at once — initial state, walletConfirmOpen, and the auto-trigger after handleWalletConfirm:

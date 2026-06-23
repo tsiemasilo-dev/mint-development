@@ -34,7 +34,7 @@
     "@sumsub/websdk-react": "^2.6.3",
     "@supabase/supabase-js": "^2.108.2",
     "adm-zip": "^0.5.17",
-    "axios": "^1.18.0",
+    "axios": "^1.18.1",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
     "drizzle-zod": "^0.8.3",

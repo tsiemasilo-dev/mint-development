@@ -1142,57 +1142,12 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
                     </div>
                   </div>
 
-                  {/* Fee breakdown — mirrors InvestAmountPage layout */}
-                  <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setFeeExpanded(!feeExpanded)}
-                      className="w-full flex items-center justify-between p-4"
-                    >
-                      <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
-                      {feeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                    </button>
-
-                    {feeExpanded && (
-                      <div className="px-4 pb-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1">
-                            <p className="text-xs text-slate-600">Investment Amount</p>
-                            <span className="text-xs text-slate-400" title="Includes 8% cash reserve">*</span>
-                          </div>
-                          <p className="text-xs font-semibold text-slate-900">
-                            R{fees.bufferedBase.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                          <p className="text-xs font-semibold text-slate-900">
-                            R{fees.brokerAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-600">
-                            Custody Fee (R{ISIN_FEE_PER_ASSET.toFixed(2)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})
-                          </p>
-                          <p className="text-xs font-semibold text-slate-900">
-                            R{fees.isinTotal.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
-                          <p className="text-xs font-semibold text-slate-900">
-                            R{fees.transactionAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-                      <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
-                      <p className="text-sm font-bold text-slate-900">
-                        R{fees.totalCost.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
+                  {/* Total cost */}
+                  <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
+                    <p className="text-sm font-bold text-slate-900">
+                      R{fees.totalCost.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                   </div>
 
                   {insufficient && (

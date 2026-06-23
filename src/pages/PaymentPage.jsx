@@ -76,19 +76,81 @@ const PaymentPage = ({
   }, [childFamilyMemberId, isChildWalletPurchase, profile?.id]);
 
   // Wallet modal state
-  const [walletConfirmOpen, setWalletConfirmOpen] = useState(initialMethod === "wallet");
+  const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
+  const [autoProcessWallet, setAutoProcessWallet] = useState(false);
   const [walletSuccessOpen, setWalletSuccessOpen] = useState(false);
   const [walletNewBalance, setWalletNewBalance] = useState(0);
   const [walletAmountDeducted, setWalletAmountDeducted] = useState(0);
   const [eftReference, setEftReference] = useState("");
   const [eftSuccessOpen, setEftSuccessOpen] = useState(false);
 
+  // Ozow confirm modal state
+  const [ozowConfirmOpen, setOzowConfirmOpen] = useState(false);
+
+  const handleInitiateOzow = useCallback(async (ozowAmount) => {
+    setOzowConfirmOpen(false);
+    setPaymentStatus("initializing");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      const baseUrl = window.location.origin;
+      const resp = await fetch("/api/ozow/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: ozowAmount || amount,
+          strategyName: strategy?.name || "",
+          strategyId: strategy?.id || null,
+          userId: user?.id || null,
+          userEmail: user?.email || null,
+          successUrl: `${baseUrl}/?ozow=success`,
+          cancelUrl: `${baseUrl}/?ozow=cancel`,
+          errorUrl: `${baseUrl}/?ozow=error`,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success && data.action_url) {
+        sessionStorage.setItem("ozow_pending", JSON.stringify({
+          transactionRef: data.TransactionReference,
+          strategyId: strategy?.id || null,
+          amount: ozowAmount || amount,
+          strategyName: strategy?.name || "",
+        }));
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = data.action_url;
+        Object.entries(data).forEach(([key, value]) => {
+          if (["success", "action_url"].includes(key)) return;
+          const input = document.createElement("input");
+          input.type = "hidden"; input.name = key; input.value = value;
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+      } else {
+        setPaymentStatus("failed");
+        setErrorMessage(data.error || "Failed to initiate Ozow payment.");
+        setIsMethodModalOpen(true);
+      }
+    } catch (err) {
+      console.error("[ozow] initiate error:", err);
+      setPaymentStatus("failed");
+      setErrorMessage("Could not connect to Ozow. Please try another payment method.");
+      setIsMethodModalOpen(true);
+    }
+  }, [amount, strategy]);
+
   const handleMethodSelection = useCallback((method) => {
     setSelectedMethod(method);
     setIsMethodModalOpen(false);
     if (method === "wallet") {
       setPaymentStatus("wallet-pending");
-      setWalletConfirmOpen(true);
+      setAutoProcessWallet(true);
+      return;
+    }
+    if (method === "ozow") {
+      setPaymentStatus("ozow-pending");
+      setOzowConfirmOpen(true);
       return;
     }
     if (method === "direct_eft") {
@@ -235,8 +297,8 @@ const PaymentPage = ({
    * The 'amount' prop comes from InvestAmountPage (or StockBuyPage). 
    * It already includes all fees: 8% silent buffer, brokerage, custody, and transaction fees.
    */
-  const handleWalletConfirm = async () => {
-    const totalToDeduct = amount;
+  const handleWalletConfirm = async (walletSpecificAmount) => {
+    const totalToDeduct = walletSpecificAmount || amount;
 
     if (isSubmittingWallet.current || paymentStatus === "processing") return;
     isSubmittingWallet.current = true;
@@ -297,36 +359,20 @@ const PaymentPage = ({
    * 3. Holdings and user_strategies are ONLY updated when an admin manually confirms 
    *    the transaction via /api/confirm-eft-deposit after funds reflect.
    */
-  const handleEftConfirm = async () => {
-    if (paymentStatus === "processing") return;
-    setPaymentStatus("processing");
-    
-    try {
-      const response = await fetch('/api/eft-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount,
-          baseAmount,
-          reference: eftReference,
-          strategyId: strategy?.id,
-          symbol: strategy?.symbol,
-          name: strategy?.name,
-          shareCount,
-          confirmed_by_user: true
-        })
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || "Failed to confirm EFT intent");
-
-      setPaymentStatus("eft-pending");
-      setEftSuccessOpen(true);
-    } catch (err) {
-      console.error("EFT confirmation error:", err);
-      setPaymentStatus("failed");
-      setErrorMessage(err.message || "EFT confirmation failed");
-    }
+  const handleEftConfirm = () => {
+    // Intent was already recorded when EFT was selected (Phase 1).
+    // Just show the "waiting for payment" modal — do NOT call the API again
+    // and do NOT update holdings or navigate to paymentSuccess.
+    setPaymentStatus("eft-pending");
+    setEftSuccessOpen(true);
   };
+
+  useEffect(() => {
+    if (!autoProcessWallet) return;
+    setAutoProcessWallet(false);
+    handleWalletConfirm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoProcessWallet]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -336,10 +382,6 @@ const PaymentPage = ({
   }, []);
 
 
-  if (paymentStatus === "eft-pending") {
-    onCancel?.();
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -348,6 +390,7 @@ const PaymentPage = ({
         isOpen={walletConfirmOpen}
         amount={amount}
         baseAmount={baseAmount}
+        fees={fees}
         strategyName={strategy?.name}
         walletBalance={walletBalance}
         walletLabel={isChildWalletPurchase ? `${childWalletName}'s wallet` : "Wallet Balance"}
@@ -363,6 +406,22 @@ const PaymentPage = ({
         onNavigateToDeposit={onOpenDeposit}
       />
 
+      {/* Ozow Confirmation Modal */}
+      <OzowConfirmModal
+        isOpen={ozowConfirmOpen}
+        baseAmount={baseAmount}
+        fees={fees}
+        strategyName={strategy?.name}
+        isProcessing={paymentStatus === "initializing"}
+        onCancel={() => {
+          setOzowConfirmOpen(false);
+          setIsMethodModalOpen(true);
+          setPaymentStatus("method-selection");
+          setSelectedMethod(null);
+        }}
+        onConfirm={handleInitiateOzow}
+      />
+
       <EFTSuccessModal
         isOpen={eftSuccessOpen}
         strategyName={strategy?.name}
@@ -370,7 +429,9 @@ const PaymentPage = ({
         reference={eftReference}
         onDone={() => {
           setEftSuccessOpen(false);
-          onSuccess?.({ reference: eftReference, method: "direct_eft", pending: true });
+          // EFT is pending — do NOT call onSuccess (which would update the portfolio).
+          // Just dismiss and go back to home.
+          onCancel?.();
         }}
       />
       <WalletSuccessModal
@@ -402,69 +463,29 @@ const PaymentPage = ({
           isOpen={isMethodModalOpen}
           onClose={() => onBack?.()}
           amount={amount}
+          baseAmount={baseAmount}
+          fees={fees}
           strategyName={strategy?.name}
           childFamilyMemberId={childFamilyMemberId}
           childFirstName={isChildWalletPurchase ? childWalletName : null}
           childWalletBalanceCents={isChildWalletPurchase ? Math.round(walletBalance * 100) : null}
           onSelectPaystack={() => handleMethodSelection("paystack")}
-          onSelectWallet={() => handleMethodSelection("wallet")}
-          onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
-          onSelectOzow={async () => {
+          onSelectWallet={(total) => {
+            setSelectedMethod("wallet");
             setIsMethodModalOpen(false);
-            setPaymentStatus("initializing");
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              const user = session?.user;
-              const baseUrl = window.location.origin;
-              const resp = await fetch("/api/ozow/initiate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  amount,
-                  strategyName: strategy?.name || "",
-                  strategyId: strategy?.id || null,
-                  userId: user?.id || null,
-                  userEmail: user?.email || null,
-                  successUrl: `${baseUrl}/?ozow=success`,
-                  cancelUrl: `${baseUrl}/?ozow=cancel`,
-                  errorUrl: `${baseUrl}/?ozow=error`,
-                }),
-              });
-              const data = await resp.json();
-              if (data.success && data.action_url) {
-                sessionStorage.setItem("ozow_pending", JSON.stringify({
-                  transactionRef: data.TransactionReference,
-                  strategyId: strategy?.id || null,
-                  amount,
-                  strategyName: strategy?.name || "",
-                }));
-                const form = document.createElement("form");
-                form.method = "POST";
-                form.action = data.action_url;
-                Object.entries(data).forEach(([key, value]) => {
-                  if (["success", "action_url"].includes(key)) return;
-                  const input = document.createElement("input");
-                  input.type = "hidden"; input.name = key; input.value = value;
-                  form.appendChild(input);
-                });
-                document.body.appendChild(form);
-                form.submit();
-              } else {
-                setPaymentStatus("failed");
-                setErrorMessage(data.error || "Failed to initiate Ozow payment.");
-                setIsMethodModalOpen(true);
-              }
-            } catch (err) {
-              console.error("[ozow] initiate error:", err);
-              setPaymentStatus("failed");
-              setErrorMessage("Could not connect to Ozow. Please try another payment method.");
-              setIsMethodModalOpen(true);
-            }
+            setPaymentStatus("processing");
+            handleWalletConfirm(total || amount);
+          }}
+          onEFTConfirm={() => { setIsMethodModalOpen(false); onCancel?.(); }}
+          onSelectOzow={(total) => {
+            setSelectedMethod("ozow");
+            setIsMethodModalOpen(false);
+            handleInitiateOzow(total || amount);
           }}
         />
 
         <section className="mt-20 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm text-center">
-          {(paymentStatus === "method-selection" || paymentStatus === "wallet-pending") && (
+          {(paymentStatus === "method-selection" || paymentStatus === "wallet-pending" || paymentStatus === "ozow-pending") && (
             <>
               <Loader2 className="h-16 w-16 mx-auto text-violet-600 animate-spin mb-4" />
               <h2 className="text-lg font-semibold text-slate-900 mb-2">
@@ -636,6 +657,7 @@ const WalletConfirmModal = ({
   isOpen,
   amount,
   baseAmount,
+  fees,
   strategyName,
   walletBalance,
   walletLabel,
@@ -645,24 +667,23 @@ const WalletConfirmModal = ({
   onConfirm,
   onNavigateToDeposit,
 }) => {
-  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
+  const { WALLET_TRANSACTION_FEE_RATE } = useFees();
 
-  const bufferedBase = (baseAmount || 0) * (1 + CASH_BUFFER_RATE);
-  const brokerFee = bufferedBase * BROKER_FEE_RATE;
-  const numAssets = strategyName ? 1 : 0; // Fallback logic, should be consistent with strategy holdings if possible
-  // Note: For simplicity and to match InvestAmountPage, we use baseAmount passed from parent
-  // If we want exact match, we should use the same numAssets logic or pass values.
-  const isinTotal = ISIN_FEE_PER_ASSET * (strategyName ? 1 : 0); 
-  const transactionFee = bufferedBase * TRANSACTION_FEE_RATE;
+  const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
+  const brokerFee    = fees?.brokerAmount ?? 0;
+  const isinTotal    = fees?.isinTotal    ?? 0;
+  const txFee        = bufferedBase * WALLET_TRANSACTION_FEE_RATE;
+  const walletTotal  = bufferedBase + brokerFee + isinTotal + txFee;
 
-  const totalToDeduct = amount;
-  const hasEnoughFunds = walletBalance >= totalToDeduct;
+  const hasEnoughFunds = walletBalance >= walletTotal;
 
   const fmt = (v) =>
     `R${Number(v).toLocaleString("en-ZA", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 
   if (!isOpen) return null;
 
@@ -684,16 +705,26 @@ const WalletConfirmModal = ({
 
         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Investment Amount</span>
-            <span className="font-semibold text-slate-900">{fmt(baseAmount)}</span>
+            <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+            <span className="font-semibold text-slate-900">{fmt(bufferedBase)}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Fees (incl. Transaction & Brokerage)</span>
-            <span className="font-semibold text-slate-900">{fmt(amount - baseAmount)}</span>
+            <span className="text-slate-500">Brokerage fee (0.25%)</span>
+            <span className="font-semibold text-slate-900">{fmt(brokerFee)}</span>
+          </div>
+          {isinTotal > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-500">Custody fee</span>
+              <span className="font-semibold text-slate-900">{fmt(isinTotal)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
+            <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
           </div>
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total to Deduct</span>
-            <span className="font-bold text-violet-700">{fmt(totalToDeduct)}</span>
+            <span className="font-bold text-violet-700">{fmt(walletTotal)}</span>
           </div>
         </div>
 
@@ -712,7 +743,7 @@ const WalletConfirmModal = ({
           ) : !walletLoading && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
               <p className="text-[11px] text-emerald-600 text-center font-medium">
-                Remaining balance after: {fmt(walletBalance - totalToDeduct)}
+                Remaining balance after: {fmt(walletBalance - walletTotal)}
               </p>
             </div>
           )}
@@ -721,7 +752,7 @@ const WalletConfirmModal = ({
         <div className="flex flex-col gap-2">
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(walletTotal)}
             disabled={isProcessing || (!walletLoading && !hasEnoughFunds)}
             className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -745,6 +776,104 @@ const WalletConfirmModal = ({
               Cancel
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── OzowConfirmModal ──────────────────────────────────────────────────────────
+const OzowConfirmModal = ({
+  isOpen,
+  baseAmount,
+  fees,
+  strategyName,
+  isProcessing,
+  onCancel,
+  onConfirm,
+}) => {
+  const { OZOW_TRANSACTION_FEE_RATE } = useFees();
+
+  const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
+  const brokerFee    = fees?.brokerAmount ?? 0;
+  const isinTotal    = fees?.isinTotal    ?? 0;
+  const txFee        = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
+  const ozowTotal    = bufferedBase + brokerFee + isinTotal + txFee;
+
+  const fmt = (v) =>
+    `R${Number(v).toLocaleString("en-ZA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-center justify-center mb-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white p-1">
+            <img src="/ozow-logo.png" alt="Ozow" className="w-full h-full object-contain" />
+          </div>
+        </div>
+
+        <h2 className="text-lg font-semibold text-slate-900 text-center mb-1">
+          Confirm Purchase
+        </h2>
+        <p className="text-xs text-slate-500 text-center mb-1">
+          {strategyName || "Investment Asset"}
+        </p>
+        <p className="text-[11px] text-violet-600 text-center mb-5 font-medium">
+          Pay via Ozow instant bank transfer
+        </p>
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+            <span className="font-semibold text-slate-900">{fmt(bufferedBase)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Brokerage fee (0.25%)</span>
+            <span className="font-semibold text-slate-900">{fmt(brokerFee)}</span>
+          </div>
+          {isinTotal > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-500">Custody fee</span>
+              <span className="font-semibold text-slate-900">{fmt(isinTotal)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
+            <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
+          </div>
+          <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
+            <span className="font-bold text-slate-700">Total</span>
+            <span className="font-bold text-violet-700">{fmt(ozowTotal)}</span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400 text-center mb-5">
+          You'll be redirected to Ozow to complete the payment securely.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => onConfirm(ozowTotal)}
+            disabled={isProcessing}
+            className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessing ? "Connecting to Ozow..." : "Confirm & Pay with Ozow"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full py-2.5 text-sm font-semibold text-slate-400"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>

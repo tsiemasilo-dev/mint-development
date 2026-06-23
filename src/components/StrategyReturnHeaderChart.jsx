@@ -38,13 +38,7 @@ export function StrategyReturnHeaderChart({ series, onValueChange }) {
   const filtered = useMemo(() => sliceForTF(resolvedSeries, tf), [resolvedSeries, tf]);
   const lastIndex = filtered.length - 1;
   const lastValue = filtered[lastIndex]?.returnPct ?? 0;
-  const tickInterval = Math.max(1, Math.ceil(filtered.length / 3));
-  const tickStartIndex = Math.max(0, lastIndex - tickInterval * 2);
-  const tickIndexes = new Set([
-    tickStartIndex,
-    Math.min(lastIndex, tickStartIndex + tickInterval),
-    lastIndex,
-  ]);
+  const tickIndexes = new Set([lastIndex]);
   const chartConfig = {
     returnPct: {
       label: "Return",

@@ -1745,6 +1745,7 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
+          fees={stockCheckout.fees}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -2153,7 +2154,7 @@ const App = () => {
           onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
-            goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
+            goalInvestAmountRef.current = pendingGoalFlow?.fees?.bufferedBase || pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
             pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
@@ -2173,7 +2174,7 @@ const App = () => {
 
             setShowPaymentMethodModal(true);
           }}
-          investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
+          investmentAmount={pendingGoalFlow?.fees?.bufferedBase || pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
           childFamilyMemberId={selectedStrategy?.is_kid_strategy ? selectedChildForInvest?.id : null}
         />
@@ -2181,6 +2182,8 @@ const App = () => {
           isOpen={showPaymentMethodModal}
           onClose={() => setShowPaymentMethodModal(false)}
           amount={investmentAmount}
+          baseAmount={baseInvestmentAmount}
+          fees={investmentFees}
           strategyName={selectedStrategy?.name || "Investment"}
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
