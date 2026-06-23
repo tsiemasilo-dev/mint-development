@@ -28,6 +28,7 @@ const PaymentMethodModal = ({
   const [showEFTPopup, setShowEFTPopup] = useState(false);
   const [ozowLoading, setOzowLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(null); // null | 'wallet' | 'ozow'
+  const [walletConfirming, setWalletConfirming] = useState(false);
   const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE } = useFees();
   const bufferedBase = (baseAmount || amount || 0) * 1.08;
   const brokerFee = bufferedBase * 0.0025;
@@ -262,12 +263,30 @@ const PaymentMethodModal = ({
 
                   <button
                     type="button"
-                    onClick={async () => { setConfirmStep(null); await onSelectWallet?.(walletTotal); }}
-                    className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95"
+                    disabled={walletConfirming}
+                    onClick={async () => {
+                      setWalletConfirming(true);
+                      try {
+                        await onSelectWallet?.(walletTotal);
+                      } finally {
+                        setWalletConfirming(false);
+                      }
+                    }}
+                    className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    Confirm Purchase
+                    {walletConfirming ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing…
+                      </span>
+                    ) : "Confirm Purchase"}
                   </button>
-                  <button type="button" onClick={() => setConfirmStep(null)} className="w-full py-2 text-sm font-semibold text-slate-400">
+                  <button
+                    type="button"
+                    disabled={walletConfirming}
+                    onClick={() => setConfirmStep(null)}
+                    className="w-full py-2 text-sm font-semibold text-slate-400 disabled:opacity-40"
+                  >
                     Back
                   </button>
                 </div>
@@ -309,12 +328,22 @@ const PaymentMethodModal = ({
                   <button
                     type="button"
                     disabled={ozowLoading}
-                    onClick={async () => { setConfirmStep(null); await handleOzow(ozowTotal); }}
-                    className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handleOzow(ozowTotal)}
+                    className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {ozowLoading ? "Connecting to Ozow..." : "Confirm & Pay with Ozow"}
+                    {ozowLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Connecting to Ozow…
+                      </span>
+                    ) : "Confirm & Pay with Ozow"}
                   </button>
-                  <button type="button" onClick={() => setConfirmStep(null)} className="w-full py-2 text-sm font-semibold text-slate-400">
+                  <button
+                    type="button"
+                    disabled={ozowLoading}
+                    onClick={() => setConfirmStep(null)}
+                    className="w-full py-2 text-sm font-semibold text-slate-400 disabled:opacity-40"
+                  >
                     Back
                   </button>
                 </div>
