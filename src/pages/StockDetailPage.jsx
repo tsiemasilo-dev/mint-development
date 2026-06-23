@@ -682,46 +682,10 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
                   <span className="font-semibold text-slate-900">{fmt(buyTotalAmount, displayCurrency)}</span>
                 </div>
 
-                {/* Fee breakdown */}
-                <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setBuyFeeExpanded(!buyFeeExpanded)}
-                    className="flex w-full items-center justify-between px-4 py-3"
-                  >
-                    <span className="text-xs font-semibold text-slate-600">Fee Breakdown</span>
-                    {buyFeeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                  </button>
-                  <AnimatePresence>
-                    {buyFeeExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="space-y-2 px-4 pb-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-500">Broker Fee (0.25%)</p>
-                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.broker, displayCurrency)}</p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-500">Custody Fee</p>
-                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.isin, displayCurrency)}</p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-slate-500">Transaction Fee (3.8%)</p>
-                            <p className="text-xs font-semibold text-slate-900">{fmt(buyFees.txn, displayCurrency)}</p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-700">Total Cost</p>
-                    <p className="text-sm font-bold text-slate-900">{fmt(buyFees.total, displayCurrency)}</p>
-                  </div>
+                {/* Total cost */}
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-700">Total Cost</p>
+                  <p className="text-sm font-bold text-slate-900">{fmt(buyFees.total, displayCurrency)}</p>
                 </div>
 
                 {/* Invest button */}

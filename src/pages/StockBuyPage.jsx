@@ -112,35 +112,9 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone 
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setFeeExpanded(!feeExpanded)}
-              className="w-full flex items-center justify-between px-4 py-3"
-            >
-              <span className="text-xs font-semibold text-slate-600">Fee Breakdown</span>
-              {feeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-            </button>
-            {feeExpanded && (
-              <div className="px-4 pb-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                  <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.brokerAmount, displayCurrency)}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, displayCurrency)} × {numAssets} asset{numAssets !== 1 ? "s" : ""})</p>
-                  <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.isinTotal, displayCurrency)}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
-                  <p className="text-xs font-semibold text-slate-900">{formatCurrency(fees.transactionAmount, displayCurrency)}</p>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-              <p className="text-xs font-semibold text-slate-700">Total Cost</p>
-              <p className="text-sm font-bold text-slate-900">{formatCurrency(fees.totalCost, displayCurrency)}</p>
-            </div>
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-700">Total Cost</p>
+            <p className="text-sm font-bold text-slate-900">{formatCurrency(fees.totalCost, displayCurrency)}</p>
           </div>
 
           {!giftEnabled && (
