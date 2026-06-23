@@ -568,6 +568,7 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
   };
 
   const handleLoginSubmit = async () => {
+    if (isLoading) return;
     if (loginCooldown > 0) {
       showToast('Too many attempts. Please wait before trying again.');
       return;
@@ -587,13 +588,28 @@ const AuthForm = ({ initialStep = 'email', onSignupComplete, onLoginComplete, on
     try {
       if (onPreLogin) onPreLogin();
 
-      // Route login through our server so the attempt is recorded server-side
-      // and the account gets locked for real (survives page refreshes).
-      const resp = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      let resp;
+      try {
+        resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          showToast('Login timed out. Please try again.');
+        } else {
+          showToast('Network error. Please check your connection.');
+        }
+        setIsLoading(false);
+        return;
+      }
+      clearTimeout(timeoutId);
       const data = await resp.json();
 
       if (!resp.ok || !data.success) {
