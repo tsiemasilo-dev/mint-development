@@ -358,35 +358,12 @@ const PaymentPage = ({
    * 3. Holdings and user_strategies are ONLY updated when an admin manually confirms 
    *    the transaction via /api/confirm-eft-deposit after funds reflect.
    */
-  const handleEftConfirm = async () => {
-    if (paymentStatus === "processing") return;
-    setPaymentStatus("processing");
-    
-    try {
-      const response = await fetch('/api/eft-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount,
-          baseAmount,
-          reference: eftReference,
-          strategyId: strategy?.id,
-          symbol: strategy?.symbol,
-          name: strategy?.name,
-          shareCount,
-          confirmed_by_user: true
-        })
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || "Failed to confirm EFT intent");
-
-      setPaymentStatus("eft-pending");
-      setEftSuccessOpen(true);
-    } catch (err) {
-      console.error("EFT confirmation error:", err);
-      setPaymentStatus("failed");
-      setErrorMessage(err.message || "EFT confirmation failed");
-    }
+  const handleEftConfirm = () => {
+    // Intent was already recorded when EFT was selected (Phase 1).
+    // Just show the "waiting for payment" modal — do NOT call the API again
+    // and do NOT update holdings or navigate to paymentSuccess.
+    setPaymentStatus("eft-pending");
+    setEftSuccessOpen(true);
   };
 
   useEffect(() => {
@@ -397,10 +374,6 @@ const PaymentPage = ({
   }, []);
 
 
-  if (paymentStatus === "eft-pending") {
-    onCancel?.();
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -448,7 +421,9 @@ const PaymentPage = ({
         reference={eftReference}
         onDone={() => {
           setEftSuccessOpen(false);
-          onSuccess?.({ reference: eftReference, method: "direct_eft", pending: true });
+          // EFT is pending — do NOT call onSuccess (which would update the portfolio).
+          // Just dismiss and go back to home.
+          onCancel?.();
         }}
       />
       <WalletSuccessModal
