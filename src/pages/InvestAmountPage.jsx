@@ -73,8 +73,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
     if (paymentMethod === "direct_eft") {
       return "You'll receive banking details to complete your EFT payment.";
     }
-    // Default — multiple payment methods available
-    return "You'll be guided through our secure payment process with multiple payment options available.";
+    // Default — no payment method selected yet, hide the banner
+    return null;
   };
 
   // ── FIX 4: Pass baseAmount and shareCount through to PaymentPage ──────────
@@ -289,10 +289,12 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
         </div>
 
         {/* ── FIX 3: Dynamic info banner ── */}
-        <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
-          <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
-          <p className="text-xs text-violet-700">{getInfoText()}</p>
-        </div>
+        {getInfoText() && (
+          <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
+            <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
+            <p className="text-xs text-violet-700">{getInfoText()}</p>
+          </div>
+        )}
 
         <GiftToggleV2
           enabled={giftEnabled}
