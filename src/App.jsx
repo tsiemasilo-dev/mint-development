@@ -2183,6 +2183,7 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={investmentAmount}
           baseAmount={baseInvestmentAmount}
+          fees={investmentFees}
           strategyName={selectedStrategy?.name || "Investment"}
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}
