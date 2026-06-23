@@ -11447,6 +11447,29 @@ cron.schedule("30 21 * * *", async () => {
 }, { timezone: "UTC" });
 console.log("[aum-fee] Scheduled daily AUM accrual + month-end settlement at 21:30 UTC");
 
+// Manual trigger for UAT — force a dry run instead of waiting for the cron.
+//   POST /api/aum-fee/run            → daily accrual only (safe; just accrues)
+//   POST /api/aum-fee/run {mode:"settle"}  → force a settlement now (moves money)
+//   POST /api/aum-fee/run {mode:"both"}    → accrue then settle now
+// Auth: Authorization: Bearer <ADMIN_API_KEY|CRON_SECRET>.
+app.post("/api/aum-fee/run", async (req, res) => {
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  const db = supabaseAdmin || supabase;
+  if (!db) return res.status(503).json({ error: "Supabase client not configured" });
+  const mode = String((req.body && req.body.mode) || req.query.mode || "accrual").toLowerCase();
+  try {
+    const out = {};
+    if (mode === "accrual" || mode === "both") out.accrual = await aumFeeEngine.runDailyAccrual(db, new Date());
+    if (mode === "settle" || mode === "both") out.settlement = await aumFeeEngine.runMonthlySettlement(db, new Date(), { force: true });
+    if (!out.accrual && !out.settlement) return res.status(400).json({ error: 'mode must be "accrual", "settle", or "both"' });
+    res.json({ ok: true, mode, ...out });
+  } catch (e) {
+    console.error("[aum-fee] manual run error:", e?.message || e);
+    res.status(500).json({ error: e?.message || String(e) });
+  }
+});
+
 // Repair child strategy returns: once at startup (60 s delay) then every 24 h
 setTimeout(repairChildStrategyReturns, 60 * 1000);
 setInterval(repairChildStrategyReturns, 24 * 60 * 60 * 1000);
