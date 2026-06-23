@@ -10,20 +10,24 @@ import { useSyncExternalStore } from "react";
 //   3. FEE_DEFAULTS          — hardcoded last resort
 
 export const FEE_DEFAULTS = {
-  ISIN_FEE_PER_ASSET:   69,
-  BROKER_FEE_RATE:      0.0025,
-  TRANSACTION_FEE_RATE: 0.038,
-  CASH_BUFFER_RATE:     0.08,
+  ISIN_FEE_PER_ASSET:          69,
+  BROKER_FEE_RATE:             0.0025,
+  TRANSACTION_FEE_RATE:        0.038,
+  WALLET_TRANSACTION_FEE_RATE: 0.01,
+  OZOW_TRANSACTION_FEE_RATE:   0.038,
+  CASH_BUFFER_RATE:            0.08,
 };
 
 const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
 
 function mapFees(f) {
   return {
-    ISIN_FEE_PER_ASSET:   num(f.ISIN_FEE_PER_ASSET   ?? f.isinFeePerAsset,                       FEE_DEFAULTS.ISIN_FEE_PER_ASSET),
-    BROKER_FEE_RATE:      num(f.BROKER_FEE_RATE       ?? f.brokerFeeRate,                          FEE_DEFAULTS.BROKER_FEE_RATE),
-    TRANSACTION_FEE_RATE: num(f.TRANSACTION_FEE_RATE  ?? f.transactionFeeRate,                     FEE_DEFAULTS.TRANSACTION_FEE_RATE),
-    CASH_BUFFER_RATE:     num(f.CASH_BUFFER_RATE       ?? f.EXECUTION_RESERVE_RATE ?? f.executionReserveRate, FEE_DEFAULTS.CASH_BUFFER_RATE),
+    ISIN_FEE_PER_ASSET:          num(f.ISIN_FEE_PER_ASSET          ?? f.isinFeePerAsset,                              FEE_DEFAULTS.ISIN_FEE_PER_ASSET),
+    BROKER_FEE_RATE:             num(f.BROKER_FEE_RATE             ?? f.brokerFeeRate,                                 FEE_DEFAULTS.BROKER_FEE_RATE),
+    TRANSACTION_FEE_RATE:        num(f.TRANSACTION_FEE_RATE        ?? f.transactionFeeRate,                            FEE_DEFAULTS.TRANSACTION_FEE_RATE),
+    WALLET_TRANSACTION_FEE_RATE: num(f.WALLET_TRANSACTION_FEE_RATE ?? f.walletTransactionFeeRate,                      FEE_DEFAULTS.WALLET_TRANSACTION_FEE_RATE),
+    OZOW_TRANSACTION_FEE_RATE:   num(f.OZOW_TRANSACTION_FEE_RATE   ?? f.ozowTransactionFeeRate,                        FEE_DEFAULTS.OZOW_TRANSACTION_FEE_RATE),
+    CASH_BUFFER_RATE:            num(f.CASH_BUFFER_RATE            ?? f.EXECUTION_RESERVE_RATE ?? f.executionReserveRate, FEE_DEFAULTS.CASH_BUFFER_RATE),
   };
 }
 

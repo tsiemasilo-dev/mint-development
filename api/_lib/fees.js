@@ -14,12 +14,14 @@
 // when the DB config is unavailable). The first four feed computeFees; the rest
 // are platform-wide fee values surfaced for display / the CRM rebalance engine.
 export const FEE_CONSTANTS = {
-  EXECUTION_RESERVE_RATE: 0.08,
-  BROKER_FEE_RATE:        0.0025,
-  ISIN_FEE_PER_ASSET:     69,
-  TRANSACTION_FEE_RATE:   0.038,
-  REB_BROKERAGE_RATE:     0.005,  // CRM rebalance brokerage (0.5%)
-  REB_CUSTODY_FEE:        69,     // CRM rebalance custody (per ISIN, per client)
+  EXECUTION_RESERVE_RATE:       0.08,
+  BROKER_FEE_RATE:              0.0025,
+  ISIN_FEE_PER_ASSET:           69,
+  TRANSACTION_FEE_RATE:         0.038,
+  WALLET_TRANSACTION_FEE_RATE:  0.01,   // 1% — wallet payments
+  OZOW_TRANSACTION_FEE_RATE:    0.038,  // 3.8% — Ozow payments
+  REB_BROKERAGE_RATE:           0.005,  // CRM rebalance brokerage (0.5%)
+  REB_CUSTODY_FEE:              69,     // CRM rebalance custody (per ISIN, per client)
 };
 
 // Map the `app_settings('fees').value` JSONB → the FEE_CONSTANTS shape. JSONB
@@ -28,12 +30,14 @@ function feesJsonToConstants(j) {
   if (!j || typeof j !== "object") return null;
   const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
   return {
-    EXECUTION_RESERVE_RATE: num(j.executionReserveRate, FEE_CONSTANTS.EXECUTION_RESERVE_RATE),
-    BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS.BROKER_FEE_RATE),
-    ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS.ISIN_FEE_PER_ASSET),
-    TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS.TRANSACTION_FEE_RATE),
-    REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS.REB_BROKERAGE_RATE),
-    REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS.REB_CUSTODY_FEE),
+    EXECUTION_RESERVE_RATE:       num(j.executionReserveRate,      FEE_CONSTANTS.EXECUTION_RESERVE_RATE),
+    BROKER_FEE_RATE:              num(j.brokerFeeRate,             FEE_CONSTANTS.BROKER_FEE_RATE),
+    ISIN_FEE_PER_ASSET:           num(j.isinFeePerAsset,           FEE_CONSTANTS.ISIN_FEE_PER_ASSET),
+    TRANSACTION_FEE_RATE:         num(j.transactionFeeRate,        FEE_CONSTANTS.TRANSACTION_FEE_RATE),
+    WALLET_TRANSACTION_FEE_RATE:  num(j.walletTransactionFeeRate,  FEE_CONSTANTS.WALLET_TRANSACTION_FEE_RATE),
+    OZOW_TRANSACTION_FEE_RATE:    num(j.ozowTransactionFeeRate,    FEE_CONSTANTS.OZOW_TRANSACTION_FEE_RATE),
+    REB_BROKERAGE_RATE:           num(j.rebBrokerageRate,          FEE_CONSTANTS.REB_BROKERAGE_RATE),
+    REB_CUSTODY_FEE:              num(j.rebCustodyFee,             FEE_CONSTANTS.REB_CUSTODY_FEE),
   };
 }
 
