@@ -174,6 +174,8 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   const [sec1Open, setSec1Open] = useState(false);
   const [sec2Open, setSec2Open] = useState(false);
   const [sec3Open, setSec3Open] = useState(false);
+  const [csOpen, setCsOpen] = useState(false);            // Computershare account-creation accordion
+  const [csAccepted, setCsAccepted] = useState(false);    // user confirmed the Computershare details
   const [signingStarted, setSigningStarted] = useState(false);
   const [existingOnboardingId, setExistingOnboardingId] = useState(null);
 
@@ -697,6 +699,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
           } else {
             // For in-progress users, check each flag individually
             if (raw.identity_details_saved === true || raw.identity_details?.identity_number) setIdentityCheckConfirmed(true);
+            if (raw.computershare_confirmed === true || raw.computershare_confirmed_at) setCsAccepted(true);
             if (raw.tax_details?.tax_number || raw.tax_details_saved === true) setTaxDone(true);
             if (raw.address_details?.address || record.address || raw.address_saved === true) setAddressDone(true);
             if (raw.mandate_data?.agreedMandate === true || raw.mandate_accepted === true) setMandateDone(true);
@@ -2029,11 +2032,64 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                 )}
               </div>
 
-              {/* ── Section 3: Account Agreement signing (accordion, always visible) ── */}
+              {/* ── Section 3: Computershare account creation (review accordion) ── */}
+              <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
+                <button type="button" onClick={() => setCsOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Computershare Account Creation</div>
+                    <div style={{ fontSize: '12px', color: 'hsl(270 15% 60%)' }}>Review the details used to open your share account</div>
+                  </div>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="hsl(270 20% 55%)" strokeWidth="2" width="18" height="18" style={{ flexShrink: 0, transition: 'transform 0.2s', transform: csOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {csOpen && (
+                  <div style={{ padding: '0 20px 18px' }}>
+                    <div className="agreement-card">
+                      <div className="agreement-section">
+                        <div className="agreement-text">These are the details that will be submitted to Computershare to open your share account. They come from the information you provided during onboarding. By signing below you confirm they are correct.</div>
+                      </div>
+                      {(() => {
+                        const na = (v) => { const s = String(v ?? '').trim(); return s ? s : 'N/A'; };
+                        const fullName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name].filter(Boolean).join(' ');
+                        const rows = [
+                          ['Asset / Fund Manager', 'MINT PLATFORMS (Pty) Ltd'],
+                          ['Account name', na(fullName)],
+                          ['Contact name', na(fullName)],
+                          ['ID number', na(identityNumber || profile?.idNumber)],
+                          ['Income tax number', na(taxNumber)],
+                          ['Physical address', na(address)],
+                          ['Postal address', na(address)],
+                          ['Cell number', na(profile?.phoneNumber || profile?.phone_number)],
+                          ['Email', na(profile?.email)],
+                          ['Bank name', na(bankName)],
+                          ['Account holder', na(bankAccountName || fullName)],
+                          ['Account number', na(bankAccountNumber)],
+                          ['Branch code', na(bankBranchCode)],
+                          ['Account type', na(bankAccountType)],
+                        ];
+                        return rows.map(([label, value]) => (
+                          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '8px 0', borderBottom: '1px solid hsl(270 20% 94%)' }}>
+                            <span style={{ fontSize: '12px', color: 'hsl(270 15% 55%)', flexShrink: 0 }}>{label}</span>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'hsl(270 30% 25%)', textAlign: 'right', whiteSpace: 'pre-wrap' }}>{value}</span>
+                          </div>
+                        ));
+                      })()}
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '14px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={csAccepted} onChange={(e) => { setCsAccepted(e.target.checked); if (e.target.checked) saveProgressFlag('computershare_confirmed', { computershare_confirmed_at: new Date().toISOString() }); }} style={{ marginTop: '2px', width: '16px', height: '16px', flexShrink: 0 }} />
+                        <span style={{ fontSize: '12px', color: 'hsl(270 25% 35%)' }}>I confirm the above details are correct and authorise MINT to open a Computershare share account on my behalf.</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Section 4: Account Agreement signing (accordion, always visible) ── */}
               <div className="animate-fade-in delay-4" style={{ marginBottom: '12px', background: 'white', borderRadius: '16px', border: '1px solid hsl(270 20% 90%)', boxShadow: '0 2px 12px rgba(100,60,140,0.06)', overflow: 'hidden' }}>
                 <button type="button" onClick={() => setSec3Open(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'hsl(270 30% 25%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>3</span>
+                    <span style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>4</span>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '14px', fontWeight: '600', color: 'hsl(270 30% 25%)' }}>Sign Your Account Agreement</div>
