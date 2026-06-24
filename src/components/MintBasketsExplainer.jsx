@@ -1174,7 +1174,15 @@ export default function MintBasketsExplainer({
     return () => window.removeEventListener("resize", update);
   }, [tabRef]);
 
-  // Phase 0 → 1: wait for Lottie to finish loading, THEN wait 2.5 s
+  // Phase 0 → 1: advance 2.5 s after Lottie loads, or after 5 s max as fallback
+  // The fallback ensures the tour continues even if the Lottie load event never fires
+  // (network error, DotLottie API mismatch, browser blocking external URLs).
+  useEffect(() => {
+    if (phase !== 0) return;
+    const fallback = setTimeout(() => setPhase(1), 5000);
+    return () => clearTimeout(fallback);
+  }, [phase]);
+
   useEffect(() => {
     if (phase !== 0 || !lottieReady) return;
     phaseTimer.current = setTimeout(() => setPhase(1), 2500);
