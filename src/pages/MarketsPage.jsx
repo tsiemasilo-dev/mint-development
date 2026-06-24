@@ -1224,7 +1224,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
     }
 
-    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const labelIndices = series.length ? [series.length - 1] : [];
     const values = series.map((point) => point?.v ?? 0);
     const minValue = values.length ? Math.min(...values) : 0;
     const maxValue = values.length ? Math.max(...values) : 0;
@@ -2354,13 +2354,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             />
                           </>
                         ) : null}
-                        <XAxis
-                          dataKey="dateLabel"
-                          tick={{ fontSize: 11, fill: "#64748b" }}
-                          axisLine={{ stroke: "#e2e8f0" }}
-                          tickLine={false}
-                          height={24}
-                        />
+                        <XAxis hide dataKey="dateLabel" />
                         <YAxis hide domain={previewChartDomain} />
                         <Area
                           type="monotone"
@@ -2596,7 +2590,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             </linearGradient>
                           </defs>
                           <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
-                          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} height={24} />
+                          <XAxis hide dataKey="dateLabel" />
                           <YAxis hide domain={previewChartDomain} />
                           <Area type="monotone" dataKey="returnPct" stroke="transparent" fill="url(#child-preview-gradient)" dot={false} />
                           <Line type="monotone" dataKey="returnPct" stroke={previewChartLineColor} strokeWidth={2} dot={false} activeDot={false} />
