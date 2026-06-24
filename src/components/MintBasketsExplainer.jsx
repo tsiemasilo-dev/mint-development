@@ -1565,6 +1565,9 @@ export default function MintBasketsExplainer({
   }, []);
 
   const handleDone = useCallback(() => {
+    // Mark the explainer as seen so it won't auto-play again
+    localStorage.setItem(BASKETS_EXPLAINER_KEY, "true");
+
     // Clear any simulated pending order from the coach tour
     sessionStorage.removeItem('mint_coach_pending_sim');
 

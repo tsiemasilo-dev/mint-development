@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, PlayCircle } from "lucide-react";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -405,6 +405,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setShowBasketsExplainer(false);
     }
   }, [viewMode, childFilter]);
+
+  const handleReplayTutorial = () => {
+    localStorage.removeItem(BASKETS_EXPLAINER_KEY);
+    setShowBasketsExplainer(true);
+  };
 
   // Pre-fetch Lottie JSON on page mount so the browser cache is warm
   useEffect(() => {
@@ -1486,9 +1491,20 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           )}
 
           {viewMode === "openstrategies" && !childFilter && (
-            <p className="text-[11px] text-white/70 leading-relaxed -mt-2">
-              A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. The assets are held directly in your name, not pooled.
-            </p>
+            <div className="flex items-start justify-between gap-3 -mt-2">
+              <p className="text-[11px] text-white/70 leading-relaxed flex-1">
+                A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. The assets are held directly in your name, not pooled.
+              </p>
+              <button
+                type="button"
+                onClick={handleReplayTutorial}
+                title="Watch tutorial"
+                aria-label="Watch tutorial"
+                className="group flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
+              >
+                <PlayCircle className="h-4 w-4 text-white/70 group-hover:text-white transition-colors" />
+              </button>
+            </div>
           )}
 
           {viewMode === "invest" && (
