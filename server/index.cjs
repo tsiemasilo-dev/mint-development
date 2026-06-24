@@ -366,9 +366,11 @@ async function sendOrderConfirmationEmail(db, { userId, userEmail, assetName, as
   }
 }
 
-const pgPool = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL) ? new Pool({
-  connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+const _pgConnStr = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+const _pgNeedsSSL = _pgConnStr && !_pgConnStr.includes('localhost') && !_pgConnStr.includes('PGHOST') && !/\.internal$/.test((process.env.PGHOST || ''));
+const pgPool = _pgConnStr ? new Pool({
+  connectionString: _pgConnStr,
+  ssl: _pgNeedsSSL ? { rejectUnauthorized: false } : false,
   max: 5,
   connectionTimeoutMillis: 4000,
   idleTimeoutMillis: 10000,
