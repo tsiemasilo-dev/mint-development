@@ -378,18 +378,24 @@ const MOCK_FILL = `${MOCK_LINE} L 280,50 L 0,50 Z`;
 
 function MockBalanceCard({ cardRef, hBounds }) {
   // hBounds = { left, width, top } from the real balance card's getBoundingClientRect()
-  // This ensures the mock card aligns pixel-perfectly with where the real card sits
-  // regardless of viewport width or how the app is embedded.
-  const posStyle = hBounds
-    ? { top: hBounds.top, left: hBounds.left, width: hBounds.width }
-    : { top: 52, left: "50%", transform: "translateX(-50%)", width: "min(calc(100vw - 32px), 440px)" };
+  // Compute pixel-based left so we never mix CSS translateX(-50%) with framer-motion's
+  // own transform system (scale/y), which would clobber the centering offset.
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 390;
+  const cardWidth = hBounds ? hBounds.width : Math.min(screenW - 32, 440);
+  const cardLeft  = hBounds ? hBounds.left  : Math.round((screenW - cardWidth) / 2);
+  const cardTop   = hBounds ? hBounds.top   : 52;
 
   return (
-    <motion.div
+    // Outer plain div owns the fixed position so getBoundingClientRect() is stable.
+    // Inner motion.div owns only the entrance animation — no positioning transforms.
+    <div
       ref={cardRef}
       className="pointer-events-none fixed z-[10003]"
+      style={{ top: cardTop, left: cardLeft, width: cardWidth }}
+    >
+    <motion.div
       style={{
-        ...posStyle,
+        width: "100%",
         borderRadius: 24,
         background: "linear-gradient(135deg, hsl(270 55% 30%) 0%, hsl(265 45% 22%) 45%, hsl(260 40% 15%) 100%)",
         boxShadow: "0 20px 60px -20px hsl(270 60% 35% / 0.5), inset 0 1px 0 hsl(0 0% 100% / 0.06)",
@@ -496,6 +502,7 @@ function MockBalanceCard({ cardRef, hBounds }) {
         </div>
       </div>
     </motion.div>
+    </div>
   );
 }
 
