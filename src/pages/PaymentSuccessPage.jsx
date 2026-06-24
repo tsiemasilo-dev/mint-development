@@ -1,9 +1,9 @@
 import React from "react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
-const PaymentSuccessPage = ({ onDone, strategyName, isCoachMode }) => (
-  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start pt-16 px-4">
-    <div data-coach-success-card="true" className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
+const PaymentSuccessPage = ({ onDone, strategyName }) => (
+  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+    <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center">
       <div className="flex justify-center mb-2" style={{ height: 160 }}>
         <DotLottieReact
           src="https://lottie.host/12e67a6d-3162-4c7d-a533-95c4c66e801b/Qatm3tqUj4.lottie"
@@ -28,10 +28,8 @@ const PaymentSuccessPage = ({ onDone, strategyName, isCoachMode }) => (
 
       <button
         type="button"
-        onClick={isCoachMode ? undefined : onDone}
-        disabled={isCoachMode}
+        onClick={onDone}
         className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3.5 text-sm font-semibold text-white shadow-lg transition-all active:scale-95"
-        style={isCoachMode ? { pointerEvents: "none", opacity: 0.45 } : undefined}
       >
         Back to Home
       </button>

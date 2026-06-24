@@ -502,39 +502,9 @@ export default function ChildInvestModal({
                 </div>
               </div>
 
-              {/* Fee breakdown */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setFeeExpanded(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3.5"
-                >
-                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
-                  <div className="flex items-center gap-2">
-                    {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
-                  </div>
-                </button>
-                {feeExpanded && (
-                  <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
-                    <div className="pt-3 flex justify-between">
-                      <p className="text-xs text-slate-500">Investment</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Broker fee (0.25%)</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.brokerAmount)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Custody (R{ISIN_FEE_PER_ASSET} × {numAssets})</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.isinTotal)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Transaction fee (3.8%)</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.transactionAmount)}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+              {/* Total cost */}
+              <div className="mb-4 rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                <div className="flex items-center justify-between px-4 py-3.5">
                   <p className="text-xs font-bold text-purple-700">Total Due Today</p>
                   <p className="text-base font-black text-purple-900">R{fmt(fees.totalCost)}</p>
                 </div>

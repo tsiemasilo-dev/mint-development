@@ -1,5 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { ArrowLeft, X, Info, Heart, Wallet, FileText } from "lucide-react";
 import generateFactsheetPdf from "../lib/generateFactsheetPdf";
 import { supabase } from "../lib/supabase";
@@ -33,7 +32,6 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const feeRates = useFees();
-  const [showCoachMark, setShowCoachMark] = useState(false);
   const [timeframe, setTimeframe] = useState("YTD");
   const [activeLabel, setActiveLabel] = useState(null);
   const [selectedMetricModal, setSelectedMetricModal] = useState(null);
@@ -97,16 +95,6 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
         : "";
 
   // Fetch strategy metadata + analytics
-  // Phase 3 coach mark — triggered by sessionStorage flag set in MintBasketsExplainer
-  useEffect(() => {
-    if (sessionStorage.getItem('coach_factsheet_pending') === '1') {
-      sessionStorage.removeItem('coach_factsheet_pending');
-      // Small delay so the page finishes rendering before capturing card rect
-      const t = setTimeout(() => setShowCoachMark(true), 500);
-      return () => clearTimeout(t);
-    }
-  }, []);
-
   useEffect(() => {
     let isMounted = true;
 
@@ -418,7 +406,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
   const { data, yDomain, baseIndexValue } = useMemo(() => {
     const curves = analytics?.curves || {};
     const series = Array.isArray(curves[timeframe]) ? curves[timeframe] : [];
-    const labelIndices = series.length ? [0, Math.floor(series.length / 2), series.length - 1] : [];
+    const labelIndices = series.length ? [series.length - 1] : [];
     const values = series.map((point) => point?.v ?? 0);
     const minValue = values.length ? Math.min(...values) : 0;
     const maxValue = values.length ? Math.max(...values) : 0;
@@ -586,7 +574,6 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {showCoachMark && <FactsheetCoachMark onDone={() => setShowCoachMark(false)} />}
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pb-32 pt-12 md:max-w-md md:px-6">
         <header className="flex items-center justify-center gap-3 mb-6 relative">
           <button
@@ -676,10 +663,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           </div>
         </header>
 
-        <section
-          data-coach-factsheet-card="true"
-          className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
-        >
+        <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -1290,204 +1274,5 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
     </div>
   );
 };
-
-/* ─────────────────────────────────────────────────────────
-   Phase 3 coach mark: spotlights the top strategy card on FactsheetPage
-───────────────────────────────────────────────────────── */
-function FactsheetCoachMark({ onDone }) {
-  const [cardRect, setCardRect] = useState(null);
-  const [exiting, setExiting]   = useState(false);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const appContent = document.querySelector('.app-content');
-    const prevApp = appContent ? appContent.style.overflow : '';
-    if (appContent) appContent.style.overflow = 'hidden';
-
-    const el = document.querySelector('[data-coach-factsheet-card="true"]');
-    if (el) setCardRect(el.getBoundingClientRect());
-
-    return () => {
-      document.body.style.overflow = prev;
-      if (appContent) appContent.style.overflow = prevApp;
-    };
-  }, []);
-
-  const handleGotIt = useCallback(() => {
-    setExiting(true);
-    setTimeout(() => onDone?.(), 400);
-  }, [onDone]);
-
-  if (!cardRect) return null;
-
-  // card is rounded-3xl = 24px; pad=12 → ring radius = 24+12 = 36
-  const PAD         = 12;
-  const CARD_RADIUS = 24;
-  const RING_RADIUS = CARD_RADIUS + PAD;
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-
-  const hole = {
-    top:    cardRect.top    - PAD,
-    left:   cardRect.left   - PAD,
-    right:  cardRect.right  + PAD,
-    bottom: cardRect.bottom + PAD,
-    width:  cardRect.width  + PAD * 2,
-    height: cardRect.height + PAD * 2,
-  };
-
-  // Same 4-panel blur approach as Phase 0/1/2
-  const PANEL = {
-    position: 'absolute',
-    background: 'rgba(0,0,0,0.72)',
-    backdropFilter: 'blur(7px)',
-    WebkitBackdropFilter: 'blur(7px)',
-  };
-
-  const glassBg = {
-    background: 'rgba(8,8,20,0.88)',
-    backdropFilter: 'blur(28px)',
-    WebkitBackdropFilter: 'blur(28px)',
-    border: '1px solid rgba(255,255,255,0.14)',
-  };
-
-  return (
-    <AnimatePresence>
-      {!exiting && (
-        <motion.div
-          key="factsheet-coach"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.32 }}
-          style={{ position: 'fixed', inset: 0, zIndex: 10000, pointerEvents: 'none' }}
-        >
-          {/* 4-panel blur overlay — clean hole around the card */}
-          {/* Top panel */}
-          <div style={{ ...PANEL, top: 0, left: 0, right: 0, height: hole.top, pointerEvents: 'auto' }} />
-          {/* Bottom panel */}
-          <div style={{ ...PANEL, top: hole.bottom, left: 0, right: 0, bottom: 0, pointerEvents: 'auto' }} />
-          {/* Left panel */}
-          <div style={{ ...PANEL, top: hole.top, left: 0, width: hole.left, height: hole.height, pointerEvents: 'auto' }} />
-          {/* Right panel */}
-          <div style={{ ...PANEL, top: hole.top, left: hole.right, right: 0, height: hole.height, pointerEvents: 'auto' }} />
-
-          {/* Pulsing white ring — matches Phase 1/2 AnimatedRing style */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.18, duration: 0.30 }}
-            style={{
-              position: 'absolute',
-              top: hole.top, left: hole.left,
-              width: hole.width, height: hole.height,
-              borderRadius: RING_RADIUS,
-              border: '2px solid rgba(255,255,255,0.85)',
-              boxShadow: '0 0 24px 6px rgba(255,255,255,0.16)',
-              pointerEvents: 'none',
-              zIndex: 10001,
-            }}
-          />
-          {/* Second ring — animated pulse */}
-          <motion.div
-            style={{
-              position: 'absolute',
-              top: hole.top, left: hole.left,
-              width: hole.width, height: hole.height,
-              borderRadius: RING_RADIUS,
-              border: '1.5px solid rgba(255,255,255,0.50)',
-              pointerEvents: 'none',
-              zIndex: 10001,
-            }}
-            animate={{ opacity: [0.6, 0.15, 0.6] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-          />
-
-          {/* Dark glass callout panel — centred below the card, same style as Phase 1/2 */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              pointerEvents: 'auto',
-              zIndex: 10002,
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.30, duration: 0.40, ease: [0.22, 1, 0.36, 1] }}
-              style={{
-                ...glassBg,
-                width: Math.min(W - 32, 460),
-                borderRadius: 20,
-                padding: '18px 20px 16px',
-                marginBottom: 40,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              {/* Title */}
-              <motion.p
-                style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', color: '#fff', margin: 0 }}
-                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.36, duration: 0.28, ease: 'easeOut' }}
-              >
-                Strategy Detail
-              </motion.p>
-
-              {/* Divider */}
-              <motion.div
-                style={{ height: 1, background: 'rgba(255,255,255,0.22)', width: '100%', originX: 0 }}
-                initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-                transition={{ delay: 0.46, duration: 0.28 }}
-              />
-
-              {/* Description */}
-              <motion.p
-                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: 'rgba(255,255,255,0.82)', textAlign: 'center', margin: 0 }}
-                initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.52, duration: 0.28, ease: 'easeOut' }}
-              >
-                This card shows your strategy's name, risk level, and performance. Scroll down to explore holdings, returns, and more.
-              </motion.p>
-
-              {/* Got it button — matches Phase 1 "Next →" pill style */}
-              <motion.button
-                onClick={handleGotIt}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                transition={{ delay: 0.62, duration: 0.24 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  marginTop: 2,
-                  padding: '10px 32px',
-                  borderRadius: 50,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  letterSpacing: '-0.01em',
-                  color: '#fff',
-                  background: 'rgba(255,255,255,0.18)',
-                  border: '1px solid rgba(255,255,255,0.35)',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-              >
-                Got it →
-              </motion.button>
-            </motion.div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 export default FactsheetPage;

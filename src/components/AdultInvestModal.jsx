@@ -307,7 +307,7 @@ export default function AdultInvestModal({
                   <button
                     type="button"
                     onClick={() => setUnits(u => u + 1)}
-                    disabled={!minimum || insufficient}
+                    disabled={!minimum}
                     className="flex h-11 w-11 items-center justify-center rounded-2xl text-white text-xl font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-90 transition-all shadow-md"
                     style={{ background: "linear-gradient(135deg,#6366f1,#7c3aed)" }}
                   >
@@ -316,53 +316,7 @@ export default function AdultInvestModal({
                 </div>
               </div>
 
-              {/* Fee breakdown */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setFeeExpanded(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3.5"
-                >
-                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Fee Breakdown</span>
-                  <div className="flex items-center gap-2">
-                    {feeExpanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
-                  </div>
-                </button>
-                {feeExpanded && (
-                  <div className="px-4 pb-3 space-y-2.5 border-t border-slate-50">
-                    <div className="pt-3 flex justify-between">
-                      <p className="text-xs text-slate-500">Investment</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.bufferedBase)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Broker fee (0.25%)</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.brokerAmount)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Custody (R{ISIN_FEE_PER_ASSET} × {numAssets})</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.isinTotal)}</p>
-                    </div>
-                    <div className="flex justify-between">
-                      <p className="text-xs text-slate-500">Transaction fee (3.8%)</p>
-                      <p className="text-xs font-semibold text-slate-800">R{fmt(fees.transactionAmount)}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center justify-between px-4 py-3.5 border-t border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
-                  <p className="text-xs font-bold text-purple-700">Total Due Today</p>
-                  <p className="text-base font-black text-purple-900">R{fmt(fees.totalCost)}</p>
-                </div>
-              </div>
 
-              {/* Insufficient funds warning */}
-              {insufficient && (
-                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-4 flex items-start gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
-                  <p className="text-xs font-semibold text-red-600">
-                    Insufficient wallet balance — please top up before investing.
-                  </p>
-                </div>
-              )}
 
               {/* Agreement */}
               <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
@@ -391,16 +345,6 @@ export default function AdultInvestModal({
                 </label>
               </div>
 
-              {/* Payment info notice */}
-              <div className="mb-4 rounded-2xl px-4 py-3 flex items-start gap-3" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
-                <svg className="h-4 w-4 text-violet-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                </svg>
-                <p className="text-xs text-violet-700 leading-relaxed">
-                  You'll be guided through our secure payment process with multiple payment options available.
-                </p>
-              </div>
 
               {/* Send as a gift */}
               <div className="mb-5">
@@ -420,7 +364,7 @@ export default function AdultInvestModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum || insufficient)}
+                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum)}
                   className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >

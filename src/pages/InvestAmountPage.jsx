@@ -73,8 +73,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
     if (paymentMethod === "direct_eft") {
       return "You'll receive banking details to complete your EFT payment.";
     }
-    // Default — multiple payment methods available
-    return "You'll be guided through our secure payment process with multiple payment options available.";
+    // Default — no payment method selected yet, hide the banner
+    return null;
   };
 
   // ── FIX 4: Pass baseAmount and shareCount through to PaymentPage ──────────
@@ -221,70 +221,6 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
           </div>
         </section>
 
-        {/* Fee Breakdown */}
-        <section className="mb-6 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setFeeExpanded(!feeExpanded)}
-            className="w-full flex items-center justify-between p-4"
-          >
-            <h3 className="text-xs font-semibold text-slate-600">
-              Fee Breakdown
-            </h3>
-            {feeExpanded ? (
-              <ChevronUp className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            )}
-          </button>
-
-          {feeExpanded && (
-            <div className="px-4 pb-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <p className="text-xs text-slate-600">Investment</p>
-                </div>
-                <p className="text-xs font-semibold text-slate-900">
-                  {formatCurrency(fees.bufferedBase, currency)}
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                <p className="text-xs font-semibold text-slate-900">
-                  {formatCurrency(fees.brokerAmount, currency)}
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">
-                  Custody Fee ({formatCurrency(ISIN_FEE_PER_ASSET, currency)} ×{" "}
-                  {numAssets} asset{numAssets !== 1 ? "s" : ""})
-                </p>
-                <p className="text-xs font-semibold text-slate-900">
-                  {formatCurrency(fees.isinTotal, currency)}
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">
-                  Transaction Fee (3.8%)
-                </p>
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-slate-900">
-                    {formatCurrency(fees.transactionAmount, currency)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-            <div>
-              <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
-            </div>
-            <p className="text-sm font-bold text-slate-900">
-              {formatCurrency(fees.totalCost, currency)}
-            </p>
-          </div>
-        </section>
 
         {/* Agreement Checkbox */}
         <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -353,10 +289,12 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
         </div>
 
         {/* ── FIX 3: Dynamic info banner ── */}
-        <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
-          <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
-          <p className="text-xs text-violet-700">{getInfoText()}</p>
-        </div>
+        {getInfoText() && (
+          <div className="mb-6 flex items-start gap-2 rounded-lg bg-violet-50 p-3">
+            <Info className="h-4 w-4 flex-shrink-0 text-violet-600 mt-0.5" />
+            <p className="text-xs text-violet-700">{getInfoText()}</p>
+          </div>
+        )}
 
         <GiftToggleV2
           enabled={giftEnabled}

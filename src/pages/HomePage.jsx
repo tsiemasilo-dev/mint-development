@@ -1396,7 +1396,7 @@ const HomePage = ({
   return (
     <>
     <div
-      className="min-h-screen pb-[env(safe-area-inset-bottom)] text-slate-900 relative overflow-x-clip"
+      className="min-h-screen pb-[env(safe-area-inset-bottom)] text-slate-900 relative overflow-x-hidden"
       style={{
         backgroundColor: '#f8f6fa',
         backgroundImage: 'linear-gradient(180deg, #0d0d12 0%, #0e0a14 0.5%, #100b18 1%, #120c1c 1.5%, #150e22 2%, #181028 2.5%, #1c122f 3%, #201436 3.5%, #25173e 4%, #2a1a46 5%, #301d4f 6%, #362158 7%, #3d2561 8%, #44296b 9%, #4c2e75 10%, #54337f 11%, #5d3889 12%, #663e93 13%, #70449d 14%, #7a4aa7 15%, #8451b0 16%, #8e58b9 17%, #9860c1 18%, #a268c8 19%, #ac71ce 20%, #b57ad3 21%, #be84d8 22%, #c68edc 23%, #cd98e0 24%, #d4a2e3 25%, #daace6 26%, #dfb6e9 27%, #e4c0eb 28%, #e8c9ed 29%, #ecd2ef 30%, #efdaf1 31%, #f2e1f3 32%, #f4e7f5 33%, #f6ecf7 34%, #f8f0f9 35%, #f9f3fa 36%, #faf5fb 38%, #fbf7fc 40%, #fcf9fd 42%, #fdfafd 45%, #faf8fc 55%, #f8f6fa 100%)',
@@ -1618,347 +1618,6 @@ const HomePage = ({
           />
         ) : null}
 
-        {/* Pending Orders */}
-        {(() => {
-          const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
-          const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
-          const _dbgCoachSim = sessionStorage.getItem('mint_coach_pending_sim');
-          console.log('[PendingOrders IIFE] coachSimName=', _dbgCoachSim, 'safeAssets=', safeAssets.length, 'safeStrategies=', safeStrategies.length, 'coachSimTick=', coachSimTick);
-          // Include fully-pending assets AND mixed assets (some batches filled, some
-          // pending) so a re-buy of a security you already hold surfaces its pending
-          // batch here while the filled portion stays in the portfolio carousel.
-          const pendingAssets = safeAssets.filter(a => a && (a.isPending || a.hasPendingBatch));
-          // A strategy goes in the pending section if:
-          //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
-          //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
-          // Using purchaseBatchesByStrategy is authoritative because it's computed
-          // client-side from real holdings data, independent of server response flags.
-          const pendingStrategies = safeStrategies.filter(s => {
-            if (!s) return false;
-            if (s.isPending) return true;
-            const batches = purchaseBatchesByStrategy[s.id] || [];
-            return batches.some(b => !b.filled);
-          });
-
-          // Build a set of transaction IDs that correspond to UNFILLED batches.
-          // A filled transaction's ID will be in filledTxIds — we skip those so
-          // a re-buy doesn't drag the old filled purchase into the pending section.
-          const pendingTxIds = new Set();
-          const filledTxIds = new Set();
-          Object.values(purchaseBatchesByStrategy).forEach(batches => {
-            batches.forEach(b => {
-              if (!b.transactionId) return;
-              if (b.filled) filledTxIds.add(b.transactionId);
-              else pendingTxIds.add(b.transactionId);
-            });
-          });
-
-          // Build one entry per PENDING TRANSACTION for strategies.
-          // Each transaction "Strategy Investment: X" = one purchase event.
-          // Skip transactions that belong to a filled batch so a re-buy doesn't
-          // pull the already-settled purchase into the pending section.
-          const stratTxMap = {};
-          (Array.isArray(transactions) ? transactions : []).forEach(tx => {
-            // If we have batch data and this tx belongs only to a filled batch, skip it.
-            if (filledTxIds.has(tx.id) && !pendingTxIds.has(tx.id)) return;
-            const name = (tx.name || "").trim();
-            let stratName = null;
-            if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
-            else if (name.startsWith("Purchased ")) stratName = name.replace("Purchased ", "").trim();
-            else if (name.startsWith("Gift Received — ")) stratName = name.replace("Gift Received — ", "").trim();
-            if (!stratName) return;
-            const strat = pendingStrategies.find(s =>
-              (s.name || "").toLowerCase() === stratName.toLowerCase() ||
-              (s.shortName || "").toLowerCase() === stratName.toLowerCase()
-            );
-            if (!strat) return;
-            const key = strat.id || strat.name;
-            if (!stratTxMap[key]) stratTxMap[key] = { strat, txs: [] };
-            stratTxMap[key].txs.push(tx);
-          });
-
-          // If no tx match found, fall back to one entry per pending strategy
-          pendingStrategies.forEach(s => {
-            const key = s.id || s.name;
-            if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
-          });
-
-          // Sort all txs per group newest-first so "Purchase 1 of N" = most recent
-          Object.entries(stratTxMap).forEach(([, entry]) => {
-            if (entry.txs.length > 1) {
-              entry.txs.sort((a, b) =>
-                new Date(b?.transaction_date || b?.created_at || 0) -
-                new Date(a?.transaction_date || a?.created_at || 0)
-              );
-            }
-          });
-
-          // Groups: [{key, strat, txs}]
-          const stratGroups = Object.entries(stratTxMap).map(([key, { strat, txs }]) => ({
-            key,
-            strat,
-            txs: txs.sort((a, b) =>
-              new Date(b?.transaction_date || b?.created_at || 0) -
-              new Date(a?.transaction_date || a?.created_at || 0)
-            ),
-          }));
-
-          const pendingAssetItems = pendingAssets.map(a => {
-            const allBatches = Array.isArray(a.batches) ? a.batches : [];
-            // Only the UNFILLED batches belong in Pending orders — filled batches
-            // live in the portfolio carousel. For a mixed security this drops the
-            // already-settled buys and keeps just the pending one(s).
-            const batches = allBatches.filter(b => !(Number(b?.avg_fill) > 0));
-            // Sort newest-first so the top of the stack is the most recent buy.
-            const sortedBatches = [...batches].sort((b1, b2) => {
-              const t1 = b1?.created_at ? new Date(b1.created_at).getTime() : 0;
-              const t2 = b2?.created_at ? new Date(b2.created_at).getTime() : 0;
-              return t2 - t1;
-            });
-            return {
-              kind: "asset",
-              key: `pending-asset-${a.symbol || a.name}`,
-              title: a.symbol || a.name || "Asset",
-              subtitle: a.name || "Awaiting fill",
-              image: a.logo || null,
-              symbolFallback: a.symbol || "•",
-              asset: a,
-              batches: sortedBatches.length > 0 ? sortedBatches : [null],
-            };
-          });
-
-          // Inject a simulated pending order during the coach tour or right after a payment
-          const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
-          if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
-            // Match the actual purchased strategy by name first, then fall back to Famous Brands, then first strategy
-            const realStrat = safeStrategies.find(s =>
-              (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
-              (s.short_name || '').toLowerCase() === coachSimName.toLowerCase()
-            ) || safeStrategies.find(s =>
-              (s.name || '').toLowerCase().includes(coachSimName.toLowerCase()) ||
-              coachSimName.toLowerCase().includes((s.name || '').toLowerCase())
-            ) || safeStrategies.find(s =>
-              (s.name || '').toLowerCase().includes('famous') ||
-              (s.short_name || '').toLowerCase().includes('famous')
-            ) || safeStrategies[0];
-            const minRands = realStrat?.min_investment
-              ? Math.round(Number(realStrat.min_investment) / 100)
-              : 0;
-            stratGroups.unshift({
-              key: 'coach-sim',
-              strat: {
-                id: 'coach-sim',
-                name: coachSimName,
-                shortName: coachSimName,
-                risk_level: realStrat?.risk_level || 'Growth',
-                image_url: realStrat?.image_url || null,
-                icon_url: realStrat?.icon_url || null,
-                investedAmount: minRands,
-                isPending: true,
-              },
-              txs: [null],
-            });
-          }
-
-          const totalGroups = stratGroups.length + pendingAssetItems.length;
-          if (totalGroups === 0) return null;
-
-          const fmtDate = (tx) => {
-            const d = new Date(tx?.transaction_date || tx?.created_at || 0);
-            if (isNaN(d)) return null;
-            return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
-          };
-
-          const PendingRow = ({ image, title, subtitle, symbolFallback, amountLabel, dateLabel, kind }) => (
-            <div className="flex items-center gap-3 px-4 py-3.5">
-              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
-                {image && !failedLogos[title] ? (
-                  <img src={image} alt={title} className="h-full w-full object-cover"
-                    referrerPolicy="no-referrer" crossOrigin="anonymous"
-                    onError={() => kind === "asset" && setFailedLogos(p => ({ ...p, [title]: true }))} />
-                ) : symbolFallback ? (
-                  <span className="text-[11px] font-bold text-white">{symbolFallback}</span>
-                ) : (
-                  <LayoutGrid className="h-5 w-5 text-white" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-bold text-white">{title}</p>
-                <p className="text-[11px] font-medium text-white/70 line-clamp-1">{subtitle}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                {dateLabel && (
-                  <p className="text-[10px] font-semibold text-white/50 whitespace-nowrap">{dateLabel}</p>
-                )}
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
-                  <Clock3 className="h-2.5 w-2.5" />
-                  Pending
-                </span>
-                <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{amountLabel}</p>
-              </div>
-            </div>
-          );
-
-          return (
-            <section data-coach-pending-orders="true" className="sticky top-0 z-20 pt-6 -mt-6 pb-3 -mb-3" style={{ background: '#f8f6fa' }}>
-              <div className="flex items-end justify-between px-5 mb-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">Pending orders</p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-violet-600">
-                      <Clock3 className="h-3 w-3" />
-                    </span>
-                    <span>Filling — will reflect in portfolio once settled</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mx-4 space-y-3" data-coach-pending-content="true">
-                {/* Strategy groups */}
-                {stratGroups.map(({ key, strat, txs }) => {
-                  const isStack = txs.length > 1;
-                  const isExpanded = expandedPendingKey === key;
-                  const image = strat.image_url || strat.icon_url || null;
-                  const amountFor = (tx) => {
-                    const amt = tx ? Number(tx.amount || 0) / 100 : Number(strat.investedAmount || 0);
-                    return amt > 0 ? `R${amt.toFixed(2)} placed` : "Awaiting fill";
-                  };
-
-                  if (!isStack) {
-                    return (
-                      <div key={key}
-                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                        <PendingRow image={image} title={strat.name || "Strategy"}
-                          subtitle={`Strategy • ${strat.risk_level || "Balanced"}`}
-                          symbolFallback={null} amountLabel={amountFor(txs[0])}
-                          dateLabel={fmtDate(txs[0])} kind="strategy" />
-                      </div>
-                    );
-                  }
-
-                  // Stack
-                  return (
-                    <div key={key}>
-                      {!isExpanded ? (
-                        <button type="button" onClick={() => setExpandedPendingKey(key)}
-                          className="relative w-full text-left">
-                          {/* Shadow cards */}
-                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
-                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
-                          {txs.length > 2 && (
-                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
-                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
-                          )}
-                          {/* Top card */}
-                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
-                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                            <PendingRow image={image} title={strat.name || "Strategy"}
-                              subtitle={`${txs.length} purchases • tap to see each`}
-                              symbolFallback={null} amountLabel={amountFor(txs[0])}
-                              dateLabel={fmtDate(txs[0])} kind="strategy" />
-                          </div>
-                          {/* Count badge */}
-                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
-                            {txs.length}
-                          </div>
-                        </button>
-                      ) : (
-                        <div className="space-y-2">
-                          {/* Collapse header */}
-                          <button type="button" onClick={() => setExpandedPendingKey(null)}
-                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
-                            <Clock3 className="h-3 w-3" /> {strat.name} · {txs.length} purchases · tap to collapse
-                          </button>
-                          {txs.map((tx, i) => (
-                            <div key={i}
-                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)]"
-                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                              <PendingRow image={image} title={strat.name || "Strategy"}
-                                subtitle={`Purchase ${i + 1} of ${txs.length}`}
-                                symbolFallback={null} amountLabel={amountFor(tx)}
-                                dateLabel={fmtDate(tx)} kind="strategy" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Single-security pending items */}
-                {pendingAssetItems.map(item => {
-                  const isStack = item.batches.length > 1;
-                  const isExpanded = expandedPendingKey === item.key;
-
-                  if (!isStack) {
-                    const onlyBatch = item.batches[0];
-                    return (
-                      <div key={item.key}
-                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
-                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                        <PendingRow image={item.image} title={item.title} subtitle={item.subtitle}
-                          symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
-                          dateLabel={onlyBatch ? fmtDate(onlyBatch) : null} kind="asset" />
-                      </div>
-                    );
-                  }
-
-                  // Multi-batch pending stock — same expand-collapse pattern as multi-purchase pending strategies
-                  return (
-                    <div key={item.key}>
-                      {!isExpanded ? (
-                        <button type="button" onClick={() => setExpandedPendingKey(item.key)}
-                          className="relative w-full text-left">
-                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
-                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
-                          {item.batches.length > 2 && (
-                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
-                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
-                          )}
-                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
-                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                            <PendingRow image={item.image} title={item.title}
-                              subtitle={`${item.batches.length} purchases • tap to see each`}
-                              symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
-                              dateLabel={fmtDate(item.batches[0])} kind="asset" />
-                          </div>
-                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
-                            {item.batches.length}
-                          </div>
-                        </button>
-                      ) : (
-                        <div className="space-y-2">
-                          <button type="button" onClick={() => setExpandedPendingKey(null)}
-                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
-                            <Clock3 className="h-3 w-3" /> {item.title} · {item.batches.length} purchases · tap to collapse
-                          </button>
-                          {item.batches.map((batch, i) => (
-                            <div key={batch?.id || i}
-                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)] relative"
-                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
-                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-                              <PendingRow image={item.image} title={item.title}
-                                subtitle={`Purchase ${item.batches.length - i} of ${item.batches.length}`}
-                                symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
-                                dateLabel={fmtDate(batch)} kind="asset" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })()}
-
         {/* Market Insights */}
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
           <div className="flex items-end justify-between px-5 py-4 border-b border-slate-100">
@@ -2131,6 +1790,312 @@ const HomePage = ({
             )}
           </div>
         </section>
+
+        {/* Pending Orders */}
+        {(() => {
+          const safeAssets = Array.isArray(assetsToDisplay) ? assetsToDisplay : [];
+          const safeStrategies = Array.isArray(bestStrategies) ? bestStrategies : [];
+          // Include fully-pending assets AND mixed assets (some batches filled, some
+          // pending) so a re-buy of a security you already hold surfaces its pending
+          // batch here while the filled portion stays in the portfolio carousel.
+          const pendingAssets = safeAssets.filter(a => a && (a.isPending || a.hasPendingBatch));
+          // A strategy goes in the pending section if:
+          //   (a) isPending flag = all holdings are unfilled (first-ever buy), OR
+          //   (b) purchaseBatchesByStrategy has at least one unfilled batch (re-buy on filled strategy)
+          // Using purchaseBatchesByStrategy is authoritative because it's computed
+          // client-side from real holdings data, independent of server response flags.
+          const pendingStrategies = safeStrategies.filter(s => {
+            if (!s) return false;
+            if (s.isPending) return true;
+            const batches = purchaseBatchesByStrategy[s.id] || [];
+            return batches.some(b => !b.filled);
+          });
+
+          // Build a set of transaction IDs that correspond to UNFILLED batches.
+          // A filled transaction's ID will be in filledTxIds — we skip those so
+          // a re-buy doesn't drag the old filled purchase into the pending section.
+          const pendingTxIds = new Set();
+          const filledTxIds = new Set();
+          Object.values(purchaseBatchesByStrategy).forEach(batches => {
+            batches.forEach(b => {
+              if (!b.transactionId) return;
+              if (b.filled) filledTxIds.add(b.transactionId);
+              else pendingTxIds.add(b.transactionId);
+            });
+          });
+
+          // Build one entry per PENDING TRANSACTION for strategies.
+          // Each transaction "Strategy Investment: X" = one purchase event.
+          // Skip transactions that belong to a filled batch so a re-buy doesn't
+          // pull the already-settled purchase into the pending section.
+          const stratTxMap = {};
+          (Array.isArray(transactions) ? transactions : []).forEach(tx => {
+            // If we have batch data and this tx belongs only to a filled batch, skip it.
+            if (filledTxIds.has(tx.id) && !pendingTxIds.has(tx.id)) return;
+            const name = (tx.name || "").trim();
+            let stratName = null;
+            if (name.startsWith("Strategy Investment: ")) stratName = name.replace("Strategy Investment: ", "").trim();
+            else if (name.startsWith("Purchased ")) stratName = name.replace("Purchased ", "").trim();
+            else if (name.startsWith("Gift Received — ")) stratName = name.replace("Gift Received — ", "").trim();
+            if (!stratName) return;
+            const strat = pendingStrategies.find(s =>
+              (s.name || "").toLowerCase() === stratName.toLowerCase() ||
+              (s.shortName || "").toLowerCase() === stratName.toLowerCase()
+            );
+            if (!strat) return;
+            const key = strat.id || strat.name;
+            if (!stratTxMap[key]) stratTxMap[key] = { strat, txs: [] };
+            stratTxMap[key].txs.push(tx);
+          });
+
+          // If no tx match found, fall back to one entry per pending strategy
+          pendingStrategies.forEach(s => {
+            const key = s.id || s.name;
+            if (!stratTxMap[key]) stratTxMap[key] = { strat: s, txs: [null] };
+          });
+
+          // Sort all txs per group newest-first so "Purchase 1 of N" = most recent
+          Object.entries(stratTxMap).forEach(([, entry]) => {
+            if (entry.txs.length > 1) {
+              entry.txs.sort((a, b) =>
+                new Date(b?.transaction_date || b?.created_at || 0) -
+                new Date(a?.transaction_date || a?.created_at || 0)
+              );
+            }
+          });
+
+          // Groups: [{key, strat, txs}]
+          const stratGroups = Object.entries(stratTxMap).map(([key, { strat, txs }]) => ({
+            key,
+            strat,
+            txs: txs.sort((a, b) =>
+              new Date(b?.transaction_date || b?.created_at || 0) -
+              new Date(a?.transaction_date || a?.created_at || 0)
+            ),
+          }));
+
+          const pendingAssetItems = pendingAssets.map(a => {
+            const allBatches = Array.isArray(a.batches) ? a.batches : [];
+            // Only the UNFILLED batches belong in Pending orders — filled batches
+            // live in the portfolio carousel. For a mixed security this drops the
+            // already-settled buys and keeps just the pending one(s).
+            const batches = allBatches.filter(b => !(Number(b?.avg_fill) > 0));
+            // Sort newest-first so the top of the stack is the most recent buy.
+            const sortedBatches = [...batches].sort((b1, b2) => {
+              const t1 = b1?.created_at ? new Date(b1.created_at).getTime() : 0;
+              const t2 = b2?.created_at ? new Date(b2.created_at).getTime() : 0;
+              return t2 - t1;
+            });
+            return {
+              kind: "asset",
+              key: `pending-asset-${a.symbol || a.name}`,
+              title: a.symbol || a.name || "Asset",
+              subtitle: a.name || "Awaiting fill",
+              image: a.logo || null,
+              symbolFallback: a.symbol || "•",
+              asset: a,
+              batches: sortedBatches.length > 0 ? sortedBatches : [null],
+            };
+          });
+
+          const totalGroups = stratGroups.length + pendingAssetItems.length;
+          if (totalGroups === 0) return null;
+
+          const fmtDate = (tx) => {
+            const d = new Date(tx?.transaction_date || tx?.created_at || 0);
+            if (isNaN(d)) return null;
+            return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+          };
+
+          const PendingRow = ({ image, title, subtitle, symbolFallback, amountLabel, dateLabel, kind }) => (
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                {image && !failedLogos[title] ? (
+                  <img src={image} alt={title} className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer" crossOrigin="anonymous"
+                    onError={() => kind === "asset" && setFailedLogos(p => ({ ...p, [title]: true }))} />
+                ) : symbolFallback ? (
+                  <span className="text-[11px] font-bold text-white">{symbolFallback}</span>
+                ) : (
+                  <LayoutGrid className="h-5 w-5 text-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-bold text-white">{title}</p>
+                <p className="text-[11px] font-medium text-white/70 line-clamp-1">{subtitle}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {dateLabel && (
+                  <p className="text-[10px] font-semibold text-white/50 whitespace-nowrap">{dateLabel}</p>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white ring-1 ring-white/25">
+                  <Clock3 className="h-2.5 w-2.5" />
+                  Pending
+                </span>
+                <p className="text-[11px] font-semibold text-white/80 whitespace-nowrap">{amountLabel}</p>
+              </div>
+            </div>
+          );
+
+          return (
+            <section>
+              <div className="flex items-end justify-between px-5 mb-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">Pending orders</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-violet-600">
+                      <Clock3 className="h-3 w-3" />
+                    </span>
+                    <span>Filling — will reflect in portfolio once settled</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mx-4 space-y-3">
+                {/* Strategy groups */}
+                {stratGroups.map(({ key, strat, txs }) => {
+                  const isStack = txs.length > 1;
+                  const isExpanded = expandedPendingKey === key;
+                  const image = strat.image_url || strat.icon_url || null;
+                  const amountFor = (tx) => {
+                    const amt = tx ? Number(tx.amount || 0) / 100 : Number(strat.investedAmount || 0);
+                    return amt > 0 ? `R${amt.toFixed(2)} placed` : "Awaiting fill";
+                  };
+
+                  if (!isStack) {
+                    return (
+                      <div key={key}
+                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                        <PendingRow image={image} title={strat.name || "Strategy"}
+                          subtitle={`Strategy • ${strat.risk_level || "Balanced"}`}
+                          symbolFallback={null} amountLabel={amountFor(txs[0])}
+                          dateLabel={fmtDate(txs[0])} kind="strategy" />
+                      </div>
+                    );
+                  }
+
+                  // Stack
+                  return (
+                    <div key={key}>
+                      {!isExpanded ? (
+                        <button type="button" onClick={() => setExpandedPendingKey(key)}
+                          className="relative w-full text-left">
+                          {/* Shadow cards */}
+                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
+                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
+                          {txs.length > 2 && (
+                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
+                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
+                          )}
+                          {/* Top card */}
+                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
+                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                            <PendingRow image={image} title={strat.name || "Strategy"}
+                              subtitle={`${txs.length} purchases • tap to see each`}
+                              symbolFallback={null} amountLabel={amountFor(txs[0])}
+                              dateLabel={fmtDate(txs[0])} kind="strategy" />
+                          </div>
+                          {/* Count badge */}
+                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
+                            {txs.length}
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Collapse header */}
+                          <button type="button" onClick={() => setExpandedPendingKey(null)}
+                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
+                            <Clock3 className="h-3 w-3" /> {strat.name} · {txs.length} purchases · tap to collapse
+                          </button>
+                          {txs.map((tx, i) => (
+                            <div key={i}
+                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)]"
+                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                              <PendingRow image={image} title={strat.name || "Strategy"}
+                                subtitle={`Purchase ${i + 1} of ${txs.length}`}
+                                symbolFallback={null} amountLabel={amountFor(tx)}
+                                dateLabel={fmtDate(tx)} kind="strategy" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Single-security pending items */}
+                {pendingAssetItems.map(item => {
+                  const isStack = item.batches.length > 1;
+                  const isExpanded = expandedPendingKey === item.key;
+
+                  if (!isStack) {
+                    const onlyBatch = item.batches[0];
+                    return (
+                      <div key={item.key}
+                        className="rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] relative overflow-hidden"
+                        style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                        <PendingRow image={item.image} title={item.title} subtitle={item.subtitle}
+                          symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                          dateLabel={onlyBatch ? fmtDate(onlyBatch) : null} kind="asset" />
+                      </div>
+                    );
+                  }
+
+                  // Multi-batch pending stock — same expand-collapse pattern as multi-purchase pending strategies
+                  return (
+                    <div key={item.key}>
+                      {!isExpanded ? (
+                        <button type="button" onClick={() => setExpandedPendingKey(item.key)}
+                          className="relative w-full text-left">
+                          <div className="absolute inset-x-3 bottom-0 h-full rounded-3xl opacity-60"
+                            style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-5px) scaleX(0.96)" }} />
+                          {item.batches.length > 2 && (
+                            <div className="absolute inset-x-5 bottom-0 h-full rounded-3xl opacity-40"
+                              style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", transform: "translateY(-9px) scaleX(0.92)" }} />
+                          )}
+                          <div className="relative rounded-3xl shadow-[0_10px_32px_-10px_rgba(76,29,149,0.45)] overflow-hidden"
+                            style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                            <PendingRow image={item.image} title={item.title}
+                              subtitle={`${item.batches.length} purchases • tap to see each`}
+                              symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                              dateLabel={fmtDate(item.batches[0])} kind="asset" />
+                          </div>
+                          <div className="absolute top-3 left-3 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-violet-700 shadow">
+                            {item.batches.length}
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => setExpandedPendingKey(null)}
+                            className="flex items-center gap-2 px-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 transition">
+                            <Clock3 className="h-3 w-3" /> {item.title} · {item.batches.length} purchases · tap to collapse
+                          </button>
+                          {item.batches.map((batch, i) => (
+                            <div key={batch?.id || i}
+                              className="rounded-3xl overflow-hidden shadow-[0_6px_20px_-6px_rgba(76,29,149,0.4)] relative"
+                              style={{ background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 55%,#a855f7 100%)" }}>
+                              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+                              <PendingRow image={item.image} title={item.title}
+                                subtitle={`Purchase ${item.batches.length - i} of ${item.batches.length}`}
+                                symbolFallback={item.symbolFallback} amountLabel="Awaiting fill"
+                                dateLabel={fmtDate(batch)} kind="asset" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Best Performing Assets — only shown when user has individual stock holdings
             (i.e. not part of a strategy). Strategies have their own section. */}

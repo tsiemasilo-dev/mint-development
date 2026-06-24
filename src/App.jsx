@@ -5,6 +5,9 @@ import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
@@ -477,6 +480,36 @@ const App = () => {
   }, [currentPage]);
 
   const canSwipeBack = !mainTabs.includes(currentPage);
+
+  // ── Mobile native initialisation (runs once on native platforms) ──────────
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const initMobile = async () => {
+      try {
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#0f0b1e' });
+      } catch (_) {}
+
+      try {
+        await SplashScreen.hide({ fadeOutDuration: 400 });
+      } catch (_) {}
+
+      if (Capacitor.getPlatform() === 'ios') {
+        try {
+          Keyboard.addListener('keyboardWillShow', () => {
+            document.body.classList.add('keyboard-open');
+          });
+          Keyboard.addListener('keyboardWillHide', () => {
+            document.body.classList.remove('keyboard-open');
+          });
+        } catch (_) {}
+      }
+    };
+
+    initMobile();
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const lastBackPressRef = useRef(0);
 
@@ -1714,6 +1747,7 @@ const App = () => {
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
+          fees={stockCheckout.fees}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {
@@ -2122,7 +2156,7 @@ const App = () => {
           onConfirm={async (goalId) => {
             setSelectedGoalId(goalId);
             selectedGoalIdRef.current = goalId;
-            goalInvestAmountRef.current = pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
+            goalInvestAmountRef.current = pendingGoalFlow?.fees?.bufferedBase || pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount;
             pendingPaymentTypeRef.current = "strategy";
             setShowGoalModal(false);
             setPendingGoalFlow(null);
@@ -2142,7 +2176,7 @@ const App = () => {
 
             setShowPaymentMethodModal(true);
           }}
-          investmentAmount={pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
+          investmentAmount={pendingGoalFlow?.fees?.bufferedBase || pendingGoalFlow?.baseAmount || pendingGoalFlow?.amount || investmentAmount}
           assetName={pendingGoalFlow?.assetName || selectedStrategy?.name || "Strategy"}
           childFamilyMemberId={selectedStrategy?.is_kid_strategy ? selectedChildForInvest?.id : null}
         />
@@ -2150,6 +2184,8 @@ const App = () => {
           isOpen={showPaymentMethodModal}
           onClose={() => setShowPaymentMethodModal(false)}
           amount={investmentAmount}
+          baseAmount={baseInvestmentAmount}
+          fees={investmentFees}
           strategyName={selectedStrategy?.name || "Investment"}
           childFamilyMemberId={isChildStrategyPurchase ? selectedChildForInvest?.id : null}
           childFirstName={isChildStrategyPurchase ? selectedChildForInvest?.first_name : null}

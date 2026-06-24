@@ -26,7 +26,7 @@ const AppLayout = ({ activeTab, onTabChange, onWithdraw, onShowComingSoon, modal
   const isCredit = creditTabs.includes(activeTab);
 
   return (
-    <div className="app-shell flex min-h-screen flex-col overflow-clip">
+    <div className="app-shell flex min-h-screen flex-col overflow-hidden">
       {/* Family profile dropdown — fixed overlay on all tabs except home (home renders its own inline) */}
       {showFamilyDropdown && profile && (
         <div className="fixed top-11 left-4 z-[200] pointer-events-auto">

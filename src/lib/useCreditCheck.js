@@ -380,7 +380,7 @@ export function useCreditCheck() {
       console.log("zipDataLength:", result?.debug?.zipDataLength ?? (typeof result?.raw?.zipData === "string" ? result.raw.zipData.length : 0));
       console.groupEnd();
       setEngineResult(result);
-      setEngineStatus(result?.success === false || result?.ok === false ? "Failed" : "Complete");
+      setEngineStatus(!response.ok || result?.success === false || result?.ok === false ? "Failed" : "Complete");
       return result;
     } catch (err) {
       console.error("Credit check engine error:", err);

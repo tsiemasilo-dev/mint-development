@@ -642,8 +642,8 @@ export const useStrategyPeriodReturns = (userId, strategyId, activeTab = "m", fa
 // Single source of truth for 5D / M / YTD period P&L on the portfolio tab.
 // Mirrors the purple card's (SwipeableBalanceCard parent-mode) computation
 // exactly: cash-adjusted anchor, trading-day-aware lookback, same live total.
-// This guarantees the portfolio tab always shows the same numbers as the card.
-export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, investedAmount) => {
+// Pass familyMemberId to use child mode (no buffer/residual, basket-only comparison).
+export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, investedAmount, familyMemberId = null) => {
   const [returnData, setReturnData] = useState({ pnl: 0, pct: 0 });
   const [loading, setLoading] = useState(false);
 
@@ -658,7 +658,102 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
 
     const run = async () => {
       try {
-        // ── Step 1: active holdings (Status="active", same filter as /api/user/holdings) ──
+        if (familyMemberId) {
+          // ── CHILD MODE ───────────────────────────────────────────────────────
+          // Step 1: active child holdings
+          const { data: activeHlds } = await supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill")
+            .eq("family_member_id", familyMemberId)
+            .eq("strategy_id", strategyId)
+            .eq("is_active", true);
+
+          const holdings = (activeHlds || []).filter(h => Number(h.quantity || 0) > 0);
+          const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
+
+          // Step 2: latest intraday prices
+          const { data: intradayRows } = securityIds.length > 0
+            ? await supabase
+                .from("stock_intraday_c")
+                .select("security_id, current_price")
+                .in("security_id", securityIds)
+                .order("timestamp", { ascending: false })
+            : { data: [] };
+
+          if (cancelled) return;
+
+          const latestPriceMap = {};
+          (intradayRows || []).forEach(row => {
+            if (!latestPriceMap[row.security_id])
+              latestPriceMap[row.security_id] = Number(row.current_price || 0);
+          });
+
+          let livePositionsCents = 0;
+          let costBasisRands = 0;
+          holdings.forEach(h => {
+            const qty = Number(h.quantity || 0);
+            const priceCents = latestPriceMap[h.security_id] || 0;
+            livePositionsCents += Math.round(priceCents * qty);
+            const ef = Number(h.Expected_fill || 0);
+            const af = Number(h.avg_fill || 0);
+            costBasisRands += (ef > 0 ? ef : af / 100) * qty;
+          });
+
+          const liveTotalRands = livePositionsCents / 100;
+
+          // YTD / ALL: live basket minus cost basis
+          if (activeTab === "ytd") {
+            if (costBasisRands <= 0) { if (!cancelled) setReturnData({ pnl: 0, pct: 0 }); return; }
+            const pnl = parseFloat((liveTotalRands - costBasisRands).toFixed(2));
+            const pct = parseFloat(((pnl / costBasisRands) * 100).toFixed(4));
+            if (!cancelled) setReturnData({ pnl, pct });
+            return;
+          }
+
+          // 5D / M: trading-day-aware basket comparison (no cash adjustment for children)
+          const rowLimit = activeTab === "5d" ? 5 : 22;
+          const FETCH_LIMIT = rowLimit * 4 + 15;
+
+          const { data: basketRows } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value")
+            .eq("family_member", familyMemberId)
+            .eq("strategy_id", strategyId)
+            .order("as_of_date", { ascending: false })
+            .limit(FETCH_LIMIT);
+
+          if (cancelled) return;
+
+          const basketByDate = {};
+          (basketRows || []).forEach(r => {
+            basketByDate[r.as_of_date] = Number(r.basket_value || 0);
+          });
+
+          const allDates = Object.keys(basketByDate).sort();
+          // Strip non-trading days: consecutive rows with identical basket values
+          const tradingDates = allDates.filter((d, i) =>
+            i === 0 || basketByDate[d] !== basketByDate[allDates[i - 1]]
+          );
+
+          if (tradingDates.length < rowLimit + 1) {
+            if (!cancelled) setReturnData({ pnl: 0, pct: 0 });
+            return;
+          }
+
+          const anchorDate = tradingDates[tradingDates.length - 1 - rowLimit];
+          const anchorBasketCents = basketByDate[anchorDate];
+
+          const pnl = parseFloat((liveTotalRands - anchorBasketCents / 100).toFixed(2));
+          const pct = anchorBasketCents > 0
+            ? parseFloat(((pnl / (anchorBasketCents / 100)) * 100).toFixed(4))
+            : 0;
+
+          if (!cancelled) setReturnData({ pnl, pct });
+          return;
+        }
+
+        // ── PARENT MODE ──────────────────────────────────────────────────────
+        // Step 1: active holdings (Status="active", same filter as /api/user/holdings)
         const { data: activeHlds } = await supabase
           .from("stock_holdings_c")
           .select("transaction_id, security_id, quantity, avg_fill")
@@ -671,7 +766,7 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
         const allTxIds = [...new Set(holdings.map(h => h.transaction_id).filter(Boolean))];
         const securityIds = [...new Set(holdings.map(h => h.security_id).filter(Boolean))];
 
-        // ── Step 2: buffer + residual + latest intraday prices (parallel) ────
+        // Step 2: buffer + residual + latest intraday prices (parallel)
         const [txnResult, residualResult, intradayResult] = await Promise.all([
           allTxIds.length > 0
             ? supabase.from("transactions").select("buffer_cents, buffer_consumed_cents").in("id", allTxIds)
@@ -706,15 +801,12 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           if (d && (!earliestResidualDateStr || d < earliestResidualDateStr)) earliestResidualDateStr = d;
         });
 
-        // Latest intraday price per security (ordered desc → first row wins)
         const latestPriceMap = {};
         (intradayResult.data || []).forEach(row => {
-          if (!latestPriceMap[row.security_id]) {
+          if (!latestPriceMap[row.security_id])
             latestPriceMap[row.security_id] = Number(row.current_price || 0);
-          }
         });
 
-        // live positions = sum(latest_intraday_price_cents × quantity) — same as API
         let livePositionsCents = 0;
         holdings.forEach(h => {
           const priceCents = latestPriceMap[h.security_id] || 0;
@@ -723,13 +815,12 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
 
         const liveTotalRands = livePositionsCents / 100 + (totalBufferCents + totalResidualCents) / 100;
 
-        // Cash present at a given snapshot date (buffer always; residual only from its date onward)
         const cashCentsAt = (dateStr) =>
           (earliestResidualDateStr && dateStr >= earliestResidualDateStr)
             ? totalBufferCents + totalResidualCents
             : totalBufferCents;
 
-        // ── YTD: live total − invested amount (mirrors home card exactly) ────
+        // YTD: live total − invested amount (mirrors home card exactly)
         if (activeTab === "ytd") {
           if (!investedAmount || investedAmount <= 0) {
             if (!cancelled) setReturnData({ pnl: 0, pct: 0 });
@@ -741,8 +832,7 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           return;
         }
 
-        // ── 5D / M: cash-adjusted, trading-day-aware anchor ─────────────────
-        // Mirrors SwipeableBalanceCard runParentSnapshots lines 939–995 exactly.
+        // 5D / M: cash-adjusted, trading-day-aware anchor
         const rowLimit = activeTab === "5d" ? 5 : 22;
         const FETCH_LIMIT = rowLimit * 4 + 15;
 
@@ -763,7 +853,6 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
         });
 
         const allDates = Object.keys(basketByDate).sort();
-        // Strip non-trading days: rows where basket_value didn't change
         const tradingDates = allDates.filter((d, i) =>
           i === 0 || basketByDate[d] !== basketByDate[allDates[i - 1]]
         );
@@ -773,7 +862,6 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
           return;
         }
 
-        // Anchor = rowLimit real trading days before the most recent snapshot row
         const anchorDate = tradingDates[tradingDates.length - 1 - rowLimit];
         const anchorBasketCents = basketByDate[anchorDate];
         const anchorCashCents = cashCentsAt(anchorDate);
@@ -795,7 +883,7 @@ export const useStrategyLivePeriodReturn = (userId, strategyId, activeTab, inves
 
     run();
     return () => { cancelled = true; };
-  }, [userId, strategyId, activeTab, investedAmount]);
+  }, [userId, strategyId, activeTab, investedAmount, familyMemberId]);
 
   return { returnData, loading };
 };

@@ -399,8 +399,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      // Only show the coach once per session — switching back to this tab
-      // after visiting the Markets tab must not re-trigger the animation.
       if (!sessionStorage.getItem("mint_baskets_coach_shown")) {
         sessionStorage.setItem("mint_baskets_coach_shown", "1");
         setShowBasketsExplainer(true);
@@ -411,11 +409,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [viewMode, childFilter]);
 
   // Pre-fetch Lottie JSON on page mount so the browser cache is warm
-  // before the user presses the invest button
   useEffect(() => {
     fetch("https://lottie.host/abde670e-c9ef-40b6-9009-6dfb6bbebc0a/1ank9HLrmf.json")
       .catch(() => {});
   }, []);
+
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
@@ -1111,16 +1109,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           return;
         }
 
-        // Calculate cumulative returns
+        // Calculate cumulative returns — skip rows with null 1d_pct to avoid flat tails
         const cumulativeData = [];
         let cumulative = 0;
 
         dailyReturns.forEach((day) => {
-          const dailyReturn = day["1d_pct"] ? day["1d_pct"] / 100 : 0; // Convert percentage to decimal
+          if (day["1d_pct"] == null) return; // skip days with no data
+          const dailyReturn = day["1d_pct"] / 100;
           cumulative += dailyReturn;
           cumulativeData.push({
             d: day.as_of_date,
-            v: Number((cumulative * 100).toFixed(2)) // Convert back to percentage for display
+            v: Number((cumulative * 100).toFixed(2))
           });
         });
 
@@ -1451,7 +1450,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-bold tracking-[0.18em] uppercase"}>{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
@@ -1994,10 +1993,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           setSelectedStrategy({ ...strategy, slug: strategy.slug });
                           if (childFilter) setShowChildInvestModal(true);
                         }}
-                        data-coach-target={displayName?.toLowerCase().includes('famous') ? 'true' : undefined}
-                        data-coach-first={filteredStrategies[0]?.id === strategy.id ? 'true' : undefined}
-                        data-coach-name={displayName}
-                        data-coach-desc={truncatedDescription || ''}
                         className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
                         <div className="flex items-start gap-3">
@@ -2734,55 +2729,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   </div>
                 </div>
 
-                {/* Fee breakdown */}
-                <div className="mb-4 rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setChildFeeExpanded(v => !v)}
-                    className="w-full flex items-center justify-between p-4"
-                  >
-                    <h3 className="text-xs font-semibold text-slate-600">Fee Breakdown</h3>
-                    {childFeeExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                  </button>
-                  {childFeeExpanded && (
-                    <div className="px-4 pb-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <p className="text-xs text-slate-600">Investment Amount</p>
-                          <span className="text-xs text-slate-400" title="Includes 8% cash reserve">*</span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-900">
-                          R{childFees.bufferedBase.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-600">Broker Fee (0.25%)</p>
-                        <p className="text-xs font-semibold text-slate-900">
-                          R{childFees.brokerAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-600">
-                          Custody Fee (R{CHILD_ISIN_FEE_PER_ASSET.toFixed(2)} × {childNumAssets} asset{childNumAssets !== 1 ? 's' : ''})
-                        </p>
-                        <p className="text-xs font-semibold text-slate-900">
-                          R{childFees.isinTotal.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-600">Transaction Fee (3.8%)</p>
-                        <p className="text-xs font-semibold text-slate-900">
-                          R{childFees.transactionAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-100">
-                    <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
-                    <p className="text-sm font-bold text-slate-900">
-                      R{childFees.totalCost.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
+                {/* Total cost */}
+                <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-700">Total Due Today</p>
+                  <p className="text-sm font-bold text-slate-900">
+                    R{childFees.totalCost.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
                 </div>
 
                 {childInsufficient && (
