@@ -952,8 +952,8 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
   const desc =
     "Top JSE companies — built for long-term growth.";
   const explanation =
-    "MINT Baskets are ready-made, actively managed portfolios. " +
-    "Instant diversification — no stock-picking needed.";
+    "A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. " +
+    "The assets are held directly in your name, not pooled.";
   // Ensure "Mint" → "MINT" in the card name
   const displayName = cardName.replace(/\bMint\b/g, "MINT");
 
