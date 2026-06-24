@@ -1393,6 +1393,30 @@ const HomePage = ({
   const hasInvestments = hasAnyHoldings || assetsToDisplay.length > 0;
   const hasStrategies = bestStrategies && bestStrategies.length > 0;
 
+  // #4 Pull-to-refresh
+  const [pullY, setPullY] = React.useState(0);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const pullTouchStartY = useRef(0);
+  const PULL_THRESHOLD = 65;
+
+  const handlePullTouchStart = (e) => {
+    if (window.scrollY > 5) return;
+    pullTouchStartY.current = e.touches[0].clientY;
+  };
+  const handlePullTouchMove = (e) => {
+    if (window.scrollY > 5) return;
+    const delta = e.touches[0].clientY - pullTouchStartY.current;
+    if (delta > 0) setPullY(Math.min(delta * 0.45, PULL_THRESHOLD));
+  };
+  const handlePullTouchEnd = async () => {
+    if (pullY >= PULL_THRESHOLD - 5 && !isRefreshing) {
+      setIsRefreshing(true);
+      await new Promise((r) => setTimeout(r, 800));
+      window.location.reload();
+    }
+    setPullY(0);
+  };
+
   return (
     <>
     <div
@@ -1403,7 +1427,35 @@ const HomePage = ({
         backgroundRepeat: 'no-repeat',
         backgroundSize: '100% 100vh',
       }}
+      onTouchStart={handlePullTouchStart}
+      onTouchMove={handlePullTouchMove}
+      onTouchEnd={handlePullTouchEnd}
     >
+      {/* #4 Pull-to-refresh indicator */}
+      <div
+        className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex items-start justify-center overflow-hidden transition-all duration-200"
+        style={{ height: pullY || isRefreshing ? (isRefreshing ? 52 : pullY) : 0 }}
+      >
+        <div className="flex items-center justify-center pt-3">
+          {isRefreshing ? (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md">
+              <svg className="h-4 w-4 animate-spin text-violet-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : (
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md transition-transform duration-100"
+              style={{ transform: `rotate(${Math.min((pullY / PULL_THRESHOLD) * 180, 180)}deg)` }}
+            >
+              <svg className="h-4 w-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="rounded-b-[36px] bg-transparent px-4 pb-12 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
@@ -1617,6 +1669,43 @@ const HomePage = ({
             onSelectAction={handleActionNavigation}
           />
         ) : null}
+
+        {/* #8 Empty portfolio state — shown when user has no investments yet */}
+        {!hasInvestments && !financialLoading && onboardingChecked && (
+          <section className="rounded-3xl overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 60%, #a855f7 100%)' }}>
+            <div className="p-6 flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-white">Start your investment journey</p>
+                <p className="mt-1 text-xs text-white/75 leading-relaxed">
+                  Explore ready-made strategies curated by our team, or pick individual JSE-listed stocks.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  {onOpenStrategies && (
+                    <button
+                      type="button"
+                      onClick={onOpenStrategies}
+                      className="inline-flex items-center gap-1 rounded-full bg-white px-4 py-2 text-xs font-bold text-violet-700 shadow-md active:scale-95 transition-transform"
+                    >
+                      View Strategies <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {onOpenMarkets && (
+                    <button
+                      type="button"
+                      onClick={onOpenMarkets}
+                      className="inline-flex items-center gap-1 rounded-full bg-white/15 px-4 py-2 text-xs font-bold text-white ring-1 ring-white/30 active:scale-95 transition-transform"
+                    >
+                      Browse Stocks
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Market Insights */}
         <section className="rounded-3xl bg-white shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] overflow-hidden">
