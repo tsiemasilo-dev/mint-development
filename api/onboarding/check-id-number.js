@@ -113,6 +113,14 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error("[Onboarding] Failed to create Sumsub applicant:", err.message);
       }
+
+      // Persist the ID to the profile now, so later steps (the mandate step reads
+      // profiles.id_number) don't make the user re-enter it.
+      try {
+        await db.from("profiles").update({ id_number: idNumber }).eq("id", user.id);
+      } catch (err) {
+        console.error("[Onboarding] Failed to save id_number to profile:", err.message);
+      }
     }
 
     return res.status(200).json({ success: true, exists, applicantId });
