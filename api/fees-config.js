@@ -21,13 +21,15 @@ export default async function handler(req, res) {
       success: true,
       fees: {
         // canonical UPPER_CASE names (mirror api/_lib/fees.js)
-        ISIN_FEE_PER_ASSET:     c.ISIN_FEE_PER_ASSET,
-        BROKER_FEE_RATE:        c.BROKER_FEE_RATE,
-        TRANSACTION_FEE_RATE:   c.TRANSACTION_FEE_RATE,
-        EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
+        ISIN_FEE_PER_ASSET:          c.ISIN_FEE_PER_ASSET,
+        BROKER_FEE_RATE:             c.BROKER_FEE_RATE,
+        TRANSACTION_FEE_RATE:        c.TRANSACTION_FEE_RATE,
+        WALLET_TRANSACTION_FEE_RATE: c.WALLET_TRANSACTION_FEE_RATE,
+        OZOW_TRANSACTION_FEE_RATE:   c.OZOW_TRANSACTION_FEE_RATE,
+        EXECUTION_RESERVE_RATE:      c.EXECUTION_RESERVE_RATE,
         // alias the client code already uses for the 8% reserve
-        CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
-        AUM_FEE_RATE:           c.AUM_FEE_RATE,
+        CASH_BUFFER_RATE:            c.EXECUTION_RESERVE_RATE,
+        AUM_FEE_RATE:                c.AUM_FEE_RATE,
       },
     });
   } catch (err) {
