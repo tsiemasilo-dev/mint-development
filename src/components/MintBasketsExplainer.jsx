@@ -1586,7 +1586,7 @@ export default function MintBasketsExplainer({
       {showSuccessOverlay && (
         <div
           style={{
-            position: "fixed", inset: 0, zIndex: 10002,
+            position: "fixed", inset: 0, zIndex: 10005,
             background: "#f8f8fb", overflowY: "auto",
           }}
         >
