@@ -1,0 +1,39 @@
+ High Priority — Do These Soon
+1. Security HTTP Headers (helmet.js)
+One package, massive protection. Adds ~12 headers automatically: prevents clickjacking, stops browsers from sniffing MIME types, forces HTTPS, hides your server fingerprint, and more. Currently your Express server has no helmet.
+
+2. Webhook Signature Verification
+Your app receives webhooks from TruID, Paystack, and Ozow. Right now any server on the internet could send fake webhook payloads pretending to be them (e.g., faking a successful payment). Each provider gives you a secret to verify the signature — this isn't implemented yet.
+
+3. Audit Logging for Financial Actions
+There's no log of who did what for sensitive actions: large investments, withdrawals, family account changes, onboarding completions. If something goes wrong (fraud, dispute), you'd have no trail. A simple audit_logs table in Supabase with user_id, action, amount, timestamp, ip_address would cover you.
+
+4. Server-Side Input Validation
+Zod is used on the frontend but not consistently enforced at the API level. A malicious user can bypass the browser entirely and send raw API requests. Every route that touches money or personal data should validate and reject malformed input before it reaches your database.
+
+🟡 Medium Priority — Do Before App Store Launch
+5. Error Sanitisation
+Stack traces and database error messages are likely being returned to clients in some routes (e.g., catch (err) { res.json({ error: err.message }) }). In production, users should only see generic messages — the full error goes to your logs only.
+
+6. File Upload Hardening
+Multer accepts files but only checks the mimetype header, which is browser-supplied and can be faked. You should verify the actual file signature (magic bytes) server-side for PDFs and images before sending them to Claude.
+
+7. Account Lockout on Failed Logins
+Rate limiting slows brute force, but doesn't stop it with a VPN. Tracking failed login attempts per account in Supabase and locking for 15 minutes after 5 failures adds a second layer.
+
+8. Supabase Row Level Security (RLS) Audit
+Your app uses the service-role key for admin operations, which bypasses RLS. It's worth auditing that every table that should have RLS enabled actually does — so a bug that accidentally uses the wrong client doesn't expose other users' data.
+
+🟢 Good Practice — Do When You Have Time
+9. POPIA Compliance (South African Law)
+You store SA ID numbers, financial data, and biometric-adjacent data. POPIA (South Africa's data protection law, equivalent to GDPR) requires: a privacy policy, a lawful basis for processing each data type, a data breach notification plan, and a way for users to request deletion. Non-compliance carries fines up to R10 million.
+
+10. Secrets Rotation Policy
+Document a rotation schedule: Supabase keys, Resend, Experian, TruID, Paystack. If any key leaks, you need a runbook for rotating it without downtime.
+
+11. Dependency Scanning in CI/CD
+Run npm audit automatically on every code push so new vulnerabilities in your packages get flagged before they reach production.
+
+12. Two-Factor Authentication (2FA)
+TOTP via Google Authenticator for high-value accounts or as an optional setting for users.
+
