@@ -5,7 +5,6 @@ import AccountAgreementStep from "../components/AccountAgreementStep";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 import { markOnboardingComplete } from "../lib/useOnboardingStatus";
-import AddressAutocomplete from "../components/AddressAutocomplete";
 import "../styles/onboarding-process.css";
 
 const ClipboardCheckIcon = (props) => (
@@ -224,6 +223,9 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
   const [addrCity, setAddrCity] = useState("");
   const [addrStreet, setAddrStreet] = useState("");
   const [addrPostal, setAddrPostal] = useState("");
+  // "This is not my address" — when a bureau address IS on record, the user can
+  // still opt into the structured manual entry (which then requires a PoA doc).
+  const [manualAddressMode, setManualAddressMode] = useState(false);
   // Proof-of-address document (e.g. bank statement) — required on the manual fallback.
   const [poaUrl, setPoaUrl] = useState("");
   const [poaFileName, setPoaFileName] = useState("");
@@ -338,8 +340,8 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
     if (!file) return;
     setPoaError("");
     if (file.size > 10 * 1024 * 1024) { setPoaError("File too large — max 10MB."); return; }
-    const okType = /pdf$/i.test(file.type) || /^image\//i.test(file.type) || /\.(pdf|png|jpe?g|webp|heic|heif)$/i.test(file.name);
-    if (!okType) { setPoaError("Please upload a PDF or image (bank statement / utility bill)."); return; }
+    const okType = /(pdf|jpe?g|png)$/i.test(file.type) || /\.(pdf|jpe?g|png)$/i.test(file.name);
+    if (!okType) { setPoaError("Please upload a PDF, JPG or PNG (bank statement / utility bill)."); return; }
     setPoaUploading(true);
     try {
       if (!supabase) throw new Error("Storage not available");
@@ -1192,7 +1194,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                   <div className="animate-fade-in delay-2 text-sm" style={{ color: "hsl(270 20% 50%)" }}>
                     Looking up your addresses…
                   </div>
-                ) : (experianAddresses && experianAddresses.length > 0) ? (
+                ) : (experianAddresses && experianAddresses.length > 0 && !manualAddressMode) ? (
                   <div className="animate-fade-in delay-2">
                     <label htmlFor="experian-address">Select your address</label>
                     <div className="glass-field">
@@ -1217,34 +1219,34 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                       </select>
                     </div>
                     <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                      These are the addresses Experian has on record for you. Pick one, or enter a different one below.
+                      These are the addresses Experian has on record for you. Pick the one you live at.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => { setManualAddressMode(true); setAddress(""); setBureauPostalCode(""); }}
+                      className="text-xs mt-3"
+                      style={{ color: "hsl(270 50% 55%)", fontWeight: 600, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                    >
+                      This is not my address — enter it manually
+                    </button>
                   </div>
                 ) : null}
 
-                {experianAddrLoading ? null : (experianAddresses && experianAddresses.length > 0) ? (
-                  /* Bureau address on record — keep the free-text "different address" box. */
-                  <div className="animate-fade-in delay-2">
-                    <label htmlFor="residential-address">Or enter your address</label>
-                    <div className="glass-field">
-                      <AddressAutocomplete
-                        value={address}
-                        onChange={(value) => setAddress(value)}
-                        placeholder="Search for your residential address"
-                        containerClassName=""
-                        inputClassName="w-full with-icon"
-                      />
-                    </div>
-                    <p className="text-xs mt-2" style={{ color: "hsl(270 15% 60%)" }}>
-                      Your address is required for regulatory compliance and credit assessment.
-                    </p>
-                  </div>
-                ) : (
-                  /* Manual fallback (no bureau address) — structured fields on one row
-                     so the format + postal code are guaranteed, plus a required
-                     proof-of-address document. */
+                {experianAddrLoading ? null : (experianAddresses && experianAddresses.length > 0 && !manualAddressMode) ? null : (
+                  /* Manual fallback (no bureau address, or user opted out of bureau address)
+                     — structured fields guaranteed format + postal code, plus required PoA. */
                   <>
                     <style>{"@keyframes poaspin{to{transform:rotate(360deg)}}"}</style>
+                    {(experianAddresses && experianAddresses.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => { setManualAddressMode(false); setPoaUrl(""); setPoaFileName(""); setPoaError(""); }}
+                        className="text-xs animate-fade-in delay-2"
+                        style={{ color: "hsl(270 50% 55%)", fontWeight: 600, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0, display: "block", marginBottom: "4px" }}
+                      >
+                        ← Use an address Experian has on record
+                      </button>
+                    )}
                     <div className="animate-fade-in delay-2">
                       <label htmlFor="addr-province">Residential Address</label>
                       {/* Province bar with a small flag country picker tucked in the left
@@ -1355,10 +1357,10 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                           {poaUploading ? "Uploading…" : poaUrl ? poaFileName : "Upload proof of address"}
                         </span>
                         <span style={{ fontSize: "11px", fontWeight: 600, color: poaUrl ? "hsl(160 40% 45%)" : "hsl(270 40% 58%)", flexShrink: 0 }}>
-                          {poaUrl ? "Replace" : "PDF · photo"}
+                          {poaUrl ? "Replace" : "PDF · JPG · PNG"}
                         </span>
                       </label>
-                      <input id="poa-upload" type="file" accept=".pdf,image/*" style={{ display: "none" }} disabled={poaUploading} onChange={handlePoaUpload} />
+                      <input id="poa-upload" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" style={{ display: "none" }} disabled={poaUploading} onChange={handlePoaUpload} />
                       {poaError && (
                         <p className="text-xs mt-2" style={{ color: "hsl(0 60% 50%)" }}>{poaError}</p>
                       )}
@@ -1410,7 +1412,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                     type="button"
                     className="continue-button"
                     onClick={async () => {
-                      const fallback = !(experianAddresses && experianAddresses.length > 0);
+                      const fallback = !(experianAddresses && experianAddresses.length > 0) || manualAddressMode;
                       let finalAddress = address;
                       let details = {};
                       if (fallback) {
@@ -1467,7 +1469,7 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                         setAddressLoading(false);
                       }
                     }}
-                    disabled={addressLoading || ((experianAddresses && experianAddresses.length > 0)
+                    disabled={addressLoading || ((experianAddresses && experianAddresses.length > 0 && !manualAddressMode)
                       ? (!address || address.length < 5)
                       : !(addrProvince.trim() && addrCity.trim() && addrStreet.trim() && addrPostal.trim() && poaUrl
                           && (addrCountry === "South Africa" ? /^\d{4}$/.test(addrPostal) : true)))}
