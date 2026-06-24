@@ -194,13 +194,14 @@ function drawPieChart(doc, slices, cx, cy, r) {
 }
 
 async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate, feeRates = {}) {
-  const brokerPct  = +((feeRates.BROKER_FEE_RATE      ?? 0.0025) * 100).toFixed(3);
-  const txnPct     = +((feeRates.TRANSACTION_FEE_RATE  ?? 0.038)  * 100).toFixed(2);
-  const custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET     ?? 69);
-  const reservePct = +((feeRates.CASH_BUFFER_RATE       ?? 0.08)   * 100).toFixed(2);
+  const brokerPct  = +((feeRates.BROKER_FEE_RATE              ?? 0.0025) * 100).toFixed(3);
+  const walletPct  = +((feeRates.WALLET_TRANSACTION_FEE_RATE  ?? 0.01)   * 100).toFixed(2);
+  const ozowPct    = +((feeRates.OZOW_TRANSACTION_FEE_RATE    ?? 0.038)  * 100).toFixed(2);
+  const custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET             ?? 69);
+  const aumPct     = +((feeRates.AUM_FEE_RATE                 ?? 0.0099) * 100).toFixed(2);
   // override the hardcoded "Fees & Charges" section body with live values
   function buildFeesChargesBody() {
-    return `Transaction fee: ${txnPct}% per trade executed within the portfolio. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. Execution reserve: ${reservePct}% cash buffer held for settlement. No management, AUM, or performance fee is charged. A full schedule of fees is available on request from MINT.`;
+    return `Transaction fee: ${walletPct}% per trade for wallet/EFT payments, ${ozowPct}% for Ozow payments. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. AUM management fee: ${aumPct}% per annum, accrued daily and settled monthly from the strategy cash sleeve. A full schedule of fees is available on request from MINT.`;
   }
   // Re-declare sections here so we can inject dynamic fee text
   doc.addPage();
@@ -321,10 +322,11 @@ export default async function generateFactsheetPdf({
   preOpenedWindow = null,
 }) {
   // Resolve live fee values — fall back to conservative defaults only if not provided
-  const _brokerPct  = +((feeRates.BROKER_FEE_RATE      ?? 0.0025) * 100).toFixed(3);
-  const _txnPct     = +((feeRates.TRANSACTION_FEE_RATE  ?? 0.038)  * 100).toFixed(2);
-  const _custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET     ?? 69);
-  const _reservePct = +((feeRates.CASH_BUFFER_RATE       ?? 0.08)   * 100).toFixed(2);
+  const _brokerPct  = +((feeRates.BROKER_FEE_RATE             ?? 0.0025) * 100).toFixed(3);
+  const _walletPct  = +((feeRates.WALLET_TRANSACTION_FEE_RATE ?? 0.01)   * 100).toFixed(2);
+  const _ozowPct    = +((feeRates.OZOW_TRANSACTION_FEE_RATE   ?? 0.038)  * 100).toFixed(2);
+  const _custodyAmt = +(feeRates.ISIN_FEE_PER_ASSET            ?? 69);
+  const _aumPct     = +((feeRates.AUM_FEE_RATE                ?? 0.0099) * 100).toFixed(2);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   doc.setProperties({ title: `${strategy?.name || "Strategy"} Factsheet`, subject: "MINT Strategy Factsheet", author: "MINT Platforms (Pty) Ltd" });
 
@@ -479,11 +481,11 @@ export default async function generateFactsheetPdf({
   ry += 8;
 
   const feesData = [
-    ["Transaction Fee",         `${_txnPct}% / trade`],
-    ["Broker Fee",              `${_brokerPct}% / trade`],
-    ["Management Fee",          "None"],
-    ["Custody fee (per asset)", `R${_custodyAmt} / asset`],
-    ["Execution Reserve",       `${_reservePct}% cash buffer`],
+    ["Transaction Fee (Wallet/EFT)", `${_walletPct}% / trade`],
+    ["Transaction Fee (Ozow)",       `${_ozowPct}% / trade`],
+    ["Broker Fee",                   `${_brokerPct}% / trade`],
+    ["AUM Management Fee",           `${_aumPct}% p.a.`],
+    ["Custody fee (per asset)",      `R${_custodyAmt} / asset`],
   ];
 
   const feesCardH = 5 + 6 + feesData.length * ROW + 3;
@@ -570,7 +572,7 @@ export default async function generateFactsheetPdf({
     { title: "Custody & Asset Segregation", body: "Client assets are held via an appointed Central Securities Depository Participant (CSDP) through its appointed nominee custodian. Assets are fully segregated from MINT's own assets at all times." },
     { title: "Performance Disclosure", body: "Performance may include historical or back-tested results. Back-tested performance does not represent actual trading and is constructed with hindsight. Performance is gross of fees unless stated. Individual returns may differ based on timing, costs, and taxes." },
     { title: "Risk Warning", body: "Past performance does not guarantee future results. Capital is not guaranteed. Strategies are subject to Market, Equity, Volatility, Leverage, Liquidity, Counterparty, Concentration, and Foreign Market risks. See Page 2 for full risk factor disclosures." },
-    { title: "Fees Summary", body: `Transaction fee: ${_txnPct}% per trade. Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). Execution reserve: ${_reservePct}% cash buffer. No management, AUM, or performance fee. Full fee schedule available on request.` },
+    { title: "Fees Summary", body: `Transaction fee: ${_walletPct}% per trade (wallet/EFT), ${_ozowPct}% (Ozow). Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). AUM management fee: ${_aumPct}% per annum, accrued daily and settled monthly from the cash sleeve. No performance fee. Full fee schedule available on request.` },
     { title: "Full Disclosures", body: "Complete regulatory disclosures, risk factors, legal notices, and the full disclaimer are contained on Page 2 of this factsheet. Please read all disclosures carefully before investing." },
   ];
 

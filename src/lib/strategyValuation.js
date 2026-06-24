@@ -99,6 +99,18 @@ export async function fetchStrategyCashCents({ userId, familyMemberId = null, st
         bufferCentsByStrategy[sid] = sum;
       });
     }
+    // AUM management fee already taken from the sleeve reduces the held 8% buffer.
+    // Tracked in its own accumulator so it never mixes with broker slippage
+    // (buffer_consumed_cents). Subtract per strategy.
+    try {
+      let aumQ = supabase.from("strategy_aum_fee_state").select("strategy_id, aum_fee_consumed_cents").in("strategy_id", strategyIds);
+      aumQ = familyMemberId ? aumQ.eq("family_member_id", familyMemberId) : aumQ.eq("user_id", userId).is("family_member_id", null);
+      const { data: aumRows } = await aumQ;
+      (aumRows || []).forEach((r) => {
+        if (!r?.strategy_id) return;
+        bufferCentsByStrategy[r.strategy_id] = (bufferCentsByStrategy[r.strategy_id] || 0) - Number(r.aum_fee_consumed_cents || 0);
+      });
+    } catch (e) { /* table may not exist yet — sleeve unchanged */ }
     // 2) rebalance residual per strategy
     if (!includeResidual) return { bufferCentsByStrategy, residualCentsByStrategy };
     let resQ = supabase.from("strategy_rebalance_residuals").select("strategy_id, balance_cents").in("strategy_id", strategyIds);
