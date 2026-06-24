@@ -178,7 +178,7 @@ function StepDots({ step, total = 6 }) {
 /* ─────────────────────────────────────────────────────────
    Phase 4 — Purchase Successful card spotlight
 ───────────────────────────────────────────────────────── */
-function SuccessCardSpotlight({ cardRect, onNext }) {
+function SuccessCardSpotlight({ cardRect, onNext, onSkip }) {
   if (!cardRect) return null;
 
   const pad = 16;
@@ -248,20 +248,35 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
               baseDelay={0.64}
             />
           </motion.p>
-          <motion.button
-            onClick={onNext}
-            style={{
-              width: "100%", padding: "10px 0", borderRadius: 12,
-              fontSize: 13, fontWeight: 700, color: "#fff",
-              background: "linear-gradient(135deg,#7c3aed,#5b21b6)",
-              border: "none", cursor: "pointer",
-            }}
+          <motion.div
+            style={{ display: "flex", gap: 8 }}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.6, duration: 0.26, ease: "easeOut" }}
-            whileTap={{ scale: 0.97 }}
           >
-            Next →
-          </motion.button>
+            <motion.button
+              onClick={onSkip}
+              style={{
+                flex: 1, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.70)",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.22)", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Skip
+            </motion.button>
+            <motion.button
+              onClick={onNext}
+              style={{
+                flex: 2, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 700, color: "#fff",
+                background: "linear-gradient(135deg,#7c3aed,#5b21b6)",
+                border: "none", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Next →
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </>
@@ -271,7 +286,7 @@ function SuccessCardSpotlight({ cardRect, onNext }) {
 /* ─────────────────────────────────────────────────────────
    Phase 5 — Pending orders spotlight on live Home page
 ───────────────────────────────────────────────────────── */
-function PendingOrdersSpotlight({ pendingRect, onDone, onNext }) {
+function PendingOrdersSpotlight({ pendingRect, onDone, onNext, onSkip }) {
   if (!pendingRect) return null;
 
   const padH = 16;    // horizontal
@@ -349,20 +364,35 @@ function PendingOrdersSpotlight({ pendingRect, onDone, onNext }) {
           >
             Your strategy appears as <strong style={{ color: "#fff" }}>Pending</strong> while being filled. Once settled, your investment reflects live on your home balance card — showing portfolio value and performance in real time.
           </motion.p>
-          <motion.button
-            onClick={onNext ?? onDone}
-            style={{
-              width: "100%", padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 700,
-              letterSpacing: "0.04em", color: "#fff",
-              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-              border: "none", cursor: "pointer",
-            }}
+          <motion.div
+            style={{ display: "flex", gap: 8 }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 0.72, duration: 0.26 }}
-            whileTap={{ scale: 0.97 }}
           >
-            Next →
-          </motion.button>
+            <motion.button
+              onClick={onSkip}
+              style={{
+                flex: 1, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.70)",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.22)", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Skip
+            </motion.button>
+            <motion.button
+              onClick={onNext ?? onDone}
+              style={{
+                flex: 2, padding: "10px 0", borderRadius: 12, fontSize: 13, fontWeight: 700,
+                letterSpacing: "0.04em", color: "#fff",
+                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                border: "none", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Next →
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </>
@@ -598,7 +628,7 @@ function Phase6BalanceCardSpotlight({ cardRect, onDone }) {
 /* ─────────────────────────────────────────────────────────
    Phase 3 — Invest Now button spotlight
 ───────────────────────────────────────────────────────── */
-function InvestBtnSpotlight({ btnRect, onNext }) {
+function InvestBtnSpotlight({ btnRect, onNext, onSkip }) {
   if (!btnRect) return null;
 
   const pad = 12;
@@ -679,20 +709,35 @@ function InvestBtnSpotlight({ btnRect, onNext }) {
               baseDelay={0.70}
             />
           </p>
-          <motion.button
-            onClick={onNext}
-            style={{
-              width: "100%", padding: "10px 0", borderRadius: 12,
-              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
-              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-              border: "none", cursor: "pointer",
-            }}
+          <motion.div
+            style={{ display: "flex", gap: 8 }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 1.05, duration: 0.26 }}
-            whileTap={{ scale: 0.97 }}
           >
-            Next →
-          </motion.button>
+            <motion.button
+              onClick={onSkip}
+              style={{
+                flex: 1, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.70)",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.22)", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Skip
+            </motion.button>
+            <motion.button
+              onClick={onNext}
+              style={{
+                flex: 2, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                border: "none", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Next →
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </>
@@ -782,7 +827,7 @@ function TabSpotlight({ rect, onLottieLoad }) {
    • Bouncing down-arrow just above the button
    • Glass text callout centred above, fading in after the ring
 ───────────────────────────────────────────────────────── */
-function FactsheetBtnSpotlight({ btnRect, onNext }) {
+function FactsheetBtnSpotlight({ btnRect, onNext, onSkip }) {
   if (!btnRect) return null;
 
   const pad = 12;
@@ -884,20 +929,35 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
             />
           </p>
 
-          <motion.button
-            onClick={onNext}
-            style={{
-              width: "100%", padding: "10px 0", borderRadius: 12,
-              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
-              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-              border: "none", cursor: "pointer",
-            }}
+          <motion.div
+            style={{ display: "flex", gap: 8 }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 1.05, duration: 0.26 }}
-            whileTap={{ scale: 0.97 }}
           >
-            Next →
-          </motion.button>
+            <motion.button
+              onClick={onSkip}
+              style={{
+                flex: 1, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.70)",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.22)", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Skip
+            </motion.button>
+            <motion.button
+              onClick={onNext}
+              style={{
+                flex: 2, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                border: "none", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Next →
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </>
@@ -907,7 +967,7 @@ function FactsheetBtnSpotlight({ btnRect, onNext }) {
 /* ─────────────────────────────────────────────────────────
    Phase 1 — Dual spotlight + card text callout
 ───────────────────────────────────────────────────────── */
-function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDone, onNext }) {
+function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDone, onNext, onSkip }) {
   const [pressed, setPressed] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setPressed(true), 350);
@@ -1046,20 +1106,35 @@ function CardSpotlight({ cardRect, cardRadius, tabRect, cardName, cardDesc, onDo
             <WordReveal text={explanation} baseDelay={0.66} />
           </p>
 
-          <motion.button
-            onClick={onNext ?? onDone}
-            style={{
-              width: "100%", padding: "10px 0", borderRadius: 12,
-              fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
-              background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
-              border: "none", cursor: "pointer",
-            }}
+          <motion.div
+            style={{ display: "flex", gap: 8 }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: 0.90, duration: 0.24 }}
-            whileTap={{ scale: 0.97 }}
           >
-            Next →
-          </motion.button>
+            <motion.button
+              onClick={onSkip}
+              style={{
+                flex: 1, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.70)",
+                background: "transparent", border: "1px solid rgba(255,255,255,0.22)", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Skip
+            </motion.button>
+            <motion.button
+              onClick={onNext ?? onDone}
+              style={{
+                flex: 2, padding: "10px 0", borderRadius: 12,
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: "#fff",
+                background: "linear-gradient(135deg, #7C3AED, #5B21B6)",
+                border: "none", cursor: "pointer",
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              Next →
+            </motion.button>
+          </motion.div>
         </motion.div>
       </div>
     </>
@@ -1627,6 +1702,7 @@ export default function MintBasketsExplainer({
               cardDesc={cardDesc}
               onDone={handleDone}
               onNext={handleNext}
+              onSkip={handleDone}
             />
           </motion.div>
         )}
@@ -1641,6 +1717,7 @@ export default function MintBasketsExplainer({
             <FactsheetBtnSpotlight
               btnRect={phase2BtnRect}
               onNext={handleGoToPhase3}
+              onSkip={handleDone}
             />
           </motion.div>
         )}
@@ -1655,6 +1732,7 @@ export default function MintBasketsExplainer({
             <InvestBtnSpotlight
               btnRect={phase3BtnRect}
               onNext={handleGoToPhase4}
+              onSkip={handleDone}
             />
           </motion.div>
         )}
@@ -1668,6 +1746,7 @@ export default function MintBasketsExplainer({
           >
             <SuccessCardSpotlight
               cardRect={phase4CardRect}
+              onSkip={handleDone}
               onNext={() => {
                 // 1. Immediately remove the coach overlay so strategy modal hole disappears
                 setPhase4CardRect(null);
@@ -1742,6 +1821,7 @@ export default function MintBasketsExplainer({
               pendingRect={phase5PendingRect}
               onDone={handleDone}
               onNext={handleGoToPhase6}
+              onSkip={handleDone}
             />
           </motion.div>
         )}
