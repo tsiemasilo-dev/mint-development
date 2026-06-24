@@ -246,6 +246,26 @@ async function runMonthlySettlement(db, asOf = new Date(), { force = false, user
         type: "investment",
         payload: { action: "aum_fee_deducted", strategy_id: seg.strategy_id, period: periodMonth, amount_cents: deducted, receivable_cents: receivable },
       });
+
+      // Monthly transaction-history line item so the client sees the deduction.
+      // DISPLAY-ONLY ledger row — the wallet balance is a stored column (wallets.balance),
+      // so this does NOT move the wallet; the fee already came out of the strategy sleeve.
+      const periodLabel = new Date(periodMonth + "T00:00:00Z").toLocaleString("en-ZA", { month: "long", year: "numeric", timeZone: "UTC" });
+      try {
+        await db.from("transactions").insert({
+          user_id: seg.user_id,
+          family_member_id: seg.family_member_id || null,
+          direction: "debit",
+          name: "AUM fee",
+          description: `Monthly AUM management fee — ${stratName} — ${periodLabel}`,
+          amount: deducted,
+          store_reference: `AUM-FEE-${periodMonth}-${seg.strategy_id}`,
+          currency: "ZAR",
+          status: "posted",
+          transaction_date: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) { console.error("[aum-settle] history row insert failed:", e?.message || e); }
     }
 
     aumCollectedCents += deducted; settledCount++;
