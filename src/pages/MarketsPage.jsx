@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, PlayCircle } from "lucide-react";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -18,6 +18,7 @@ import { Area, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip,
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
+import MintBasketsExplainer, { BASKETS_EXPLAINER_KEY } from "../components/MintBasketsExplainer.jsx";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -362,7 +363,7 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
@@ -393,6 +394,29 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   useEffect(() => {
     onViewModeChange?.(viewMode);
   }, [viewMode]);
+
+  const [showBasketsExplainer, setShowBasketsExplainer] = useState(false);
+  const basketsTabRef = useRef(null);
+  useEffect(() => {
+    if (viewMode === "openstrategies" && !childFilter) {
+      const alreadySeen = localStorage.getItem(BASKETS_EXPLAINER_KEY) === "true";
+      setShowBasketsExplainer(!alreadySeen);
+    } else {
+      setShowBasketsExplainer(false);
+    }
+  }, [viewMode, childFilter]);
+
+  const handleReplayTutorial = () => {
+    localStorage.removeItem(BASKETS_EXPLAINER_KEY);
+    setShowBasketsExplainer(true);
+  };
+
+  // Pre-fetch Lottie JSON on page mount so the browser cache is warm
+  useEffect(() => {
+    fetch("https://lottie.host/abde670e-c9ef-40b6-9009-6dfb6bbebc0a/1ank9HLrmf.json")
+      .catch(() => {});
+  }, []);
+
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
@@ -1380,6 +1404,26 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+      {showBasketsExplainer && (
+        <MintBasketsExplainer
+          onDone={() => setShowBasketsExplainer(false)}
+          tabRef={basketsTabRef}
+          onOpenStrategyForCoach={(name) => {
+            const target =
+              strategies.find(s => (s.short_name || s.name) === name) ??
+              strategies.find(s => (s.short_name || s.name || '').toLowerCase().includes('famous')) ??
+              strategies[0];
+            if (target) setSelectedStrategy(target);
+          }}
+          onNavigateToFactsheetForCoach={() => {
+            const btn = document.querySelector('[data-coach-factsheet-btn="true"]');
+            if (btn) btn.click();
+          }}
+          onCloseStrategyForCoach={() => setSelectedStrategy(null)}
+          onNavigateToHome={() => onNavigateToHome?.()}
+          onNavigateToInvest={() => onNavigateToInvest?.()}
+        />
+      )}
       {/* Header */}
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
@@ -1409,7 +1453,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
@@ -1417,6 +1461,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           {viewMode !== "news" && !childFilter && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
+                ref={basketsTabRef}
                 onClick={() => {
                   setViewMode("openstrategies");
                   setActiveChips(buildChipsFromFilters(_savedStrat));
@@ -1441,6 +1486,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }`}
               >
                 Markets
+              </button>
+            </div>
+          )}
+
+          {viewMode === "openstrategies" && !childFilter && (
+            <div className="flex items-start justify-between gap-3 -mt-2">
+              <p className="text-[11px] text-white/70 leading-relaxed flex-1">
+                A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. The assets are held directly in your name, not pooled.
+              </p>
+              <button
+                type="button"
+                onClick={handleReplayTutorial}
+                title="Watch tutorial"
+                aria-label="Watch tutorial"
+                className="group flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
+              >
+                <PlayCircle className="h-4 w-4 text-white/70 group-hover:text-white transition-colors" />
               </button>
             </div>
           )}
@@ -1951,6 +2013,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           setSelectedStrategy({ ...strategy, slug: strategy.slug });
                           if (childFilter) setShowChildInvestModal(true);
                         }}
+                        data-coach-target={displayName?.toLowerCase().includes('famous') ? 'true' : undefined}
+                        data-coach-first={sectorStrategies[0]?.id === strategy.id ? 'true' : undefined}
+                        data-coach-name={displayName}
+                        data-coach-desc={truncatedDescription || ''}
                         className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
                         <div className="flex items-start gap-3">
@@ -2137,18 +2203,18 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <motion.div
                 key="preview-backdrop"
                 className="fixed inset-0"
-                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)" }}
+                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)", pointerEvents: showBasketsExplainer ? "none" : undefined }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                onClick={() => setSelectedStrategy(null)}
+                onClick={() => { if (showBasketsExplainer) return; setSelectedStrategy(null); }}
               />
               {/* Sheet */}
               <motion.div
                 key="preview-sheet"
                 className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
-                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                style={{ zIndex: 9999, maxHeight: "92dvh", pointerEvents: showBasketsExplainer ? "none" : undefined }}
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
@@ -2360,6 +2426,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <div className="mt-6 flex flex-col gap-2">
                 <button
                   onClick={() => {
+                    if (showBasketsExplainer) return;
                     const hArr = getHoldingsArray(selectedStrategy);
                     const enrichedHoldings = hArr.map(h => {
                       const sym = h.ticker || h.symbol || h;
@@ -2370,12 +2437,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     setSelectedStrategy(null);
                     setTimeout(() => onInvestNow?.(enrichedStrategy), 220);
                   }}
+                  data-coach-invest-btn="true"
                   className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
                 >
                   Invest Now
                 </button>
                 <button
                   onClick={() => {
+                    if (showBasketsExplainer) return;
                     setSelectedStrategy(null);
                     const hArr = getHoldingsArray(selectedStrategy);
                     const enrichedHoldings = hArr.map(h => {
@@ -2385,6 +2454,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     });
                     onOpenFactsheet({ ...selectedStrategy, calculatedMinInvestment: calculateMinInvestmentSync(selectedStrategy, holdingsBySymbol), holdingsWithLogos: enrichedHoldings });
                   }}
+                  data-coach-factsheet-btn="true"
                   className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
                 >
                   View Factsheet

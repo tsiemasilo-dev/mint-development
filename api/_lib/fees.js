@@ -22,6 +22,7 @@ export const FEE_CONSTANTS = {
   OZOW_TRANSACTION_FEE_RATE:    0.038,  // 3.8% — Ozow payments
   REB_BROKERAGE_RATE:           0.005,  // CRM rebalance brokerage (0.5%)
   REB_CUSTODY_FEE:              69,     // CRM rebalance custody (per ISIN, per client)
+  AUM_FEE_RATE:                 0.0099, // Annual AUM management fee (0.99% p.a.), accrued daily actual/365, settled monthly from the cash sleeve. CEO-tunable.
 };
 
 // Map the `app_settings('fees').value` JSONB → the FEE_CONSTANTS shape. JSONB
@@ -38,6 +39,7 @@ function feesJsonToConstants(j) {
     OZOW_TRANSACTION_FEE_RATE:    num(j.ozowTransactionFeeRate,    FEE_CONSTANTS.OZOW_TRANSACTION_FEE_RATE),
     REB_BROKERAGE_RATE:           num(j.rebBrokerageRate,          FEE_CONSTANTS.REB_BROKERAGE_RATE),
     REB_CUSTODY_FEE:              num(j.rebCustodyFee,             FEE_CONSTANTS.REB_CUSTODY_FEE),
+    AUM_FEE_RATE:                 num(j.aumFeeRate,                FEE_CONSTANTS.AUM_FEE_RATE),
   };
 }
 

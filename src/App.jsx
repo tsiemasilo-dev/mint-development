@@ -1465,6 +1465,8 @@ const App = () => {
                   onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
                   onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
                   childFilter={marketsChildFilter}
+                  onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
+                  onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
                 />
               </AppLayout>
             )}
@@ -2347,18 +2349,34 @@ const App = () => {
 
   if (currentPage === "paymentSuccess") {
     let successStrategyName = null;
+    let successAmount = null;
     try {
       const raw = sessionStorage.getItem("ozow_pending");
-      if (raw) successStrategyName = JSON.parse(raw)?.strategyName || null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        successStrategyName = parsed?.strategyName || null;
+        successAmount = parsed?.amount ? Number(parsed.amount) : null;
+      }
     } catch {}
     return (
       <PaymentSuccessPage
         strategyName={successStrategyName}
         onDone={() => {
+          console.log("[PaymentSuccess] onDone fired. successStrategyName=", successStrategyName, "ozow_pending=", sessionStorage.getItem("ozow_pending"));
+          if (successStrategyName) {
+            sessionStorage.setItem("mint_coach_pending_sim", successStrategyName);
+            console.log("[PaymentSuccess] Set mint_coach_pending_sim =", successStrategyName);
+          } else {
+            console.warn("[PaymentSuccess] successStrategyName is null/empty — sim will NOT be set");
+          }
           sessionStorage.removeItem("ozow_pending");
           navigationHistory.current = [];
           setPreviousPageName(null);
           setCurrentPage("home");
+          // Trigger home page re-render so it picks up mint_coach_pending_sim
+          setTimeout(() => {
+            try { window.dispatchEvent(new Event("mint-coach-sim-update")); } catch {}
+          }, 100);
         }}
       />
     );

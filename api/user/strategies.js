@@ -137,6 +137,17 @@ export default async function handler(req, res) {
         Object.entries(txIdsByStrat).forEach(([sid, set]) => { let s = 0; set.forEach(tid => { s += bufById[tid] || 0; }); bufferByStrat[sid] = s / 100; });
       }
 
+      // AUM management fee taken from the sleeve reduces the held 8% buffer
+      // (separate accumulator, never mixed with broker slippage).
+      try {
+        const { data: aumRows } = await db
+          .from("strategy_aum_fee_state")
+          .select("strategy_id, aum_fee_consumed_cents")
+          .eq("user_id", userId).is("family_member_id", null)
+          .in("strategy_id", holdingStrategyIds);
+        (aumRows || []).forEach(r => { if (r.strategy_id) bufferByStrat[r.strategy_id] = (bufferByStrat[r.strategy_id] || 0) - Number(r.aum_fee_consumed_cents || 0) / 100; });
+      } catch (e) { /* table may not exist yet */ }
+
       // Realised P&L from closed positions: Σ (avg_exit − avg_fill) × qty (cents → rands).
       for (const h of (userHoldings || [])) {
         if (h.is_active !== false || !h.strategy_id) continue;

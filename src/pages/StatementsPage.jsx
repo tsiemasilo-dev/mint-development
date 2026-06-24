@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, buildHoldingsBySymbol, getStrategyHoldingsSnapshot } from "../lib/strategyUtils";
 import { useTransactions } from "../lib/useFinancialData";
+import { useFees } from "../lib/useFees";
 import SettlementBadge from "../components/PendingBadge";
 import { useSettlementConfig, getSettlementStatusForHolding } from "../lib/useSettlementStatus";
 
@@ -97,6 +98,7 @@ const DateRangePills = ({ dateRange, setDateRange }) => (
 
 const StatementsPage = ({ onOpenNotifications }) => {
   const { profile } = useProfile();
+  const { AUM_FEE_RATE } = useFees();
   const settlementCfg = useSettlementConfig();
   const holdingSettlementStatus = getSettlementStatusForHolding(settlementCfg);
 
@@ -1069,7 +1071,7 @@ const StatementsPage = ({ onOpenNotifications }) => {
                     {[
                       ["Min Investment", selectedCard.minInvestment ? formatCurrency(selectedCard.minInvestment) : null],
                       ["Provider", selectedCard.providerName],
-                      ["Mgmt Fee", selectedCard.managementFeeBps != null ? `${(selectedCard.managementFeeBps / 100).toFixed(2)}%` : null],
+                      ["AUM Fee", `${+(AUM_FEE_RATE * 100).toFixed(2)}% p.a.`],
                       ["As of", selectedCard.date],
                     ].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label} className="rounded-2xl border border-slate-100 bg-white p-3.5">

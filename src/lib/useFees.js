@@ -16,6 +16,7 @@ export const FEE_DEFAULTS = {
   WALLET_TRANSACTION_FEE_RATE: 0.01,
   OZOW_TRANSACTION_FEE_RATE:   0.038,
   CASH_BUFFER_RATE:            0.08,
+  AUM_FEE_RATE:                0.0099, // Annual management fee — display only (0.99% p.a.)
 };
 
 const num = (v, d) => (v == null || v === "" || isNaN(Number(v)) ? d : Number(v));
@@ -28,6 +29,7 @@ function mapFees(f) {
     WALLET_TRANSACTION_FEE_RATE: num(f.WALLET_TRANSACTION_FEE_RATE ?? f.walletTransactionFeeRate,                      FEE_DEFAULTS.WALLET_TRANSACTION_FEE_RATE),
     OZOW_TRANSACTION_FEE_RATE:   num(f.OZOW_TRANSACTION_FEE_RATE   ?? f.ozowTransactionFeeRate,                        FEE_DEFAULTS.OZOW_TRANSACTION_FEE_RATE),
     CASH_BUFFER_RATE:            num(f.CASH_BUFFER_RATE            ?? f.EXECUTION_RESERVE_RATE ?? f.executionReserveRate, FEE_DEFAULTS.CASH_BUFFER_RATE),
+    AUM_FEE_RATE:                num(f.AUM_FEE_RATE                ?? f.aumFeeRate,                                    FEE_DEFAULTS.AUM_FEE_RATE),
   };
 }
 

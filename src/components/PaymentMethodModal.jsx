@@ -30,7 +30,7 @@ const PaymentMethodModal = ({
   const [ozowLoading, setOzowLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(null); // null | 'wallet' | 'ozow'
   const [walletConfirming, setWalletConfirming] = useState(false);
-  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE } = useFees();
+  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
   const bufferedBase = fees?.bufferedBase ?? (baseAmount || amount || 0) * 1.08;
   const brokerFee = fees?.brokerAmount ?? bufferedBase * 0.0025;
   const isinTotal = fees?.isinTotal ?? 0;
@@ -252,6 +252,11 @@ const PaymentMethodModal = ({
                       <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
                       <span className="font-semibold text-slate-900">{formatAmount(walletTxFee)}</span>
                     </div>
+                    {/* Recurring annual management fee — disclosure, NOT part of Total to Deduct. */}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                      <span className="font-medium text-slate-400">monthly from cash</span>
+                    </div>
                     <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
                       <span className="font-bold text-slate-700">Total to Deduct</span>
                       <span className="font-bold text-violet-700">{formatAmount(walletTotal)}</span>
@@ -328,6 +333,11 @@ const PaymentMethodModal = ({
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
                       <span className="font-semibold text-slate-900">{formatAmount(ozowTxFee)}</span>
+                    </div>
+                    {/* Recurring annual management fee — disclosure, NOT part of Total. */}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                      <span className="font-medium text-slate-400">monthly from cash</span>
                     </div>
                     <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
                       <span className="font-bold text-slate-700">Total</span>
@@ -510,6 +520,11 @@ const PaymentMethodModal = ({
                             <div className="flex justify-between text-xs text-slate-600">
                               <span>Transaction fee ({pct(TRANSACTION_FEE_RATE)})</span>
                               <span className="font-medium">{formatAmount(eftTxFee)}</span>
+                            </div>
+                            {/* Recurring annual management fee — disclosure, not in the total. */}
+                            <div className="flex justify-between text-xs text-slate-400">
+                              <span>AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                              <span className="font-medium">monthly from cash</span>
                             </div>
                             <div className="h-px bg-slate-100 my-1" />
                             <div className="flex justify-between text-sm font-semibold text-slate-900">

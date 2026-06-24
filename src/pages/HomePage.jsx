@@ -631,6 +631,29 @@ const HomePage = ({
     return true;
   });
 
+  // Re-render trigger for coach-tour simulated pending order
+  const [coachSimTick, setCoachSimTick] = useState(0);
+  useEffect(() => {
+    const handler = () => setCoachSimTick(t => t + 1);
+    window.addEventListener('mint-coach-sim-update', handler);
+    return () => window.removeEventListener('mint-coach-sim-update', handler);
+  }, []);
+
+  // Auto-scroll to pending section when sim activates via event
+  useEffect(() => {
+    if (coachSimTick === 0) return;
+    const simName = sessionStorage.getItem('mint_coach_pending_sim');
+    console.log('[HomePage] coachSimTick changed =', coachSimTick, 'simName=', simName);
+    if (!simName) return;
+    setTimeout(() => {
+      const el = document.querySelector('[data-coach-pending-orders="true"]');
+      console.log('[HomePage] scroll target el=', el);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  }, [coachSimTick]);
+
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
@@ -1875,6 +1898,38 @@ const HomePage = ({
             };
           });
 
+          // Inject a simulated pending order during the coach tour or right after a payment
+          const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
+          if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
+            const realStrat = safeStrategies.find(s =>
+              (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
+              (s.short_name || '').toLowerCase() === coachSimName.toLowerCase()
+            ) || safeStrategies.find(s =>
+              (s.name || '').toLowerCase().includes(coachSimName.toLowerCase()) ||
+              coachSimName.toLowerCase().includes((s.name || '').toLowerCase())
+            ) || safeStrategies.find(s =>
+              (s.name || '').toLowerCase().includes('famous') ||
+              (s.short_name || '').toLowerCase().includes('famous')
+            ) || safeStrategies[0];
+            const minRands = realStrat?.min_investment
+              ? Math.round(Number(realStrat.min_investment) / 100)
+              : 0;
+            stratGroups.unshift({
+              key: 'coach-sim',
+              strat: {
+                id: 'coach-sim',
+                name: coachSimName,
+                shortName: coachSimName,
+                risk_level: realStrat?.risk_level || 'Growth',
+                image_url: realStrat?.image_url || null,
+                icon_url: realStrat?.icon_url || null,
+                investedAmount: minRands,
+                isPending: true,
+              },
+              txs: [null],
+            });
+          }
+
           const totalGroups = stratGroups.length + pendingAssetItems.length;
           if (totalGroups === 0) return null;
 
@@ -1915,7 +1970,7 @@ const HomePage = ({
           );
 
           return (
-            <section>
+            <section data-coach-pending-orders="true" className="sticky top-0 z-20 pt-6 -mt-6 pb-3 -mb-3" style={{ background: '#f8f6fa' }}>
               <div className="flex items-end justify-between px-5 mb-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-slate-900">Pending orders</p>
@@ -1928,7 +1983,7 @@ const HomePage = ({
                 </div>
               </div>
 
-              <div className="mx-4 space-y-3">
+              <div className="mx-4 space-y-3" data-coach-pending-content="true">
                 {/* Strategy groups */}
                 {stratGroups.map(({ key, strat, txs }) => {
                   const isStack = txs.length > 1;

@@ -667,7 +667,7 @@ const WalletConfirmModal = ({
   onConfirm,
   onNavigateToDeposit,
 }) => {
-  const { WALLET_TRANSACTION_FEE_RATE } = useFees();
+  const { WALLET_TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
 
   const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
   const brokerFee    = fees?.brokerAmount ?? 0;
@@ -721,6 +721,10 @@ const WalletConfirmModal = ({
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+            <span className="font-medium text-slate-400">monthly from cash</span>
           </div>
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total to Deduct</span>
@@ -792,7 +796,7 @@ const OzowConfirmModal = ({
   onCancel,
   onConfirm,
 }) => {
-  const { OZOW_TRANSACTION_FEE_RATE } = useFees();
+  const { OZOW_TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
 
   const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
   const brokerFee    = fees?.brokerAmount ?? 0;
@@ -847,6 +851,10 @@ const OzowConfirmModal = ({
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+            <span className="font-medium text-slate-400">monthly from cash</span>
           </div>
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total</span>

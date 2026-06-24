@@ -27,6 +27,7 @@ export default async function handler(req, res) {
         EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
         // alias the client code already uses for the 8% reserve
         CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
+        AUM_FEE_RATE:           c.AUM_FEE_RATE,
       },
     });
   } catch (err) {
