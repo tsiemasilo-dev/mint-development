@@ -722,6 +722,7 @@ const WalletConfirmModal = ({
             <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
           </div>
+          {/* Recurring annual management fee — disclosure, NOT part of Total to Deduct. */}
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
             <span className="font-medium text-slate-400">monthly from cash</span>
@@ -852,6 +853,7 @@ const OzowConfirmModal = ({
             <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
           </div>
+          {/* Recurring annual management fee — disclosure, NOT part of Total. */}
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
             <span className="font-medium text-slate-400">monthly from cash</span>
