@@ -469,6 +469,14 @@ app.use([
 
 app.use(express.json({ limit: "20mb" }));
 
+// Public runtime config — exposes only non-secret public keys to the browser
+app.get("/api/config", (req, res) => {
+  res.json({
+    supabaseUrl: SUPABASE_URL || "",
+    supabaseAnonKey: SUPABASE_ANON_KEY || "",
+  });
+});
+
 // Local Content Security Policy for testing framing of and by TrueID
 app.use((req, res, next) => {
   res.setHeader(

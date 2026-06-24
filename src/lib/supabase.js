@@ -1,39 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "Missing Supabase environment variables. Please check your secrets.",
-  );
-  console.error("VITE_SUPABASE_URL:", supabaseUrl ? "set" : "not set");
-  console.error("VITE_SUPABASE_ANON_KEY:", supabaseAnonKey ? "set" : "not set");
-}
-
-// ── Global auth cache & deduplication patch ───────────────────────────────────
-//
-// Root problem: 40+ components call getSession() AND 28+ components call
-// getUser() simultaneously on mount. Both fight over a Web Locks mutex inside
-// @supabase/gotrue-js. In a throttled background tab the lock is orphaned,
-// callers wait 5 s then fight with the 'steal' option → AbortError cascades →
-// pages freeze in infinite skeleton / R0 balance.
-//
-// getUser() is worse: it makes a real network POST to /auth/v1/user every call,
-// adding 200-800 ms latency even when the user object is already in the JWT.
-//
-// Fix — patch both methods at the singleton level:
-//  • getSession: deduplicate concurrent calls via one in-flight promise; cache
-//    result until 60 s before JWT expiry; return stale cache on AbortError.
-//  • getUser:    return the user from the cached session immediately, with no
-//    network round-trip. Falls back to a real call only when the cache is empty.
-//
-// Both patches are applied once when the client is first created and stored in
-// globalThis so Vite HMR reloads reuse the same GoTrueClient instance (avoids
-// the "Multiple GoTrueClient instances" console warning).
-// ─────────────────────────────────────────────────────────────────────────────
-
 const GLOBAL_CLIENT_KEY = "__mint_supabase_v2__";
+const GLOBAL_CONFIG_KEY = "__mint_supabase_config__";
 
 function _parseTokenExpiry(token) {
   try {
@@ -44,7 +12,7 @@ function _parseTokenExpiry(token) {
   }
 }
 
-function createAndPatch() {
+function createAndPatch(supabaseUrl, supabaseAnonKey) {
   const client = createClient(supabaseUrl, supabaseAnonKey, {
     realtime: { timeout: 40000 },
     auth: {
@@ -58,12 +26,10 @@ function createAndPatch() {
   const _origGetUser = client.auth.getUser.bind(client.auth);
   const _origRefreshSession = client.auth.refreshSession.bind(client.auth);
 
-  let _cached = null; // full session object
-  let _expiry = 0; // ms timestamp: when access_token expires
-  let _inflight = null; // shared Promise while a real getSession fetch is running
+  let _cached = null;
+  let _expiry = 0;
+  let _inflight = null;
 
-  // Pre-warm cache via auth state events. Fires immediately on subscription
-  // with the current session, so cache is ready before any component mounts.
   client.auth.onAuthStateChange((event, session) => {
     if (session?.access_token) {
       _cached = session;
@@ -76,18 +42,12 @@ function createAndPatch() {
     }
   });
 
-  // ── Patch: getSession ──────────────────────────────────────────────────────
   client.auth.getSession = async function patchedGetSession() {
     const now = Date.now();
-
-    // Serve from cache when token has > 60 s remaining
     if (_cached?.access_token && _expiry > now + 60000) {
       return { data: { session: _cached }, error: null };
     }
-
-    // Deduplicate: all concurrent callers share one in-flight fetch
     if (_inflight) return _inflight;
-
     _inflight = _origGetSession()
       .then(async (result) => {
         _inflight = null;
@@ -97,64 +57,82 @@ function createAndPatch() {
           _expiry = _parseTokenExpiry(session.access_token);
           return result;
         }
-        // No session found — return null result.
-        // Do NOT call _origRefreshSession() here: autoRefreshToken:true already
-        // handles refresh automatically, and calling it manually can fire a
-        // spurious SIGNED_OUT event when there is no refresh token, which
-        // causes an infinite loop in the auth state machine.
         return result;
       })
       .catch((err) => {
         _inflight = null;
-        // AbortError from Web Locks contention — serve stale cache instead
         if (_cached?.access_token) {
-          console.warn(
-            "[supabase] getSession failed, returning cached session:",
-            err.message,
-          );
+          console.warn("[supabase] getSession failed, returning cached session:", err.message);
           return { data: { session: _cached }, error: null };
         }
         return { data: { session: null }, error: err };
       });
-
     return _inflight;
   };
 
-  // ── Patch: getUser ─────────────────────────────────────────────────────────
-  // The original getUser() POSTs to /auth/v1/user on every call (~200-800 ms).
-  // The session JWT already contains an up-to-date user object — return that
-  // instead. Only fall back to the real network call when no session is cached.
   client.auth.getUser = async function patchedGetUser(jwt) {
-    // If a specific JWT was passed, delegate to original (security-sensitive path)
     if (jwt) return _origGetUser(jwt);
-
-    // If we have a cached session with a valid user, return it immediately
     if (_cached?.user && _cached?.access_token) {
       return { data: { user: _cached.user }, error: null };
     }
-
-    // Cache miss — call patched getSession (which deduplicates + caches) then
-    // extract the user from the result. This avoids a separate network request.
-    const { data: sessionData, error: sessionError } =
-      await client.auth.getSession();
+    const { data: sessionData, error: sessionError } = await client.auth.getSession();
     if (sessionData?.session?.user) {
       return { data: { user: sessionData.session.user }, error: null };
     }
-
-    // Absolute fallback: real network call (e.g. very first page load with no
-    // cached session in localStorage)
     return _origGetUser();
   };
 
   return client;
 }
 
-// Reuse the existing client across HMR reloads; only create once per page load.
-// Re-attempt initialization on each HMR cycle in case env vars weren't available
-// on the very first module load (e.g. Vite dev server started before secrets).
-if (!globalThis[GLOBAL_CLIENT_KEY] && supabaseUrl && supabaseAnonKey) {
-  globalThis[GLOBAL_CLIENT_KEY] = createAndPatch();
+// Fetch config from the server and initialize the Supabase client
+async function initSupabase() {
+  if (globalThis[GLOBAL_CLIENT_KEY]) return globalThis[GLOBAL_CLIENT_KEY];
+
+  // Try VITE_ env vars first (works in some Replit setups)
+  let supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+  let supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+  // Fall back to server-side config endpoint if anon key not available
+  if (!supabaseAnonKey) {
+    try {
+      const res = await fetch("/api/config");
+      if (res.ok) {
+        const cfg = await res.json();
+        supabaseUrl = cfg.supabaseUrl || supabaseUrl;
+        supabaseAnonKey = cfg.supabaseAnonKey || "";
+      }
+    } catch (e) {
+      console.warn("[supabase] Could not fetch /api/config:", e.message);
+    }
+  }
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Missing Supabase environment variables. Please check your secrets.");
+    console.error("VITE_SUPABASE_URL:", supabaseUrl ? "set" : "not set");
+    console.error("VITE_SUPABASE_ANON_KEY:", supabaseAnonKey ? "set" : "not set");
+    return null;
+  }
+
+  globalThis[GLOBAL_CONFIG_KEY] = { supabaseUrl, supabaseAnonKey };
+  globalThis[GLOBAL_CLIENT_KEY] = createAndPatch(supabaseUrl, supabaseAnonKey);
+  return globalThis[GLOBAL_CLIENT_KEY];
 }
 
-export const supabase =
-  supabaseUrl && supabaseAnonKey ? (globalThis[GLOBAL_CLIENT_KEY] ?? null) : null;
+// Synchronous getter — returns existing client or null; call initSupabase() to bootstrap
+export function getSupabaseClient() {
+  return globalThis[GLOBAL_CLIENT_KEY] ?? null;
+}
+
+// Start initialization immediately (fire-and-forget; components use the promise)
+export const supabaseReady = initSupabase();
+
+// Legacy named export — null until initSupabase() resolves; safe for guards like `if (!supabase)`
+export let supabase = globalThis[GLOBAL_CLIENT_KEY] ?? null;
+
+// Patch the export once initialized so modules that imported `supabase` get the real client
+supabaseReady.then((client) => {
+  supabase = client;
+  // Notify any listeners that supabase is ready
+  window.dispatchEvent(new CustomEvent("supabase:ready", { detail: client }));
+}).catch(() => {});
