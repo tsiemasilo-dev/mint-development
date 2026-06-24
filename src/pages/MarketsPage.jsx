@@ -399,7 +399,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      setShowBasketsExplainer(true);
+      const alreadySeen = localStorage.getItem(BASKETS_EXPLAINER_KEY) === "true";
+      setShowBasketsExplainer(!alreadySeen);
     } else {
       setShowBasketsExplainer(false);
     }
@@ -1447,7 +1448,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className={childFilter ? "text-sm font-bold tracking-[0.18em] uppercase" : "text-lg font-semibold"}>{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
             <NotificationBell onClick={onOpenNotifications} />
           </header>
 
@@ -1482,6 +1483,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 Markets
               </button>
             </div>
+          )}
+
+          {viewMode === "openstrategies" && !childFilter && (
+            <p className="text-[11px] text-white/70 leading-relaxed -mt-2">
+              A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. The assets are held directly in your name, not pooled.
+            </p>
           )}
 
           {viewMode === "invest" && (
