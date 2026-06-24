@@ -1993,6 +1993,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           setSelectedStrategy({ ...strategy, slug: strategy.slug });
                           if (childFilter) setShowChildInvestModal(true);
                         }}
+                        data-coach-target={displayName?.toLowerCase().includes('famous') ? 'true' : undefined}
+                        data-coach-first={sectorStrategies[0]?.id === strategy.id ? 'true' : undefined}
+                        data-coach-name={displayName}
+                        data-coach-desc={truncatedDescription || ''}
                         className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
                         <div className="flex items-start gap-3">
