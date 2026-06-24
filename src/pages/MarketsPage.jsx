@@ -399,8 +399,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      if (!sessionStorage.getItem("mint_baskets_coach_shown")) {
-        sessionStorage.setItem("mint_baskets_coach_shown", "1");
+      if (!sessionStorage.getItem("mint_baskets_coach_shown_v2")) {
+        sessionStorage.setItem("mint_baskets_coach_shown_v2", "1");
         setShowBasketsExplainer(true);
       }
     } else {
