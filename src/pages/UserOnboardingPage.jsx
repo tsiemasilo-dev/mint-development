@@ -1233,8 +1233,9 @@ const OnboardingProcessPage = ({ onBack, onComplete, editMandate = false }) => {
                 ) : null}
 
                 {experianAddrLoading ? null : (experianAddresses && experianAddresses.length > 0 && !manualAddressMode) ? null : (
-                  /* Manual fallback (no bureau address, or user opted out of bureau address)
-                     — structured fields guaranteed format + postal code, plus required PoA. */
+                  /* Manual fallback (no bureau address) — structured fields on one row
+                     so the format + postal code are guaranteed, plus a required
+                     proof-of-address document. */
                   <>
                     <style>{"@keyframes poaspin{to{transform:rotate(360deg)}}"}</style>
                     {(experianAddresses && experianAddresses.length > 0) && (
