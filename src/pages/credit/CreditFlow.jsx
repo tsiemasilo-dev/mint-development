@@ -104,6 +104,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
   const [loanTermMonths, setLoanTermMonths] = useState(3);
+  // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
+  const [addrPrompt, setAddrPrompt] = useState(false);
+  const [addr1, setAddr1] = useState("");   // street
+  const [addr2, setAddr2] = useState("");   // suburb / area
+  const [addrPostal, setAddrPostal] = useState("");
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -197,6 +202,14 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setConsentDone(consented);
       setCreditDone(scored);
       setIdOnFile(raw.identity_details?.identity_number || "");
+      // Address sources (best-effort): a previously-entered credit address →
+      // onboarding manual address → bureau KYC address → profile.
+      const ca = raw.credit_address || {};
+      const ad = raw.address_details || {};
+      const kyc0 = (Array.isArray(raw.experian_kyc_addresses) && raw.experian_kyc_addresses[0]) || {};
+      setAddr1(ca.address1 || ad.street || (kyc0.lines && kyc0.lines[0]) || profile?.address || "");
+      setAddr2(ca.address2 || ad.city || ad.suburb || (kyc0.lines && kyc0.lines[1]) || "");
+      setAddrPostal(ca.postal_code || ad.postal_code || kyc0.postalCode || profile?.postalCode || profile?.postal_code || "");
       if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(bandFor(Number(raw.credit_score))); }
       if (raw.credit_requested_amount) setLoanAmount(Number(raw.credit_requested_amount));
       if (raw.credit_requested_term) setLoanTermMonths(Number(raw.credit_requested_term));
@@ -210,52 +223,74 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const goMarketplace = useCallback(() => setStep("marketplace"), []);
 
-  // The single credit bureau enquiry — real Experian pull via /api/credit-check
-  // (needs only identity_number + name; reused across all lenders, never re-pulled).
+  // The single credit bureau enquiry — real Experian pull via /api/credit-check.
+  // ID is mandatory (fetched first). Address (street+suburb+postal) is required by
+  // Experian; if it's missing we prompt for it before/after the call rather than
+  // burning a guaranteed-fail enquiry. ClientRef is sanitized server-side (≤20).
   const runBureau = useCallback(async () => {
     setScoreError("");
+    const idNum = (idOnFile || profile?.idNumber || profile?.id_number || "").replace(/\D/g, "");
+    const forename = profile?.firstName || profile?.first_name || "";
+    const surname = profile?.lastName || profile?.last_name || "";
+    // ID is the one thing we can't proceed without — it's fetched at the very start.
+    if (!/^\d{13}$/.test(idNum) || !forename || !surname) {
+      setScoreError("We couldn't find your verified ID — please complete the identity step first.");
+      return;
+    }
+    // Address must be complete or Experian rejects the enquiry (-121/-122). If it's
+    // missing, prompt instead of wasting a billable call + the 30-min cooldown.
+    const street = (addr1 || "").trim(), suburb = (addr2 || "").trim(), postal = (addrPostal || "").trim();
+    if (!street || !suburb || !postal) {
+      setAddrPrompt(true);
+      setScoreError("We need your address to run the credit check.");
+      return;
+    }
+
     setBureauRunning(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("You must be signed in to continue.");
-      const idNum = (idOnFile || profile?.idNumber || profile?.id_number || "").replace(/\D/g, "");
-      const forename = profile?.firstName || profile?.first_name || "";
-      const surname = profile?.lastName || profile?.last_name || "";
-      if (!/^\d{13}$/.test(idNum) || !forename || !surname) {
-        throw new Error("Missing verified identity — please complete the previous steps.");
-      }
       const res = await fetch("/api/credit-check", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           userData: {
             identity_number: idNum, forename, surname,
-            postal_code: profile?.postalCode || profile?.postal_code || "0152",
-            address1: profile?.address || undefined,
+            gender: profile?.gender || undefined,
+            date_of_birth: profile?.dateOfBirth || profile?.date_of_birth || undefined,
+            address1: street, address2: suburb, postal_code: postal,
           },
         }),
       });
-      const result = await res.json();
-      if (!res.ok || result?.success === false) throw new Error(result?.error || "Credit check could not be completed.");
-      const s = Number(result.creditScore);
-      const hasScore = Number.isFinite(s);
+      const data = await res.json();
+      // Surface the exact Experian error so the user can see it (per request).
+      const experianError = data?.raw?.error || data?.error;
+      if (!res.ok || data?.success !== true) {
+        setScoreError(experianError || "Credit check could not be completed.");
+        if (/address/i.test(String(experianError || ""))) setAddrPrompt(true);
+        return;
+      }
+      const s = Number(data.creditScore);
+      const hasScore = Number.isFinite(s) && s > 0;
+      const band = data?.raw?.creditScore?.riskType || data.score_band || bandFor(s);
       setScore(hasScore ? s : null);
-      setScoreBand(result.score_band || result.riskType || bandFor(s));
+      setScoreBand(band);
       setCreditDone(true);
       await saveCreditFlag({
         credit_score: hasScore ? s : null,
-        credit_score_band: result.score_band || result.riskType || bandFor(s),
+        credit_score_band: band,
         credit_score_at: new Date().toISOString(),
         credit_requested_amount: loanAmount,
         credit_requested_term: loanTermMonths,
+        credit_address: { address1: street, address2: suburb, postal_code: postal },
       });
     } catch (e) {
       setScoreError(e?.message || "Credit check could not be completed.");
     } finally {
       setBureauRunning(false);
     }
-  }, [idOnFile, profile, loanAmount, loanTermMonths, saveCreditFlag]);
+  }, [idOnFile, profile, addr1, addr2, addrPostal, loanAmount, loanTermMonths, saveCreditFlag]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -460,6 +495,33 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 {bureauRunning ? "Checking your credit…" : creditDone ? "Run again" : "Run credit check"}
               </button>
             </section>
+
+            {/* Address prompt — appears when address is missing or Experian rejects it. */}
+            {addrPrompt && (
+              <section className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-amber-600" />
+                  <h3 className="text-sm font-semibold text-slate-900">Confirm your address</h3>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">The credit bureau needs your residential address to run the check.</p>
+                <input value={addr1} onChange={(e) => setAddr1(e.target.value)} placeholder="Street address"
+                  className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-violet-400" />
+                <input value={addr2} onChange={(e) => setAddr2(e.target.value)} placeholder="Suburb / area"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-violet-400" />
+                <input value={addrPostal} onChange={(e) => setAddrPostal(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" placeholder="Postal code"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm tracking-widest text-slate-900 outline-none focus:border-violet-400" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!addr1.trim() || !addr2.trim() || !addrPostal.trim()) { setScoreError("Please fill in all address fields."); return; }
+                    setScoreError(""); setAddrPrompt(false); runBureau();
+                  }}
+                  className="mt-4 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]"
+                >
+                  Save &amp; continue
+                </button>
+              </section>
+            )}
 
             {/* Lean loan config — amount + term only. Lenders set the actual rate/terms. */}
             <section className="mt-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
