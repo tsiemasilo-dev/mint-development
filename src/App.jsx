@@ -22,6 +22,7 @@ const MorePage = lazy(() => import("./pages/MorePage.jsx"));
 
 const AuthPage = lazy(() => import("./pages/AuthPage.jsx"));
 const CreditApplyPage = lazy(() => import("./pages/CreditApplyPage.jsx"));
+const CreditFlow = lazy(() => import("./pages/credit/CreditFlow.jsx"));
 const UnsecuredCreditDashboard = lazy(() => import("./pages/credit/UnsecuredCreditDashboard.jsx"));
 const CreditRepayPage = lazy(() => import("./pages/CreditRepayPage.jsx"));
 const InvestmentsPage = lazy(() => import("./pages/InvestmentsPage.jsx"));
@@ -2652,6 +2653,25 @@ const App = () => {
             setNotificationReturnPage("unsecuredCreditDashboard");
             navigateTo("notifications");
           }}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (currentPage === "creditFlow") {
+    return (
+      <AppLayout
+        activeTab="creditApply"
+        onTabChange={handleTabChange}
+        onWithdraw={handleWithdrawRequest}
+        onShowComingSoon={handleShowComingSoon}
+        modal={modal}
+        onCloseModal={closeModal}
+      >
+        <CreditFlow
+          profile={profile}
+          onBack={() => navigateTo("credit")}
+          onTabChange={navigateTo}
         />
       </AppLayout>
     );
