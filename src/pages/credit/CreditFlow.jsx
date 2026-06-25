@@ -44,6 +44,23 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const goMarketplace = useCallback(() => setStep("marketplace"), []);
 
+  // Bouncy purple coin carried over from the old unsecured-credit first page.
+  const BouncyCoin = () => (
+    <div className="relative mx-auto mb-6 mt-1 flex h-24 w-24 items-start justify-center">
+      <div style={{ animation: "subtleBounce 3s ease-in-out infinite" }}>
+        <img src="/assets/images/coinAlgoMoney.png" alt="MINT" className="h-20 w-20 object-contain drop-shadow-2xl" />
+      </div>
+      <div
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-12 rounded-[100%] bg-black/10 blur-md"
+        style={{ animation: "shadowScale 3s ease-in-out infinite" }}
+      />
+      <style>{`
+        @keyframes subtleBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes shadowScale { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.2; } 50% { transform: translateX(-50%) scale(0.8); opacity: 0.1; } }
+      `}</style>
+    </div>
+  );
+
   const Header = ({ title }) => (
     <header className="flex items-center gap-3 mb-6 relative">
       <button type="button" onClick={onBack} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm flex-shrink-0">
@@ -88,6 +105,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         {step === "consent" && (
           <>
             <Header title="Before we check your credit" />
+            <BouncyCoin />
             <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
                 <ShieldCheck className="h-6 w-6" />
