@@ -69,7 +69,7 @@ const STAGE = {
   ERROR: "error",
 };
 
-const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
+const ExperianVerification = ({ onVerified, standaloneOcr = false, requireOcr = false }) => {
   const [stage, setStage] = useState(STAGE.INITIALIZING);
   const [verificationUrl, setVerificationUrl] = useState(null);
   const [isMockMode, setIsMockMode] = useState(false);
@@ -92,7 +92,9 @@ const ExperianVerification = ({ onVerified, standaloneOcr = false }) => {
   // machinery (workflow "ocr" in start/collect + the 'ocr' phase below) is kept
   // intact so that flow can reuse it; onboarding runs liveness only.
   // Re-enable for onboarding by flipping this (or setting VITE_EXPERIAN_OCR).
-  const OCR_ENABLED = import.meta.env?.VITE_EXPERIAN_OCR === "true";
+  // OCR (ID-document scan): off for invest onboarding (deferred to withdrawal /
+  // 2nd-strategy), but callers can force it on — credit requires it inline.
+  const OCR_ENABLED = requireOcr || import.meta.env?.VITE_EXPERIAN_OCR === "true";
   // standaloneOcr = run the OCR document workflow (wf8) on its own, outside
   // onboarding (e.g. at a secondary-strategy purchase). We start directly in the
   // 'ocr' phase — there's no liveness step to precede it.

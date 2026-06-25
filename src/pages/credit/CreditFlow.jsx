@@ -66,27 +66,49 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, [idNumber]);
 
-  // ── Branch: is the user KYC-verified? (KYC only, ignore investment mandate) ──
+  // Persist a credit-flow flag into user_onboarding.sumsub_raw so the journey is
+  // resumable — leave mid-flow, come back, continue where you left off (spec MC-04).
+  const saveCreditFlag = useCallback(async (patch) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id; if (!uid) return;
+      const { data: rows } = await supabase.from("user_onboarding").select("id, sumsub_raw").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
+      const row = rows?.[0];
+      let raw = {};
+      try { raw = typeof row?.sumsub_raw === "string" ? JSON.parse(row.sumsub_raw) : (row?.sumsub_raw || {}); } catch {}
+      Object.assign(raw, patch);
+      if (row?.id) await supabase.from("user_onboarding").update({ sumsub_raw: raw }).eq("id", row.id);
+      else await supabase.from("user_onboarding").insert({ user_id: uid, sumsub_raw: raw });
+    } catch (e) { console.warn("[CreditFlow] saveCreditFlag failed:", e?.message || e); }
+  }, []);
+
+  // ── Branch + resume. KYC-only (ignore investment mandate, spec §3.1). ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let kycDone = false;
+      let kycDone = false, raw = {};
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token) {
-          const r = await fetch("/api/onboarding/status", { headers: { Authorization: `Bearer ${token}` } });
-          const j = await r.json();
-          kycDone = !!(j?.flags?.kycDone);
+        const uid = session?.user?.id;
+        if (uid) {
+          const { data: rows } = await supabase.from("user_onboarding").select("sumsub_raw, kyc_status").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
+          const row = rows?.[0];
+          kycDone = ["approved", "onboarding_complete", "verified"].includes(row?.kyc_status);
+          try { raw = typeof row?.sumsub_raw === "string" ? JSON.parse(row.sumsub_raw) : (row?.sumsub_raw || {}); } catch {}
         }
       } catch (e) {
-        console.warn("[CreditFlow] KYC status check failed:", e?.message || e);
+        console.warn("[CreditFlow] status check failed:", e?.message || e);
       }
       if (cancelled) return;
-      setKycVerified(kycDone);
-      // Path A (verified) → straight to the bureau step (reuse on-file score later).
-      // Path B (not verified) → consent first.
-      setStep(kycDone ? "bureau" : "consent");
+      const creditKycDone = !!raw.credit_kyc_verified_at;
+      const idDone = !!raw.identity_details?.identity_number;
+      const consentDone = !!raw.credit_consent_at;
+      setKycVerified(kycDone || creditKycDone);
+      setIdConfirmed(idDone);
+      // Resume at the furthest completed point.
+      if (kycDone || creditKycDone) setStep("bureau");       // Path A (verified) → offers
+      else if (consentDone) setStep("kyc");                  // consented → continue KYC (ID/biometric resume themselves)
+      else setStep("consent");                               // Path B (new) → consent first
     })();
     return () => { cancelled = true; };
   }, []);
@@ -184,7 +206,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 If you decline, we can't show you credit offers — we can't make an offer without verifying who you are and checking your credit. You can come back any time.
               </p>
 
-              <button type="button" onClick={() => setStep("kyc")} className="mt-5 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
+              <button type="button" onClick={() => { saveCreditFlag({ credit_consent_at: new Date().toISOString() }); setStep("kyc"); }} className="mt-5 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
                 I agree — continue
               </button>
               <button type="button" onClick={onBack} className="mt-2 w-full rounded-2xl bg-white py-3 text-sm font-semibold text-slate-500">
@@ -224,8 +246,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               </section>
             ) : (
               // Reuses the shared KYC infra (Experian IDMN — liveness + facial match
-              // vs Home Affairs, with its own in-progress/pending/failed states).
-              <ExperianVerification onVerified={() => setStep("bureau")} />
+              // vs Home Affairs + ID-document OCR, which credit requires inline).
+              <ExperianVerification
+                requireOcr
+                onVerified={() => { saveCreditFlag({ credit_kyc_verified_at: new Date().toISOString() }); setStep("bureau"); }}
+              />
             )}
           </>
         )}
