@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { ArrowLeft, ShieldCheck, IdCard, MapPin, Smartphone, ScanFace, Search, CheckCircle2, Loader2, Store } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
@@ -25,29 +25,64 @@ const bandFor = (s) => {
   return "Below average";
 };
 
-// Segmented semicircle gauge (SVG). Fills purple up to the score fraction.
+// Segmented semicircle gauge — canvas port of the reference design: 4 thick
+// rounded segments with 8° gaps, purple fill flows continuously up to the score
+// fraction, with a count-up of the number.
 const ScoreGauge = ({ value }) => {
+  const canvasRef = useRef(null);
+  const numRef = useRef(null);
+  const rafRef = useRef(null);
   const has = Number.isFinite(value);
-  const frac = has ? Math.max(0, Math.min(1, (value - SCORE_MIN) / (SCORE_MAX - SCORE_MIN))) : 0;
-  const SEGS = 5, GAP = 5, TOTAL = 180;
-  const segDeg = (TOTAL - GAP * (SEGS - 1)) / SEGS;
-  const cx = 130, cy = 122, r = 104;
-  const polar = (deg) => { const a = ((deg - 180) * Math.PI) / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
-  const arc = (s, e) => { const [x1, y1] = polar(s), [x2, y2] = polar(e); return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`; };
-  const filled = frac * SEGS;
-  const segs = [];
-  let cur = 0;
-  for (let i = 0; i < SEGS; i++) { segs.push({ d: arc(cur, cur + segDeg), on: (i + 0.5) < filled }); cur += segDeg + GAP; }
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const CW = canvas.width, CH = canvas.height;       // 520 x 300 (hi-res)
+    const cx = CW / 2, cy = CH - 20, R = 205;
+    const SEGS = 4, SEG_W = 22, GAP_DEG = 8, TOTAL_DEG = 180;
+    const SEG_DEG = (TOTAL_DEG - GAP_DEG * (SEGS - 1)) / SEGS;
+    const PURPLE = "#6C3FE0", TRACK = "#EDE9FB";
+    const toRad = (deg) => ((180 + deg) * Math.PI) / 180; // 0° = left
+    const targetFrac = has ? Math.max(0, Math.min(1, (value - SCORE_MIN) / (SCORE_MAX - SCORE_MIN))) : 0;
+
+    const draw = (progress) => {
+      ctx.clearRect(0, 0, CW, CH);
+      const filledDeg = targetFrac * progress * TOTAL_DEG;
+      let cursor = 0;
+      for (let i = 0; i < SEGS; i++) {
+        const segStart = cursor, segEnd = cursor + SEG_DEG;
+        ctx.beginPath(); ctx.arc(cx, cy, R, toRad(segStart), toRad(segEnd));
+        ctx.strokeStyle = TRACK; ctx.lineWidth = SEG_W; ctx.lineCap = "round"; ctx.stroke();
+        const fillEnd = Math.min(segEnd, filledDeg);
+        if (fillEnd > segStart) {
+          ctx.beginPath(); ctx.arc(cx, cy, R, toRad(segStart), toRad(fillEnd));
+          ctx.strokeStyle = PURPLE; ctx.lineWidth = SEG_W; ctx.lineCap = "round"; ctx.stroke();
+        }
+        cursor += SEG_DEG + GAP_DEG;
+      }
+    };
+
+    let startT = null; const dur = 1300;
+    const tick = (t) => {
+      if (startT == null) startT = t;
+      const p = Math.min((t - startT) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      draw(ease);
+      if (numRef.current) numRef.current.textContent = has ? String(Math.round(value * ease)) : "—";
+      if (p < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [value, has]);
+
   return (
     <div className="relative mx-auto" style={{ width: 260, height: 150 }}>
-      <svg width="260" height="140" viewBox="0 0 260 140">
-        {segs.map((s, i) => (
-          <path key={i} d={s.d} fill="none" strokeWidth="16" strokeLinecap="round" stroke={s.on ? "#6C3FE0" : "#EDE9FB"} />
-        ))}
-      </svg>
-      <div className="absolute inset-x-0 text-center" style={{ bottom: 6 }}>
+      <canvas ref={canvasRef} width={520} height={300} style={{ width: 260, height: 150, position: "absolute", top: 0, left: 0 }} />
+      <div className="absolute inset-x-0 text-center" style={{ bottom: 4 }}>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{has ? bandFor(value) : "Credit score"}</div>
-        <div className="text-[44px] font-extrabold leading-none text-slate-900" style={{ letterSpacing: "-2px" }}>{has ? Math.round(value) : "—"}</div>
+        <div ref={numRef} className="text-[44px] font-extrabold leading-none text-slate-900" style={{ letterSpacing: "-2px" }}>—</div>
       </div>
     </div>
   );
@@ -68,7 +103,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [creditDone, setCreditDone] = useState(false);
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
-  const [loanTermMonths, setLoanTermMonths] = useState(24);
+  const [loanTermMonths, setLoanTermMonths] = useState(3);
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -432,30 +467,31 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <p className="mt-1 text-xs text-slate-400">We'll match you to lenders for this amount and term.</p>
 
               <div className="mt-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
-                  <span className="text-xl font-extrabold text-violet-600">R {loanAmount.toLocaleString("en-ZA")}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
+                <div className="mt-2 flex items-center rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-violet-400">
+                  <span className="mr-1 text-base font-semibold text-slate-400">R</span>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
+                    onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
+                    placeholder="0"
+                    className="w-full bg-transparent text-xl font-extrabold text-violet-600 outline-none"
+                  />
                 </div>
-                <input
-                  type="range" min={5000} max={500000} step={5000} value={loanAmount}
-                  onChange={(e) => setLoanAmount(Number(e.target.value))}
-                  className="mt-3 w-full accent-violet-600"
-                />
-                <div className="mt-1 flex justify-between text-[11px] text-slate-400"><span>R 5k</span><span>R 500k</span></div>
+                <p className="mt-1 text-[11px] text-slate-400">Up to R 50,000</p>
               </div>
 
               <div className="mt-5">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repayment term</span>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[12, 24, 36, 48, 60].map((m) => (
-                    <button
-                      key={m} type="button" onClick={() => setLoanTermMonths(m)}
-                      className={`rounded-full px-4 py-2 text-xs font-semibold transition ${loanTermMonths === m ? "bg-violet-600 text-white" : "bg-slate-50 text-slate-500 border border-slate-200"}`}
-                    >
-                      {m} mo
-                    </button>
+                <select
+                  value={loanTermMonths}
+                  onChange={(e) => setLoanTermMonths(Number(e.target.value))}
+                  className="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m} month{m > 1 ? "s" : ""}</option>
                   ))}
-                </div>
+                </select>
               </div>
             </section>
 
