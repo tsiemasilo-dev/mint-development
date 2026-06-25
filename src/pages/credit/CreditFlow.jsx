@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { ArrowLeft, ShieldCheck, IdCard, MapPin, Smartphone, ScanFace, Search, CheckCircle2, Loader2, Store } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import ExperianVerification from "../../components/ExperianVerification";
 
 /**
  * CreditFlow — the unsecured-credit journey per the MINT Credit Journey spec (§3).
@@ -16,6 +17,38 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   // steps: checking | consent | kyc | bureau | marketplace
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
+
+  // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
+  // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
+  const [idNumber, setIdNumber] = useState("");
+  const [idChecking, setIdChecking] = useState(false);
+  const [idError, setIdError] = useState("");
+  const [idConfirmed, setIdConfirmed] = useState(false);
+
+  const handleIdCheck = useCallback(async () => {
+    setIdError("");
+    const clean = idNumber.replace(/\D/g, "");
+    if (!/^\d{13}$/.test(clean)) { setIdError("Please enter a valid 13-digit ID number."); return; }
+    setIdChecking(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setIdError("You must be signed in to continue."); return; }
+      const res = await fetch("/api/onboarding/check-id-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id_number: clean }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to verify ID number.");
+      if (result.exists) { setIdError("An account with this ID number already exists."); return; }
+      setIdConfirmed(true);
+    } catch (e) {
+      setIdError(e?.message || "Failed to verify ID number.");
+    } finally {
+      setIdChecking(false);
+    }
+  }, [idNumber]);
 
   // ── Branch: is the user KYC-verified? (KYC only, ignore investment mandate) ──
   useEffect(() => {
@@ -148,13 +181,36 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         {step === "kyc" && (
           <>
             <Header title="Verify your identity" />
-            <Stub
-              icon={ScanFace}
-              title="Real-time verification"
-              body="We'll verify your ID, address, cellphone and a facial match — reusing the verification you may already have on file, so you don't repeat steps."
-              cta="Continue (stub → bureau)"
-              onCta={() => setStep("bureau")}
-            />
+            {!idConfirmed ? (
+              <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+                  <IdCard className="h-6 w-6" />
+                </div>
+                <h2 className="text-base font-semibold text-slate-900">Your ID number</h2>
+                <p className="mt-2 text-sm text-slate-500">Enter your 13-digit South African ID number to begin verification.</p>
+                <input
+                  value={idNumber}
+                  onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, "").slice(0, 13))}
+                  inputMode="numeric"
+                  maxLength={13}
+                  placeholder="0000000000000"
+                  className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm tracking-widest text-slate-900 outline-none focus:border-violet-400"
+                />
+                {idError && <p className="mt-2 text-xs font-medium text-red-500">{idError}</p>}
+                <button
+                  type="button"
+                  onClick={handleIdCheck}
+                  disabled={idChecking}
+                  className="mt-5 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
+                >
+                  {idChecking ? "Checking…" : "Continue"}
+                </button>
+              </section>
+            ) : (
+              // Reuses the shared KYC infra (Experian IDMN — liveness + facial match
+              // vs Home Affairs, with its own in-progress/pending/failed states).
+              <ExperianVerification onVerified={() => setStep("bureau")} />
+            )}
           </>
         )}
 
