@@ -14,9 +14,11 @@ import ExperianVerification from "../../components/ExperianVerification";
  * applicant must NOT be required to sign an investment mandate (spec §3.1).
  */
 const CreditFlow = ({ profile, onBack, onTabChange }) => {
-  // steps: checking | consent | kyc | bureau | marketplace
+  // steps: checking | overview | consent | kyc | bureau | marketplace
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
+  const [consentDone, setConsentDone] = useState(false);
+  const [resumeTarget, setResumeTarget] = useState("consent"); // where Continue takes you
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -102,13 +104,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       if (cancelled) return;
       const creditKycDone = !!raw.credit_kyc_verified_at;
       const idDone = !!raw.identity_details?.identity_number;
-      const consentDone = !!raw.credit_consent_at;
-      setKycVerified(kycDone || creditKycDone);
+      const consented = !!raw.credit_consent_at;
+      const verified = kycDone || creditKycDone;
+      setKycVerified(verified);
       setIdConfirmed(idDone);
-      // Resume at the furthest completed point.
-      if (kycDone || creditKycDone) setStep("bureau");       // Path A (verified) → offers
-      else if (consentDone) setStep("kyc");                  // consented → continue KYC (ID/biometric resume themselves)
-      else setStep("consent");                               // Path B (new) → consent first
+      setConsentDone(consented);
+      // Furthest completed point — where "Continue" resumes to.
+      setResumeTarget(verified ? "bureau" : consented ? "kyc" : "consent");
+      // Always land on the overview first (checklist of what's done) — like invest onboarding.
+      setStep("overview");
     })();
     return () => { cancelled = true; };
   }, []);
@@ -169,6 +173,49 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <Loader2 className="h-7 w-7 animate-spin" />
               <p className="mt-3 text-sm">Checking your verification…</p>
             </div>
+          </>
+        )}
+
+        {/* ── Overview / resume checklist (always shown first) ── */}
+        {step === "overview" && (
+          <>
+            <Header title="Unsecured credit" />
+            <BouncyCoin />
+            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <h2 className="text-center text-base font-semibold text-slate-900">
+                {resumeTarget === "consent" ? "Let's get you set up for credit" : "Welcome back — let's continue"}
+              </h2>
+              <p className="mt-1 text-center text-sm text-slate-500">
+                {resumeTarget === "consent"
+                  ? "A quick, one-time setup so we can show you offers from multiple lenders."
+                  : "Here's where you are — pick up right where you left off."}
+              </p>
+
+              <ul className="mt-5 space-y-3">
+                {[
+                  { done: consentDone, label: "Consent", sub: "Permission to verify & check your credit" },
+                  { done: kycVerified, label: "Identity verification", sub: "ID number, document & facial match" },
+                  { done: false, label: "Credit check", sub: "A single credit bureau enquiry" },
+                  { done: false, label: "Your offers", sub: "Compare lenders side by side" },
+                ].map((s) => (
+                  <li key={s.label} className="flex items-center gap-3">
+                    {s.done ? (
+                      <CheckCircle2 className="h-6 w-6 flex-shrink-0 text-emerald-500" />
+                    ) : (
+                      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-slate-200" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-semibold ${s.done ? "text-slate-400 line-through" : "text-slate-800"}`}>{s.label}</p>
+                      <p className="text-xs text-slate-400">{s.sub}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <button type="button" onClick={() => setStep(resumeTarget)} className="mt-6 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
+                {resumeTarget === "consent" ? "Get started" : "Continue"}
+              </button>
+            </section>
           </>
         )}
 
