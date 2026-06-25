@@ -13,12 +13,62 @@ import ExperianVerification from "../../components/ExperianVerification";
  * IMPORTANT: the "verified?" branch is KYC-ONLY, not full onboarding — a credit
  * applicant must NOT be required to sign an investment mandate (spec §3.1).
  */
+// Experian SA score scale (Delphi-style). Adjust once we see real returns.
+const SCORE_MIN = 0;
+const SCORE_MAX = 999;
+const bandFor = (s) => {
+  if (!Number.isFinite(s)) return "No score on file";
+  if (s >= 767) return "Excellent";
+  if (s >= 681) return "Good";
+  if (s >= 614) return "Fair";
+  if (s >= 583) return "Average";
+  return "Below average";
+};
+
+// Segmented semicircle gauge (SVG). Fills purple up to the score fraction.
+const ScoreGauge = ({ value }) => {
+  const has = Number.isFinite(value);
+  const frac = has ? Math.max(0, Math.min(1, (value - SCORE_MIN) / (SCORE_MAX - SCORE_MIN))) : 0;
+  const SEGS = 5, GAP = 5, TOTAL = 180;
+  const segDeg = (TOTAL - GAP * (SEGS - 1)) / SEGS;
+  const cx = 130, cy = 122, r = 104;
+  const polar = (deg) => { const a = ((deg - 180) * Math.PI) / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const arc = (s, e) => { const [x1, y1] = polar(s), [x2, y2] = polar(e); return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`; };
+  const filled = frac * SEGS;
+  const segs = [];
+  let cur = 0;
+  for (let i = 0; i < SEGS; i++) { segs.push({ d: arc(cur, cur + segDeg), on: (i + 0.5) < filled }); cur += segDeg + GAP; }
+  return (
+    <div className="relative mx-auto" style={{ width: 260, height: 150 }}>
+      <svg width="260" height="140" viewBox="0 0 260 140">
+        {segs.map((s, i) => (
+          <path key={i} d={s.d} fill="none" strokeWidth="16" strokeLinecap="round" stroke={s.on ? "#6C3FE0" : "#EDE9FB"} />
+        ))}
+      </svg>
+      <div className="absolute inset-x-0 text-center" style={{ bottom: 6 }}>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{has ? bandFor(value) : "Credit score"}</div>
+        <div className="text-[44px] font-extrabold leading-none text-slate-900" style={{ letterSpacing: "-2px" }}>{has ? Math.round(value) : "—"}</div>
+      </div>
+    </div>
+  );
+};
+
 const CreditFlow = ({ profile, onBack, onTabChange }) => {
   // steps: checking | overview | consent | kyc | bureau | marketplace
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
   const [consentDone, setConsentDone] = useState(false);
   const [resumeTarget, setResumeTarget] = useState("consent"); // where Continue takes you
+
+  // Bureau step
+  const [bureauRunning, setBureauRunning] = useState(false);
+  const [score, setScore] = useState(null);
+  const [scoreBand, setScoreBand] = useState("");
+  const [scoreError, setScoreError] = useState("");
+  const [creditDone, setCreditDone] = useState(false);
+  const [idOnFile, setIdOnFile] = useState("");
+  const [loanAmount, setLoanAmount] = useState(50000);
+  const [loanTermMonths, setLoanTermMonths] = useState(24);
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -106,11 +156,17 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const idDone = !!raw.identity_details?.identity_number;
       const consented = !!raw.credit_consent_at;
       const verified = kycDone || creditKycDone;
+      const scored = !!raw.credit_score_at;
       setKycVerified(verified);
       setIdConfirmed(idDone);
       setConsentDone(consented);
+      setCreditDone(scored);
+      setIdOnFile(raw.identity_details?.identity_number || "");
+      if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(bandFor(Number(raw.credit_score))); }
+      if (raw.credit_requested_amount) setLoanAmount(Number(raw.credit_requested_amount));
+      if (raw.credit_requested_term) setLoanTermMonths(Number(raw.credit_requested_term));
       // Furthest completed point — where "Continue" resumes to.
-      setResumeTarget(verified ? "bureau" : consented ? "kyc" : "consent");
+      setResumeTarget(scored ? "marketplace" : verified ? "bureau" : consented ? "kyc" : "consent");
       // Always land on the overview first (checklist of what's done) — like invest onboarding.
       setStep("overview");
     })();
@@ -118,6 +174,53 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   }, []);
 
   const goMarketplace = useCallback(() => setStep("marketplace"), []);
+
+  // The single credit bureau enquiry — real Experian pull via /api/credit-check
+  // (needs only identity_number + name; reused across all lenders, never re-pulled).
+  const runBureau = useCallback(async () => {
+    setScoreError("");
+    setBureauRunning(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("You must be signed in to continue.");
+      const idNum = (idOnFile || profile?.idNumber || profile?.id_number || "").replace(/\D/g, "");
+      const forename = profile?.firstName || profile?.first_name || "";
+      const surname = profile?.lastName || profile?.last_name || "";
+      if (!/^\d{13}$/.test(idNum) || !forename || !surname) {
+        throw new Error("Missing verified identity — please complete the previous steps.");
+      }
+      const res = await fetch("/api/credit-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          userData: {
+            identity_number: idNum, forename, surname,
+            postal_code: profile?.postalCode || profile?.postal_code || "0152",
+            address1: profile?.address || undefined,
+          },
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result?.success === false) throw new Error(result?.error || "Credit check could not be completed.");
+      const s = Number(result.creditScore);
+      const hasScore = Number.isFinite(s);
+      setScore(hasScore ? s : null);
+      setScoreBand(result.score_band || result.riskType || bandFor(s));
+      setCreditDone(true);
+      await saveCreditFlag({
+        credit_score: hasScore ? s : null,
+        credit_score_band: result.score_band || result.riskType || bandFor(s),
+        credit_score_at: new Date().toISOString(),
+        credit_requested_amount: loanAmount,
+        credit_requested_term: loanTermMonths,
+      });
+    } catch (e) {
+      setScoreError(e?.message || "Credit check could not be completed.");
+    } finally {
+      setBureauRunning(false);
+    }
+  }, [idOnFile, profile, loanAmount, loanTermMonths, saveCreditFlag]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -195,7 +298,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 {[
                   { done: consentDone, label: "Consent", sub: "Permission to verify & check your credit" },
                   { done: kycVerified, label: "Identity verification", sub: "ID number, document & facial match" },
-                  { done: false, label: "Credit check", sub: "A single credit bureau enquiry" },
+                  { done: creditDone, label: "Credit check", sub: "A single credit bureau enquiry" },
                   { done: false, label: "Your offers", sub: "Compare lenders side by side" },
                 ].map((s) => (
                   <li key={s.label} className="flex items-center gap-3">
@@ -305,15 +408,62 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         {step === "bureau" && (
           <>
             <Header title="Credit check" />
-            <Stub
-              icon={Search}
-              title="One credit bureau check"
-              body={kycVerified
-                ? "You're already verified — we'll reuse your on-file credit score (or refresh it if it's older than our window) before showing offers."
-                : "We run a single credit bureau enquiry and reuse it across every lender."}
-              cta="Continue (stub → lenders)"
-              onCta={goMarketplace}
-            />
+
+            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <ScoreGauge value={score} />
+              <p className="mt-1 text-center text-xs text-slate-400">
+                {creditDone ? `${scoreBand} · one enquiry, reused across all lenders` : "We run a single credit bureau enquiry — reused across every lender, so your score is protected."}
+              </p>
+              {scoreError && <p className="mt-3 text-center text-xs font-medium text-red-500">{scoreError}</p>}
+              <button
+                type="button"
+                onClick={runBureau}
+                disabled={bureauRunning}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
+              >
+                {bureauRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {bureauRunning ? "Checking your credit…" : creditDone ? "Run again" : "Run credit check"}
+              </button>
+            </section>
+
+            {/* Lean loan config — amount + term only. Lenders set the actual rate/terms. */}
+            <section className="mt-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900">What you're looking for</h3>
+              <p className="mt-1 text-xs text-slate-400">We'll match you to lenders for this amount and term.</p>
+
+              <div className="mt-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
+                  <span className="text-xl font-extrabold text-violet-600">R {loanAmount.toLocaleString("en-ZA")}</span>
+                </div>
+                <input
+                  type="range" min={5000} max={500000} step={5000} value={loanAmount}
+                  onChange={(e) => setLoanAmount(Number(e.target.value))}
+                  className="mt-3 w-full accent-violet-600"
+                />
+                <div className="mt-1 flex justify-between text-[11px] text-slate-400"><span>R 5k</span><span>R 500k</span></div>
+              </div>
+
+              <div className="mt-5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repayment term</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[12, 24, 36, 48, 60].map((m) => (
+                    <button
+                      key={m} type="button" onClick={() => setLoanTermMonths(m)}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold transition ${loanTermMonths === m ? "bg-violet-600 text-white" : "bg-slate-50 text-slate-500 border border-slate-200"}`}
+                    >
+                      {m} mo
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {creditDone && (
+              <button type="button" onClick={goMarketplace} className="mt-4 w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
+                See my offers
+              </button>
+            )}
           </>
         )}
 
