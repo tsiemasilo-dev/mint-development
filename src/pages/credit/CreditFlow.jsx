@@ -42,6 +42,22 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const result = await res.json();
       if (!res.ok || !result.success) throw new Error(result.error || "Failed to verify ID number.");
       if (result.exists) { setIdError("An account with this ID number already exists."); return; }
+
+      // Persist the ID into user_onboarding.sumsub_raw so the Experian step can
+      // read it (idmn/start looks for raw.identity_details.identity_number).
+      const userId = session.user?.id;
+      if (userId) {
+        const { data: rows } = await supabase
+          .from("user_onboarding").select("id, sumsub_raw").eq("user_id", userId)
+          .order("created_at", { ascending: false }).limit(1);
+        const row = rows?.[0];
+        let raw = {};
+        try { raw = typeof row?.sumsub_raw === "string" ? JSON.parse(row.sumsub_raw) : (row?.sumsub_raw || {}); } catch {}
+        raw.identity_details = { ...(raw.identity_details || {}), identity_number: clean, applicantId: result.applicantId || raw.identity_details?.applicantId || null, savedAt: new Date().toISOString() };
+        raw.identity_details_saved = true;
+        if (row?.id) await supabase.from("user_onboarding").update({ sumsub_raw: raw }).eq("id", row.id);
+        else await supabase.from("user_onboarding").insert({ user_id: userId, sumsub_raw: raw });
+      }
       setIdConfirmed(true);
     } catch (e) {
       setIdError(e?.message || "Failed to verify ID number.");
