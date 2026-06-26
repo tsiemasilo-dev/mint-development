@@ -99,6 +99,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [bureauRunning, setBureauRunning] = useState(false);
   const [score, setScore] = useState(null);
   const [scoreBand, setScoreBand] = useState("");
+  const [scoreReasons, setScoreReasons] = useState([]);
   const [scoreError, setScoreError] = useState("");
   const [creditDone, setCreditDone] = useState(false);
   const [idOnFile, setIdOnFile] = useState("");
@@ -213,7 +214,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setAddr2(ca.address2 || ad.city || ad.suburb || (kyc0.lines && kyc0.lines[1]) || "");
       setAddr3(ca.address3 || (kyc0.lines && kyc0.lines[2]) || "");
       setAddrPostal(ca.postal_code || ad.postal_code || kyc0.postalCode || profile?.postalCode || profile?.postal_code || "");
-      if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(bandFor(Number(raw.credit_score))); }
+      if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(raw.credit_score_band || bandFor(Number(raw.credit_score))); }
+      if (Array.isArray(raw.credit_score_reasons)) setScoreReasons(raw.credit_score_reasons);
       if (raw.credit_requested_amount) setLoanAmount(Number(raw.credit_requested_amount));
       if (raw.credit_requested_term) setLoanTermMonths(Number(raw.credit_requested_term));
       // Furthest completed point — where "Continue" resumes to.
@@ -309,12 +311,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const s = Number(data.creditScore);
       const hasScore = Number.isFinite(s) && s > 0;
       const band = data?.raw?.creditScore?.riskType || data.score_band || bandFor(s);
+      const reasons = Array.isArray(data.scoreReasons) ? data.scoreReasons : [];
       setScore(hasScore ? s : null);
       setScoreBand(band);
+      setScoreReasons(reasons);
       setCreditDone(true);
       await saveCreditFlag({
         credit_score: hasScore ? s : null,
         credit_score_band: band,
+        credit_score_reasons: reasons,
         credit_score_at: new Date().toISOString(),
         credit_requested_amount: loanAmount,
         credit_requested_term: loanTermMonths,
@@ -519,6 +524,18 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <p className="mt-1 text-center text-xs text-slate-400">
                 {creditDone ? `${scoreBand} · one enquiry, reused across all lenders` : "We run a single credit bureau enquiry — reused across every lender, so your score is protected."}
               </p>
+              {creditDone && scoreReasons.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">What's affecting your score</p>
+                  <ul className="mt-1 space-y-1">
+                    {scoreReasons.map((r, i) => (
+                      <li key={i} className="flex gap-1.5 text-xs text-slate-400">
+                        <span className="text-slate-300">•</span>{r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {scoreError && <p className="mt-3 text-center text-xs font-medium text-red-500">{scoreError}</p>}
               <button
                 type="button"
