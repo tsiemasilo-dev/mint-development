@@ -11197,9 +11197,9 @@ async function fetchYahooPrice(symbol) {
     const currentPrice = meta.regularMarketPrice; // ZAc (cents) for JSE stocks
     const changeAbs = currentPrice - prevClose;
     const changePct = prevClose ? (changeAbs / prevClose) * 100 : 0;
-    // Anomaly guard: reject prices that deviate >40% from prev close in a single session.
+    // Anomaly guard: reject prices that deviate >20% from prev close in a single session.
     // This catches Yahoo Finance data glitches (e.g. unit errors, stale/wrong ticks).
-    if (prevClose && Math.abs(changePct) > 40) {
+    if (prevClose && Math.abs(changePct) > 20) {
       console.warn(`[yahoo-price] Anomaly rejected for ${symbol}: ${currentPrice}c vs prevClose ${prevClose}c (${changePct.toFixed(1)}% change). Skipping.`);
       return null;
     }
