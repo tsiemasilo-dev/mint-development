@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Smartphone, ScanFace, Search, CheckCircle2, Loader2, Store, ChevronRight, SlidersHorizontal, Star, X } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, SlidersHorizontal, Star, Plus, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -39,9 +39,18 @@ const STUB_PROVIDERS = [
 ];
 
 const APP_STATUS = {
-  in_review: { label: "In review", cls: "bg-amber-50 text-amber-700" },
-  rejected: { label: "Rejected", cls: "bg-red-50 text-red-600" },
-  complete: { label: "Complete", cls: "bg-emerald-50 text-emerald-700" },
+  in_review: { label: "In review", cls: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
+  rejected: { label: "Rejected", cls: "bg-red-50 text-red-600", dot: "bg-red-500" },
+  complete: { label: "Complete", cls: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+};
+
+// Score-band tone for the dark gradient hero card (light text on dark).
+const bandTone = (band) => {
+  const b = String(band || "").toLowerCase();
+  if (/excellent|good|low risk/.test(b)) return { dot: "bg-emerald-400", chip: "bg-emerald-400/20 text-emerald-200" };
+  if (/fair|average|medium/.test(b)) return { dot: "bg-amber-300", chip: "bg-amber-300/20 text-amber-100" };
+  if (/below|high risk|very high/.test(b)) return { dot: "bg-rose-400", chip: "bg-rose-400/20 text-rose-100" };
+  return { dot: "bg-white/50", chip: "bg-white/15 text-white/70" };
 };
 
 // Segmented semicircle gauge — canvas port of the reference design: 4 thick
@@ -476,22 +485,6 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     </header>
   );
 
-  // ── Stub node (KYC / bureau / marketplace get filled in later) ──
-  const Stub = ({ icon: Icon, title, body, cta, onCta, tone = "violet" }) => (
-    <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm text-center">
-      <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${tone === "violet" ? "bg-violet-50 text-violet-600" : "bg-slate-100 text-slate-500"}`}>
-        <Icon className="h-7 w-7" />
-      </div>
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-sm text-slate-500">{body}</p>
-      <p className="mt-3 inline-block rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">Coming next</p>
-      {cta && (
-        <button type="button" onClick={onCta} className="mt-5 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
-          {cta}
-        </button>
-      )}
-    </section>
-  );
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10 text-slate-900">
@@ -735,39 +728,129 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           </>
         )}
 
-        {/* ── My applications — every completed bureau run, tap one to compare lenders ── */}
+        {/* ── My applications — score hero + application cards + new-loan CTA ── */}
         {step === "marketplace" && (
           <>
             <Header title="My applications" />
+
+            {/* Score hero — premium dark-purple card (moved here from the provider view). */}
+            {(() => {
+              const tone = bandTone(scoreBand || bandFor(score));
+              const pct = Number.isFinite(score) ? Math.min(100, Math.max(0, ((score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100)) : 0;
+              return (
+                <section
+                  className="relative overflow-hidden rounded-[28px] px-5 pt-5 pb-6 shadow-lg"
+                  style={{ background: "linear-gradient(135deg, #2a1a46 0%, #4c2e75 55%, #7a4aa7 100%)" }}
+                >
+                  <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+                  <div className="pointer-events-none absolute -left-6 bottom-0 h-24 w-24 rounded-full bg-fuchsia-400/10 blur-2xl" />
+
+                  <div className="relative flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Your credit score</p>
+                    {Number.isFinite(score) && (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${tone.chip}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />{scoreBand || bandFor(score)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="relative mt-2 flex items-end gap-2">
+                    <p className="text-[52px] font-light leading-none text-white">{Number.isFinite(score) ? score : "—"}</p>
+                    <p className="mb-1.5 text-[11px] text-white/40">/ {SCORE_MAX}</p>
+                  </div>
+
+                  <div className="relative mt-4 h-[5px] w-full overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-300 to-white/80" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="relative mt-1 flex justify-between text-[9px] text-white/35">
+                    <span>{SCORE_MIN}</span><span>{SCORE_MAX}</span>
+                  </div>
+
+                  <p className="relative mt-3 text-[10px] leading-relaxed text-white/45">One bureau enquiry — reused across every lender, so your score is protected.</p>
+                </section>
+              );
+            })()}
+
+            {/* Applications */}
+            <div className="mt-6 mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">Your applications</p>
+              {applications.length > 0 && <span className="text-xs font-medium text-slate-400">{applications.length}</span>}
+            </div>
+
             {applicationsLoading ? (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
+              <div className="flex justify-center py-10 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
             ) : applications.length === 0 ? (
-              <Stub icon={Store} tone="slate" title="No applications yet" body="Run a credit check to start your first application." />
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-500"><Store className="h-6 w-6" /></div>
+                <p className="text-sm font-semibold text-slate-700">No applications yet</p>
+                <p className="mt-1 text-xs text-slate-400">Start one below to compare lenders side by side.</p>
+              </div>
             ) : (
               <ul className="space-y-3">
                 {applications.map((app) => {
                   const st = APP_STATUS[app.status] || APP_STATUS.in_review;
+                  const sel = Array.isArray(app.selected_providers) ? app.selected_providers : [];
+                  const isComplete = app.status === "complete";
                   return (
                     <li key={app.id}>
                       <button
                         type="button"
                         onClick={() => openApplication(app)}
-                        className="flex w-full items-center justify-between gap-3 rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm active:scale-[0.99]"
+                        className="block w-full rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition active:scale-[0.99]"
                       >
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">R {Number(app.requested_amount || 0).toLocaleString("en-ZA")} · {app.requested_term_months} mo</p>
-                          <p className="mt-1 text-xs text-slate-400">{new Date(app.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</p>
-                          <span className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.cls}`}>{st.label}</span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[19px] font-semibold leading-none text-slate-900">R {Number(app.requested_amount || 0).toLocaleString("en-ZA")}</p>
+                            <p className="mt-1.5 text-xs text-slate-400">{app.requested_term_months} month{app.requested_term_months > 1 ? "s" : ""} · {new Date(app.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</p>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.cls}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />{st.label}
+                          </span>
                         </div>
-                        <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
+
+                        {sel.length > 0 && (
+                          <div className="mt-4 border-t border-slate-100 pt-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{isComplete ? "Accepted by" : "Submitted to"}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              {sel.map((s) => {
+                                const p = STUB_PROVIDERS.find((x) => x.id === s.provider_id);
+                                return (
+                                  <span key={s.provider_id} className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[11px] font-medium ${isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"}`}>
+                                    <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: p?.bg || "#6C3FE0" }}>{p?.short || (s.provider_name || "?").slice(0, 2)}</span>
+                                    {s.provider_name || p?.name}
+                                    {isComplete && <Check className="h-3 w-3" />}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-violet-600">{sel.length > 0 ? (isComplete ? "View offers" : "Edit lenders") : "Choose lenders"}</span>
+                          <ChevronRight className="h-4 w-4 text-slate-300" />
+                        </div>
                       </button>
                     </li>
                   );
                 })}
               </ul>
             )}
+
+            {/* Apply for a new loan — purple CTA card */}
+            <button
+              type="button"
+              onClick={() => setStep("bureau")}
+              className="mt-4 flex w-full items-center gap-4 overflow-hidden rounded-3xl px-5 py-5 text-left shadow-lg active:scale-[0.99]"
+              style={{ background: "linear-gradient(135deg, #6C3FE0 0%, #8B5CF6 100%)" }}
+            >
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white"><Plus className="h-6 w-6" /></div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-white">Apply for a new loan</p>
+                <p className="mt-0.5 text-xs text-white/70">Set a new amount and compare lenders again</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-white/70" />
+            </button>
           </>
         )}
 
@@ -781,20 +864,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <h1 className="text-lg font-semibold text-slate-900">Credit marketplace</h1>
             </header>
 
-            {/* Score strip */}
-            <section className="mb-5 flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <div>
-                <p className="text-3xl font-bold leading-none tracking-tight text-slate-900">{Number.isFinite(score) ? score : "—"}</p>
-                <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{scoreBand || "Score on file"}
-                </span>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-slate-400">{SCORE_MIN} – {SCORE_MAX}</p>
-                <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400" style={{ width: `${Number.isFinite(score) ? Math.min(100, Math.max(0, ((score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100) ) : 0}%` }} />
-                </div>
-              </div>
+            {/* Context — what this application is shopping for (score lives on My applications). */}
+            <section className="mb-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <p className="text-[11px] text-slate-400">Comparing lenders for</p>
+              <p className="text-sm font-semibold text-slate-900">R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} · {activeApplication.requested_term_months} month{activeApplication.requested_term_months > 1 ? "s" : ""}</p>
             </section>
 
             {/* Toolbar */}
