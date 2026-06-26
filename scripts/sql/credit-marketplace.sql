@@ -6,7 +6,6 @@
 CREATE TABLE IF NOT EXISTS credit_marketplace_applications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
-  loan_engine_score_id uuid,
   requested_amount numeric,
   requested_term_months integer,
   status text NOT NULL DEFAULT 'in_review',
@@ -16,3 +15,14 @@ CREATE TABLE IF NOT EXISTS credit_marketplace_applications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cma_user ON credit_marketplace_applications(user_id);
+
+-- Owner-only access (matches the protected user_onboarding pattern, not the
+-- looser anon-readable loan_application table). Each user sees only their rows.
+ALTER TABLE credit_marketplace_applications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "own marketplace applications" ON credit_marketplace_applications;
+CREATE POLICY "own marketplace applications"
+  ON credit_marketplace_applications
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);

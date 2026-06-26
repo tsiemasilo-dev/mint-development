@@ -28,12 +28,14 @@ const bandFor = (s) => {
 // Lender marketplace — stub providers until AlgoLend's marketplace is wired in
 // (per spec, AlgoLend supplies the real lender list + live terms; this gets the
 // comparison/select/submit UX working end-to-end today).
+// Unsecured personal-loan lenders sized to this product (credit up to R50k).
+// Placeholder until AlgoLend supplies the real lender list + live terms.
 const STUB_PROVIDERS = [
-  { id: "std", name: "Standard Bank", short: "SB", bg: "#0A7B5E", type: "Home loan", cat: "home", rate: 11.75, limit: "R 5,000,000", rawLimit: 5000000, term: "30 yrs", minIncome: "R 15k/mo", rating: 4.6, reviews: 1840, eligible: true, badge: "Lowest rate" },
-  { id: "cap", name: "Capitec", short: "CA", bg: "#4C3AA3", type: "Personal loan", cat: "personal", rate: 12.0, limit: "R 250,000", rawLimit: 250000, term: "84 mo", minIncome: "R 5k/mo", rating: 4.4, reviews: 3120, eligible: true, badge: "Most popular" },
-  { id: "absa", name: "ABSA", short: "AB", bg: "#B02020", type: "Personal loan", cat: "personal", rate: 12.5, limit: "R 350,000", rawLimit: 350000, term: "72 mo", minIncome: "R 8k/mo", rating: 4.2, reviews: 2760, eligible: true, badge: null },
-  { id: "ned", name: "Nedbank", short: "NB", bg: "#5B2FD4", type: "Vehicle finance", cat: "vehicle", rate: 13.25, limit: "R 500,000", rawLimit: 500000, term: "72 mo", minIncome: "R 10k/mo", rating: 4.1, reviews: 1490, eligible: false, badge: "Fast approval" },
-  { id: "fnb", name: "FNB", short: "FNB", bg: "#15457A", type: "Credit card", cat: "personal", rate: 14.0, limit: "R 80,000", rawLimit: 80000, term: "Revolving", minIncome: "R 7k/mo", rating: 4.3, reviews: 2180, eligible: true, badge: null },
+  { id: "oldmutual", name: "Old Mutual", short: "OM", bg: "#009677", type: "Personal loan", rate: 21.5, limit: "R 200,000", rawLimit: 200000, term: "Up to 72 mo", minIncome: "R 5k/mo", rating: 4.2, reviews: 1620, eligible: true, badge: "Lowest rate" },
+  { id: "capitec", name: "Capitec", short: "CA", bg: "#4C3AA3", type: "Personal loan", rate: 22.9, limit: "R 250,000", rawLimit: 250000, term: "Up to 84 mo", minIncome: "R 5k/mo", rating: 4.4, reviews: 3120, eligible: true, badge: "Most popular" },
+  { id: "fnb", name: "FNB", short: "FNB", bg: "#15457A", type: "Personal loan", rate: 23.75, limit: "R 300,000", rawLimit: 300000, term: "Up to 60 mo", minIncome: "R 7k/mo", rating: 4.3, reviews: 2180, eligible: true, badge: null },
+  { id: "africanbank", name: "African Bank", short: "AB", bg: "#0072CE", type: "Personal loan", rate: 24.5, limit: "R 350,000", rawLimit: 350000, term: "Up to 72 mo", minIncome: "R 5k/mo", rating: 4.1, reviews: 2740, eligible: true, badge: null },
+  { id: "directaxis", name: "DirectAxis", short: "DA", bg: "#E2231A", type: "Personal loan", rate: 25.0, limit: "R 300,000", rawLimit: 300000, term: "Up to 72 mo", minIncome: "R 8k/mo", rating: 4.0, reviews: 1490, eligible: false, badge: null },
 ];
 
 const APP_STATUS = {
@@ -290,6 +292,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+    // Changing the selection after a submit re-opens the tray so you can resubmit.
+    setProviderSubmitted(false);
   }, []);
 
   const submitProviderSelections = useCallback(async () => {
@@ -415,16 +419,26 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         credit_requested_term: loanTermMonths,
         credit_address: { address1: street, address2: suburb, address3: line3, postal_code: postal },
       });
-      // One "application" per completed bureau run — what the user picks from in the marketplace list.
+      // One open application per bureau pull (spec: a single pull, reused). Re-running
+      // the check updates the existing in_review application rather than spawning a
+      // duplicate; a fresh row is only created if there's no open one yet.
       try {
         const uid = session.user?.id;
         if (uid) {
-          await supabase.from("credit_marketplace_applications").insert({
-            user_id: uid,
-            requested_amount: loanAmount,
-            requested_term_months: loanTermMonths,
-            status: "in_review",
-          });
+          const { data: openApp } = await supabase
+            .from("credit_marketplace_applications")
+            .select("id")
+            .eq("user_id", uid)
+            .eq("status", "in_review")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const patch = { requested_amount: loanAmount, requested_term_months: loanTermMonths, updated_at: new Date().toISOString() };
+          if (openApp?.id) {
+            await supabase.from("credit_marketplace_applications").update(patch).eq("id", openApp.id);
+          } else {
+            await supabase.from("credit_marketplace_applications").insert({ user_id: uid, status: "in_review", ...patch });
+          }
         }
       } catch (e) {
         console.warn("[CreditFlow] application record failed:", e?.message || e);
@@ -877,6 +891,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 <CheckCircle2 className="h-4 w-4" />Submitted to {providerSel.size} lender{providerSel.size !== 1 ? "s" : ""}
               </p>
             )}
+
+            {/* Spacer so the fixed tray never covers the last provider card. */}
+            {providerSel.size > 0 && !providerSubmitted && <div className="h-24" />}
 
             {/* Selection tray */}
             {providerSel.size > 0 && !providerSubmitted && (
