@@ -2356,10 +2356,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         ) : null}
                         <XAxis
                           dataKey="dateLabel"
-                          tick={{ fontSize: 11, fill: "#64748b" }}
-                          axisLine={{ stroke: "#e2e8f0" }}
+                          tick={false}
+                          axisLine={false}
                           tickLine={false}
-                          height={24}
+                          height={0}
                         />
                         <YAxis hide domain={previewChartDomain} />
                         <Area
@@ -2596,7 +2596,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             </linearGradient>
                           </defs>
                           <ReferenceLine y={100} stroke="#e2e8f0" strokeDasharray="3 3" />
-                          <XAxis dataKey="dateLabel" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} height={24} />
+                          <XAxis dataKey="dateLabel" tick={false} axisLine={false} tickLine={false} height={0} />
                           <YAxis hide domain={previewChartDomain} />
                           <Area type="monotone" dataKey="returnPct" stroke="transparent" fill="url(#child-preview-gradient)" dot={false} />
                           <Line type="monotone" dataKey="returnPct" stroke={previewChartLineColor} strokeWidth={2} dot={false} activeDot={false} />
