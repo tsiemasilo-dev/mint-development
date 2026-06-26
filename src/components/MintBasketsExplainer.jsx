@@ -1180,6 +1180,13 @@ export default function MintBasketsExplainer({
   const modalScrollElRef  = useRef(null); // modal scroll container padded in phase 2
   const mockCardRef       = useRef(null); // ref to MockBalanceCard DOM node for phase 6
 
+  // ── Mark explainer as seen immediately on mount ──────────────────────────
+  // This ensures it won't replay even if the user navigates away before
+  // the animation fully completes (handleDone never fires in that case).
+  useEffect(() => {
+    localStorage.setItem(BASKETS_EXPLAINER_KEY, "true");
+  }, []);
+
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
   useEffect(() => {
     // Slide bottom nav offscreen
