@@ -117,7 +117,7 @@ const ScoreGauge = ({ value }) => {
 };
 
 const CreditFlow = ({ profile, onBack, onTabChange }) => {
-  // steps: checking | overview | consent | kyc | bureau | marketplace | marketplaceOffers
+  // steps: checking | overview | consent | kyc | bureau | marketplace | newApplication | marketplaceOffers
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
   const [consentDone, setConsentDone] = useState(false);
@@ -141,10 +141,17 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [addrPostal, setAddrPostal] = useState("");
   const [addrLookupLoading, setAddrLookupLoading] = useState(false);
 
+  // Proof of address (CEO-required KYC artefact) — uploaded on the bureau step.
+  const [poaUploading, setPoaUploading] = useState(false);
+  const [poaPath, setPoaPath] = useState(null);
+  const [poaFileName, setPoaFileName] = useState("");
+  const [poaError, setPoaError] = useState("");
+
   // Marketplace: "My applications" list → tap one → provider comparison.
   const [applications, setApplications] = useState([]);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [activeApplication, setActiveApplication] = useState(null);
+  const [creatingApplication, setCreatingApplication] = useState(false);
   const [providerSel, setProviderSel] = useState(new Set());
   const [providerFilterOpen, setProviderFilterOpen] = useState(false);
   const [providerEligOnly, setProviderEligOnly] = useState(false);
@@ -255,12 +262,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setAddrPostal(ca.postal_code || ad.postal_code || kyc0.postalCode || profile?.postalCode || profile?.postal_code || "");
       if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(raw.credit_score_band || bandFor(Number(raw.credit_score))); }
       if (Array.isArray(raw.credit_score_reasons)) setScoreReasons(raw.credit_score_reasons);
-      if (raw.credit_requested_amount) setLoanAmount(Number(raw.credit_requested_amount));
-      if (raw.credit_requested_term) setLoanTermMonths(Number(raw.credit_requested_term));
+      // Proof of address — reuse one already uploaded during invest onboarding if present.
+      const poa = raw.credit_poa_path || raw.address_details?.proof_of_address_path || null;
+      if (poa) { setPoaPath(poa); setPoaFileName(raw.credit_poa_name || raw.address_details?.proof_of_address_name || "Proof of address"); }
       // Furthest completed point — where "Continue" resumes to.
       setResumeTarget(scored ? "marketplace" : verified ? "bureau" : consented ? "kyc" : "consent");
-      // Always land on the overview first (checklist of what's done) — like invest onboarding.
-      setStep("overview");
+      // Once fully onboarded + scored, go straight to My applications (no checklist).
+      // Otherwise land on the overview first (like invest onboarding).
+      if (scored) { setStep("marketplace"); loadApplications(); }
+      else setStep("overview");
     })();
     return () => { cancelled = true; };
   }, []);
@@ -354,6 +364,66 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, []);
 
+  // Proof-of-address upload (CEO-required KYC artefact). Reuses the onboarding
+  // signed-URL flow: private "proof-of-address" bucket, file goes straight to
+  // storage, only the path is persisted (in sumsub_raw.credit_poa_path).
+  const handlePoaUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPoaError("");
+    if (file.size > 10 * 1024 * 1024) { setPoaError("File too large — max 10MB."); return; }
+    const okType = /(pdf|jpe?g|png)$/i.test(file.type) || /\.(pdf|jpe?g|png)$/i.test(file.name);
+    if (!okType) { setPoaError("Please upload a PDF, JPG or PNG (bank statement / utility bill)."); return; }
+    setPoaUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("You need to be signed in.");
+      const res = await fetch("/api/onboarding/poa-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || "application/octet-stream" }),
+      });
+      const info = await res.json().catch(() => ({}));
+      if (!res.ok || !info.success) throw new Error(info.error || "Upload failed. Please try again.");
+      const { error: upErr } = await supabase.storage
+        .from(info.bucket)
+        .uploadToSignedUrl(info.path, info.token, file, { contentType: file.type || undefined, upsert: true });
+      if (upErr) throw upErr;
+      setPoaPath(info.path);
+      setPoaFileName(file.name);
+      await saveCreditFlag({ credit_poa_path: info.path, credit_poa_name: file.name, credit_poa_at: new Date().toISOString() });
+    } catch (err) {
+      console.error("[CreditFlow] POA upload failed:", err);
+      setPoaError(err?.message || "Upload failed. Please try again.");
+    } finally {
+      setPoaUploading(false);
+    }
+  }, [saveCreditFlag]);
+
+  // Explicitly create a new application from the My-applications page (amount +
+  // term live here now, not on the bureau step — the single score is reused).
+  const createApplication = useCallback(async () => {
+    setCreatingApplication(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) throw new Error("You must be signed in.");
+      const { data, error } = await supabase
+        .from("credit_marketplace_applications")
+        .insert({ user_id: uid, requested_amount: loanAmount, requested_term_months: loanTermMonths, status: "in_review", selected_providers: [] })
+        .select()
+        .single();
+      if (error) throw error;
+      setApplications((prev) => [data, ...prev]);
+      openApplication(data);
+    } catch (e) {
+      console.warn("[CreditFlow] createApplication failed:", e?.message || e);
+    } finally {
+      setCreatingApplication(false);
+    }
+  }, [loanAmount, loanTermMonths]);
+
   // The single credit bureau enquiry — real Experian pull via /api/credit-check.
   // ID is mandatory (fetched first). Address (street+suburb+postal) is required by
   // Experian; we auto-fetch it from the KYC lookup, and only prompt if the bureau
@@ -366,6 +436,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     // ID is the one thing we can't proceed without — it's fetched at the very start.
     if (!/^\d{13}$/.test(idNum) || !forename || !surname) {
       setScoreError("We couldn't find your verified ID — please complete the identity step first.");
+      return;
+    }
+    // CEO-required: proof of address must be on file before the bureau check.
+    if (!poaPath) {
+      setScoreError("Please upload your proof of address before running the check.");
       return;
     }
 
@@ -424,40 +499,16 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         credit_score_band: band,
         credit_score_reasons: reasons,
         credit_score_at: new Date().toISOString(),
-        credit_requested_amount: loanAmount,
-        credit_requested_term: loanTermMonths,
         credit_address: { address1: street, address2: suburb, address3: line3, postal_code: postal },
       });
-      // One open application per bureau pull (spec: a single pull, reused). Re-running
-      // the check updates the existing in_review application rather than spawning a
-      // duplicate; a fresh row is only created if there's no open one yet.
-      try {
-        const uid = session.user?.id;
-        if (uid) {
-          const { data: openApp } = await supabase
-            .from("credit_marketplace_applications")
-            .select("id")
-            .eq("user_id", uid)
-            .eq("status", "in_review")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          const patch = { requested_amount: loanAmount, requested_term_months: loanTermMonths, updated_at: new Date().toISOString() };
-          if (openApp?.id) {
-            await supabase.from("credit_marketplace_applications").update(patch).eq("id", openApp.id);
-          } else {
-            await supabase.from("credit_marketplace_applications").insert({ user_id: uid, status: "in_review", ...patch });
-          }
-        }
-      } catch (e) {
-        console.warn("[CreditFlow] application record failed:", e?.message || e);
-      }
+      // Note: applications (amount + term) are created explicitly on the
+      // My-applications page now — the single bureau score is reused across them.
     } catch (e) {
       setScoreError(e?.message || "Credit check could not be completed.");
     } finally {
       setBureauRunning(false);
     }
-  }, [idOnFile, profile, addr1, addr2, addr3, addrPostal, loanAmount, loanTermMonths, saveCreditFlag, fetchKycAddress]);
+  }, [idOnFile, profile, addr1, addr2, addr3, addrPostal, poaPath, saveCreditFlag, fetchKycAddress]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -651,12 +702,13 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <button
                 type="button"
                 onClick={runBureau}
-                disabled={bureauRunning || addrLookupLoading}
+                disabled={bureauRunning || addrLookupLoading || !poaPath}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
               >
                 {(bureauRunning || addrLookupLoading) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {addrLookupLoading ? "Finding your address…" : bureauRunning ? "Checking your credit…" : creditDone ? "Run again" : "Run credit check"}
               </button>
+              {!poaPath && <p className="mt-2 text-center text-[11px] text-slate-400">Upload your proof of address below to enable the check.</p>}
             </section>
 
             {/* Address prompt — appears when address is missing or Experian rejects it. */}
@@ -686,43 +738,45 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               </section>
             )}
 
-            {/* Lean loan config — amount + term only. Lenders set the actual rate/terms. */}
+            {/* Proof of address — required KYC artefact (bank statement / utility bill). */}
             <section className="mt-4 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900">What you're looking for</h3>
-              <p className="mt-1 text-xs text-slate-400">We'll match you to lenders for this amount and term.</p>
-
-              <div className="mt-5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
-                <div className="mt-2 flex items-center rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-violet-400">
-                  <span className="mr-1 text-base font-semibold text-slate-400">R</span>
-                  <input
-                    type="text" inputMode="numeric"
-                    value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
-                    onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
-                    placeholder="0"
-                    className="w-full bg-transparent text-xl font-extrabold text-violet-600 outline-none"
-                  />
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><MapPin className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Proof of address</h3>
+                  <p className="text-[11px] text-slate-400">Bank statement or utility bill — PDF, JPG or PNG</p>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">Up to R 50,000</p>
               </div>
 
-              <div className="mt-5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repayment term</span>
-                <select
-                  value={loanTermMonths}
-                  onChange={(e) => setLoanTermMonths(Number(e.target.value))}
-                  className="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400"
-                >
-                  {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>{m} month{m > 1 ? "s" : ""}</option>
-                  ))}
-                </select>
-              </div>
+              {poaPath ? (
+                <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" /><span className="truncate max-w-[180px]">{poaFileName || "Uploaded"}</span>
+                  </span>
+                  <label className="cursor-pointer text-[12px] font-semibold text-violet-600">
+                    Replace
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" className="hidden" onChange={handlePoaUpload} />
+                  </label>
+                </div>
+              ) : (
+                <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center transition hover:border-violet-300">
+                  {poaUploading ? (
+                    <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Uploading…</span>
+                  ) : (
+                    <>
+                      <span className="text-sm font-semibold text-violet-600">Tap to upload</span>
+                      <span className="mt-0.5 text-[11px] text-slate-400">Max 10MB</span>
+                    </>
+                  )}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" className="hidden" onChange={handlePoaUpload} disabled={poaUploading} />
+                </label>
+              )}
+              {poaError && <p className="mt-2 text-xs font-medium text-red-500">{poaError}</p>}
             </section>
 
             {creditDone && (
               <button type="button" onClick={goMarketplace} className="mt-4 w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
-                See my offers
+                Continue to my applications
               </button>
             )}
           </>
@@ -837,20 +891,75 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               </ul>
             )}
 
-            {/* Apply for a new loan — purple CTA card */}
+            {/* Create a new application — purple CTA card (amount + term entered next) */}
             <button
               type="button"
-              onClick={() => setStep("bureau")}
+              onClick={() => { setLoanAmount(50000); setLoanTermMonths(3); setStep("newApplication"); }}
               className="mt-4 flex w-full items-center gap-4 overflow-hidden rounded-3xl px-5 py-5 text-left shadow-lg active:scale-[0.99]"
               style={{ background: "linear-gradient(135deg, #6C3FE0 0%, #8B5CF6 100%)" }}
             >
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white"><Plus className="h-6 w-6" /></div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-white">Apply for a new loan</p>
-                <p className="mt-0.5 text-xs text-white/70">Set a new amount and compare lenders again</p>
+                <p className="text-sm font-semibold text-white">Create a new application</p>
+                <p className="mt-0.5 text-xs text-white/70">Set your amount and term, then compare lenders</p>
               </div>
               <ChevronRight className="h-5 w-5 text-white/70" />
             </button>
+          </>
+        )}
+
+        {/* ── New application — amount + term, then create & jump to comparison ── */}
+        {step === "newApplication" && (
+          <>
+            <header className="flex items-center gap-3 mb-6 relative">
+              <button type="button" onClick={() => setStep("marketplace")} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm flex-shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-lg font-semibold text-slate-900">New application</h1>
+            </header>
+
+            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900">What you're looking for</h3>
+              <p className="mt-1 text-xs text-slate-400">We'll match you to lenders for this amount and term. Your existing credit score is reused — no new check.</p>
+
+              <div className="mt-5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
+                <div className="mt-2 flex items-center rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-violet-400">
+                  <span className="mr-1 text-base font-semibold text-slate-400">R</span>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
+                    onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
+                    placeholder="0"
+                    className="w-full bg-transparent text-xl font-extrabold text-violet-600 outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">Up to R 50,000</p>
+              </div>
+
+              <div className="mt-5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repayment term</span>
+                <select
+                  value={loanTermMonths}
+                  onChange={(e) => setLoanTermMonths(Number(e.target.value))}
+                  className="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m} month{m > 1 ? "s" : ""}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={createApplication}
+                disabled={creatingApplication || !loanAmount}
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
+              >
+                {creatingApplication ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {creatingApplication ? "Creating…" : "Create application"}
+              </button>
+            </section>
           </>
         )}
 
