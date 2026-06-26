@@ -1704,14 +1704,14 @@ export default function MintBasketsExplainer({
              3. Outer      — the case lip / edge highlight
              4. Drop shadow — floating depth */
           boxShadow: [
-            "inset 0 0 0 3px rgba(167,139,250,0.25)",
-            "inset 0 0 0 26px #130b2e",
-            "inset 0 0 0 28px rgba(139,92,246,0.7)",
+            "inset 0 0 0 2px rgba(167,139,250,0.2)",
+            "inset 0 0 0 13px #130b2e",
+            "inset 0 0 0 15px rgba(139,92,246,0.65)",
             "0 0 0 2px #0d0720",
             "0 24px 80px rgba(109,40,217,0.55)",
             "0 8px 32px rgba(0,0,0,0.7)",
           ].join(", "),
-          borderRadius: 48,
+          borderRadius: 44,
           overflow: "hidden",
         }}
       >
