@@ -1690,59 +1690,117 @@ export default function MintBasketsExplainer({
         </div>
       )}
 
-      {/* ── Phone frame — wraps the entire animation like a device bezel ───── */}
+      {/* ── Phone case frame — floating mockup with DEMO ribbon ─────────────── */}
       <motion.div
         className="pointer-events-none fixed inset-0 z-[10020]"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.4 }}
+        initial={{ opacity: 0, scale: 0.93 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22, duration: 0.5 }}
         style={{
-          boxShadow: "inset 0 0 0 12px #1a0f35, inset 0 0 0 14px rgba(167,139,250,0.55)",
-          borderRadius: 44,
+          /* Layered inset shadows build up the case:
+             1. Innermost — screen-edge inner glow (subtle purple)
+             2. Middle     — the main case body (deep purple-black)
+             3. Outer      — the case lip / edge highlight
+             4. Drop shadow — floating depth */
+          boxShadow: [
+            "inset 0 0 0 3px rgba(167,139,250,0.25)",
+            "inset 0 0 0 26px #130b2e",
+            "inset 0 0 0 28px rgba(139,92,246,0.7)",
+            "0 0 0 2px #0d0720",
+            "0 24px 80px rgba(109,40,217,0.55)",
+            "0 8px 32px rgba(0,0,0,0.7)",
+          ].join(", "),
+          borderRadius: 48,
+          overflow: "hidden",
         }}
       >
-        {/* Dynamic island */}
+        {/* Case surface gradient — gives it a subtle material feel */}
         <div style={{
-          position: "absolute", top: 14, left: "50%",
-          transform: "translateX(-50%)",
-          width: 110, height: 32,
-          background: "#1a0f35",
-          borderRadius: 99,
-          boxShadow: "0 0 0 2px rgba(167,139,250,0.35)",
+          position: "absolute", inset: 0,
+          background: "linear-gradient(145deg, rgba(255,255,255,0.04) 0%, transparent 50%, rgba(0,0,0,0.12) 100%)",
+          borderRadius: "inherit",
+          pointerEvents: "none",
         }} />
 
-        {/* Left side buttons */}
-        <div style={{ position: "absolute", left: -4, top: 100, width: 4, height: 32, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
-        <div style={{ position: "absolute", left: -4, top: 142, width: 4, height: 50, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
-        <div style={{ position: "absolute", left: -4, top: 202, width: 4, height: 50, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
+        {/* Dynamic Island */}
+        <div style={{
+          position: "absolute", top: 16, left: "50%",
+          transform: "translateX(-50%)",
+          width: 116, height: 34,
+          background: "#0a0618",
+          borderRadius: 99,
+          boxShadow: "0 0 0 2px rgba(139,92,246,0.4), inset 0 1px 3px rgba(0,0,0,0.6)",
+          zIndex: 1,
+        }} />
 
-        {/* Right side button */}
-        <div style={{ position: "absolute", right: -4, top: 160, width: 4, height: 70, background: "#2d1b5e", borderRadius: "0 4px 4px 0" }} />
+        {/* Left buttons — mute + volume */}
+        {[96, 138, 194].map((top, i) => (
+          <div key={i} style={{
+            position: "absolute", left: -6, top,
+            width: 6, height: i === 0 ? 28 : 46,
+            background: "linear-gradient(180deg, #2a1760 0%, #1a0f45 100%)",
+            borderRadius: "4px 0 0 4px",
+            boxShadow: "-1px 0 3px rgba(0,0,0,0.5)",
+          }} />
+        ))}
+
+        {/* Right button — power */}
+        <div style={{
+          position: "absolute", right: -6, top: 158,
+          width: 6, height: 68,
+          background: "linear-gradient(180deg, #2a1760 0%, #1a0f45 100%)",
+          borderRadius: "0 4px 4px 0",
+          boxShadow: "1px 0 3px rgba(0,0,0,0.5)",
+        }} />
 
         {/* Home indicator */}
         <div style={{
-          position: "absolute", bottom: 8, left: "50%",
+          position: "absolute", bottom: 10, left: "50%",
           transform: "translateX(-50%)",
-          width: 120, height: 4,
-          background: "rgba(167,139,250,0.5)",
+          width: 128, height: 5,
+          background: "linear-gradient(90deg, rgba(139,92,246,0.3), rgba(167,139,250,0.7), rgba(139,92,246,0.3))",
           borderRadius: 99,
         }} />
 
-        {/* "Guide" label — top-right corner */}
+        {/* ── DEMO ribbon — top-left corner ───────────────────────────────── */}
         <div style={{
-          position: "absolute", top: 18, right: 24,
-          display: "flex", alignItems: "center", gap: 5,
-          background: "rgba(124,58,237,0.85)",
-          border: "1px solid rgba(167,139,250,0.5)",
-          borderRadius: 99, padding: "3px 10px",
-          backdropFilter: "blur(8px)",
+          position: "absolute", top: 0, left: 0,
+          width: 110, height: 110,
+          overflow: "hidden",
+          zIndex: 2,
+          borderRadius: "48px 0 0 0",
         }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#a78bfa", animation: "pulse 1.5s infinite" }} />
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#e9d5ff" }}>
-            Guide
-          </span>
+          <div style={{
+            position: "absolute",
+            top: 28, left: -32,
+            width: 130,
+            padding: "6px 0",
+            background: "linear-gradient(135deg, #5b21b6, #7c3aed)",
+            transform: "rotate(-45deg)",
+            textAlign: "center",
+            boxShadow: "0 2px 12px rgba(109,40,217,0.6)",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+          }}>
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <polygon points="5,1 6.2,3.8 9.5,4.1 7.1,6.2 7.9,9.5 5,7.8 2.1,9.5 2.9,6.2 0.5,4.1 3.8,3.8"
+                fill="rgba(255,255,255,0.9)" />
+            </svg>
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: "0.14em",
+              textTransform: "uppercase", color: "#fff",
+            }}>Demo</span>
+          </div>
         </div>
+
+        {/* Corner camera dots (top-left, subtle) */}
+        <div style={{
+          position: "absolute", top: 20, left: 22,
+          width: 8, height: 8, borderRadius: "50%",
+          background: "#1e1040",
+          boxShadow: "0 0 0 1.5px rgba(139,92,246,0.3)",
+          zIndex: 3,
+        }} />
       </motion.div>
 
       <AnimatePresence>
