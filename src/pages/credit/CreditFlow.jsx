@@ -276,17 +276,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const goMarketplace = useCallback(() => { setStep("marketplace"); loadApplications(); }, [loadApplications]);
 
-  const openApplication = useCallback(async (app) => {
+  const openApplication = useCallback((app) => {
     setActiveApplication(app);
-    setProviderSubmitted(false);
-    setProviderSel(new Set());
-    try {
-      const { data } = await supabase.from("credit_marketplace_selections").select("provider_id").eq("application_id", app.id);
-      setProviderSel(new Set((data || []).map((r) => r.provider_id)));
-      if (data?.length) setProviderSubmitted(true);
-    } catch (e) {
-      console.warn("[CreditFlow] load selections failed:", e?.message || e);
-    }
+    const existing = Array.isArray(app.selected_providers) ? app.selected_providers : [];
+    setProviderSel(new Set(existing.map((p) => p.provider_id)));
+    setProviderSubmitted(existing.length > 0);
     setStep("marketplaceOffers");
   }, []);
 
@@ -302,12 +296,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     if (!activeApplication || providerSel.size === 0) return;
     setProviderSubmitting(true);
     try {
-      await supabase.from("credit_marketplace_selections").delete().eq("application_id", activeApplication.id);
-      const rows = [...providerSel].map((id) => {
+      const selected = [...providerSel].map((id) => {
         const p = STUB_PROVIDERS.find((x) => x.id === id);
-        return { application_id: activeApplication.id, provider_id: id, provider_name: p?.name || id };
+        return { provider_id: id, provider_name: p?.name || id };
       });
-      await supabase.from("credit_marketplace_selections").insert(rows);
+      await supabase.from("credit_marketplace_applications").update({ selected_providers: selected, updated_at: new Date().toISOString() }).eq("id", activeApplication.id);
       setProviderSubmitted(true);
     } catch (e) {
       console.warn("[CreditFlow] submit selections failed:", e?.message || e);
