@@ -44,6 +44,27 @@ const APP_STATUS = {
   complete: { label: "Complete", cls: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
 };
 
+// Count-up animation for a number (used on the score card).
+const CountUp = ({ value, className, duration = 1200 }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (!Number.isFinite(value)) { el.textContent = "—"; return; }
+    let raf, start;
+    const tick = (t) => {
+      if (start == null) start = t;
+      const p = Math.min((t - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(value * ease));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => raf && cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <span ref={ref} className={className}>—</span>;
+};
+
 // Score-band tone for the dark gradient hero card (light text on dark).
 const bandTone = (band) => {
   const b = String(band || "").toLowerCase();
@@ -130,6 +151,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [scoreReasons, setScoreReasons] = useState([]);
   const [scoreError, setScoreError] = useState("");
   const [creditDone, setCreditDone] = useState(false);
+  const [creditAt, setCreditAt] = useState(null); // when the bureau check last ran
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
   const [loanTermMonths, setLoanTermMonths] = useState(3);
@@ -158,6 +180,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [providerSort, setProviderSort] = useState("rate");
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [providerSubmitted, setProviderSubmitted] = useState(false);
+  const [showScoreBack, setShowScoreBack] = useState(false); // flip the score card
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -246,6 +269,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const consented = !!raw.credit_consent_at;
       const verified = kycDone || creditKycDone;
       const scored = !!raw.credit_score_at;
+      setCreditAt(raw.credit_score_at || null);
       setKycVerified(verified);
       setIdConfirmed(idDone);
       setConsentDone(consented);
@@ -490,15 +514,17 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const hasScore = Number.isFinite(s) && s > 0;
       const band = data?.raw?.creditScore?.riskType || data.score_band || bandFor(s);
       const reasons = Array.isArray(data.scoreReasons) ? data.scoreReasons : [];
+      const nowIso = new Date().toISOString();
       setScore(hasScore ? s : null);
       setScoreBand(band);
       setScoreReasons(reasons);
       setCreditDone(true);
+      setCreditAt(nowIso);
       await saveCreditFlag({
         credit_score: hasScore ? s : null,
         credit_score_band: band,
         credit_score_reasons: reasons,
-        credit_score_at: new Date().toISOString(),
+        credit_score_at: nowIso,
         credit_address: { address1: street, address2: suburb, address3: line3, postal_code: postal },
       });
       // Note: applications (amount + term) are created explicitly on the
@@ -782,131 +808,215 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           </>
         )}
 
-        {/* ── My applications — score hero + application cards + new-loan CTA ── */}
-        {step === "marketplace" && (
-          <>
-            <Header title="My applications" />
+        {/* ── My applications — immersive hero (flip score card), metrics, list, CTA ── */}
+        {step === "marketplace" && (() => {
+          const tone = bandTone(scoreBand || bandFor(score));
+          const pct = Number.isFinite(score) ? Math.min(100, Math.max(0, ((score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100)) : 0;
+          const lastChecked = creditAt ? new Date(creditAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short" }) : "—";
+          const CARD = "linear-gradient(135deg, #2a1a46 0%, #4c2e75 55%, #7a4aa7 100%)";
+          return (
+            <div className="-mx-3 -mt-12 md:-mx-6">
+              <style>{`
+                @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes cfSheen { 0% { transform: translateX(-120%); } 60%,100% { transform: translateX(220%); } }
+                @keyframes cfFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+                @keyframes cfPulse { 0%,100% { box-shadow: 0 10px 30px -8px rgba(108,63,224,.55); } 50% { box-shadow: 0 14px 42px -6px rgba(108,63,224,.85); } }
+                .cf-fade { opacity: 0; animation: cfFadeUp .6s cubic-bezier(.22,1,.36,1) forwards; }
+              `}</style>
 
-            {/* Score hero — premium dark-purple card (moved here from the provider view). */}
-            {(() => {
-              const tone = bandTone(scoreBand || bandFor(score));
-              const pct = Number.isFinite(score) ? Math.min(100, Math.max(0, ((score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100)) : 0;
-              return (
-                <section
-                  className="relative overflow-hidden rounded-[28px] px-5 pt-5 pb-6 shadow-lg"
-                  style={{ background: "linear-gradient(135deg, #2a1a46 0%, #4c2e75 55%, #7a4aa7 100%)" }}
-                >
-                  <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                  <div className="pointer-events-none absolute -left-6 bottom-0 h-24 w-24 rounded-full bg-fuchsia-400/10 blur-2xl" />
+              {/* HERO */}
+              <div
+                className="relative overflow-hidden rounded-b-[34px] px-5 pt-12 pb-9"
+                style={{ background: "linear-gradient(170deg, #0d0d12 0%, #25173e 22%, #5b3486 55%, #9a64c4 80%, #e7d4f0 100%)" }}
+              >
+                <div className="pointer-events-none absolute -right-10 top-6 h-40 w-40 rounded-full bg-fuchsia-300/15 blur-3xl" />
+                <div className="pointer-events-none absolute -left-12 top-24 h-36 w-36 rounded-full bg-violet-400/15 blur-3xl" />
 
-                  <div className="relative flex items-center justify-between">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Your credit score</p>
-                    {Number.isFinite(score) && (
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${tone.chip}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />{scoreBand || bandFor(score)}
-                      </span>
-                    )}
-                  </div>
+                {/* Header */}
+                <div className="relative z-10 mb-6 flex items-center justify-between">
+                  <button type="button" onClick={onBack} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm active:scale-95">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <p className="text-sm font-semibold text-white/90">My credit</p>
+                  <div className="h-10 w-10" />
+                </div>
 
-                  <div className="relative mt-2 flex items-end gap-2">
-                    <p className="text-[52px] font-light leading-none text-white">{Number.isFinite(score) ? score : "—"}</p>
-                    <p className="mb-1.5 text-[11px] text-white/40">/ {SCORE_MAX}</p>
-                  </div>
-
-                  <div className="relative mt-4 h-[5px] w-full overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-300 to-white/80" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="relative mt-1 flex justify-between text-[9px] text-white/35">
-                    <span>{SCORE_MIN}</span><span>{SCORE_MAX}</span>
-                  </div>
-
-                  <p className="relative mt-3 text-[10px] leading-relaxed text-white/45">One bureau enquiry — reused across every lender, so your score is protected.</p>
-                </section>
-              );
-            })()}
-
-            {/* Applications */}
-            <div className="mt-6 mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Your applications</p>
-              {applications.length > 0 && <span className="text-xs font-medium text-slate-400">{applications.length}</span>}
-            </div>
-
-            {applicationsLoading ? (
-              <div className="flex justify-center py-10 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
-            ) : applications.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-500"><Store className="h-6 w-6" /></div>
-                <p className="text-sm font-semibold text-slate-700">No applications yet</p>
-                <p className="mt-1 text-xs text-slate-400">Start one below to compare lenders side by side.</p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {applications.map((app) => {
-                  const st = APP_STATUS[app.status] || APP_STATUS.in_review;
-                  const sel = Array.isArray(app.selected_providers) ? app.selected_providers : [];
-                  const isComplete = app.status === "complete";
-                  return (
-                    <li key={app.id}>
+                {/* Flip score card */}
+                <div className="relative" style={{ perspective: "1400px" }}>
+                  <div
+                    className="relative w-full"
+                    style={{
+                      transformStyle: "preserve-3d",
+                      transition: "transform .65s cubic-bezier(.4,.2,.2,1), min-height .4s ease",
+                      transform: showScoreBack ? "rotateY(180deg)" : "rotateY(0deg)",
+                      minHeight: showScoreBack ? "230px" : "210px",
+                    }}
+                  >
+                    {/* FRONT */}
+                    <div className="w-full" style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
                       <button
                         type="button"
-                        onClick={() => openApplication(app)}
-                        className="block w-full rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition active:scale-[0.99]"
+                        onClick={() => Number.isFinite(score) && setShowScoreBack(true)}
+                        className="relative w-full overflow-hidden rounded-[28px] px-5 pt-5 pb-6 text-left shadow-xl"
+                        style={{ background: CARD }}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[19px] font-semibold leading-none text-slate-900">R {Number(app.requested_amount || 0).toLocaleString("en-ZA")}</p>
-                            <p className="mt-1.5 text-xs text-slate-400">{app.requested_term_months} month{app.requested_term_months > 1 ? "s" : ""} · {new Date(app.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</p>
-                          </div>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.cls}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />{st.label}
-                          </span>
+                        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                          <div className="absolute top-0 h-full w-1/3 -skew-x-12 bg-white/10" style={{ animation: "cfSheen 4.5s ease-in-out infinite" }} />
                         </div>
-
-                        {sel.length > 0 && (
-                          <div className="mt-4 border-t border-slate-100 pt-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{isComplete ? "Accepted by" : "Submitted to"}</p>
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              {sel.map((s) => {
-                                const p = STUB_PROVIDERS.find((x) => x.id === s.provider_id);
-                                return (
-                                  <span key={s.provider_id} className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[11px] font-medium ${isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"}`}>
-                                    <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: p?.bg || "#6C3FE0" }}>{p?.short || (s.provider_name || "?").slice(0, 2)}</span>
-                                    {s.provider_name || p?.name}
-                                    {isComplete && <Check className="h-3 w-3" />}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-3 flex items-center justify-between">
-                          <span className="text-[12px] font-medium text-violet-600">{sel.length > 0 ? (isComplete ? "View offers" : "Edit lenders") : "Choose lenders"}</span>
-                          <ChevronRight className="h-4 w-4 text-slate-300" />
+                        <div className="relative flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">Your credit score</span>
+                          {Number.isFinite(score) && (
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ${tone.chip}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />{scoreBand || bandFor(score)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative mt-3 flex items-end gap-2">
+                          <CountUp value={score} className="text-[60px] font-light leading-none text-white" />
+                          <span className="mb-2 text-[12px] text-white/40">/ {SCORE_MAX}</span>
+                        </div>
+                        <div className="relative mt-4 h-[6px] w-full overflow-hidden rounded-full bg-white/15">
+                          <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-300 to-white/85 transition-all duration-1000" style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="relative mt-1.5 flex items-center justify-between text-[9px] text-white/35">
+                          <span>{SCORE_MIN}</span>
+                          <span className="text-white/40">Tap for details ↻</span>
+                          <span>{SCORE_MAX}</span>
                         </div>
                       </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                    </div>
 
-            {/* Create a new application — purple CTA card (amount + term entered next) */}
-            <button
-              type="button"
-              onClick={() => { setLoanAmount(50000); setLoanTermMonths(3); setStep("newApplication"); }}
-              className="mt-4 flex w-full items-center gap-4 overflow-hidden rounded-3xl px-5 py-5 text-left shadow-lg active:scale-[0.99]"
-              style={{ background: "linear-gradient(135deg, #6C3FE0 0%, #8B5CF6 100%)" }}
-            >
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white"><Plus className="h-6 w-6" /></div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white">Create a new application</p>
-                <p className="mt-0.5 text-xs text-white/70">Set your amount and term, then compare lenders</p>
+                    {/* BACK — score reasons + NCA */}
+                    <div className="absolute inset-0 w-full" style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowScoreBack(false)}
+                        className="h-full w-full overflow-hidden rounded-[28px] px-5 pt-5 pb-6 text-left shadow-xl"
+                        style={{ background: CARD }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">What's affecting your score</span>
+                          <span className="text-[10px] text-white/40">↻ Flip back</span>
+                        </div>
+                        {scoreReasons.length > 0 ? (
+                          <ul className="mt-3 space-y-1.5">
+                            {scoreReasons.slice(0, 4).map((r, i) => (
+                              <li key={i} className="flex gap-2 text-[11px] leading-snug text-white/75"><span className="text-fuchsia-300">•</span>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-3 text-[11px] text-white/55">No detailed reasons returned for this enquiry.</p>
+                        )}
+                        <div className="mt-3 border-t border-white/10 pt-2.5">
+                          <p className="text-[10px] leading-relaxed text-white/45">One bureau enquiry, reused across every lender — your score is protected. Credit provided under the National Credit Act 34 of 2005 by NCR-registered lenders.</p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics 2×2 */}
+                <div className="relative z-10 mt-4 grid grid-cols-2 gap-2.5">
+                  {[
+                    { k: "Applications", v: String(applications.length), s: applications.length === 1 ? "active request" : "active requests" },
+                    { k: "Score band", v: Number.isFinite(score) ? (scoreBand || bandFor(score)) : "—", s: "bureau rating", small: true },
+                    { k: "Last checked", v: lastChecked, s: "single enquiry" },
+                    { k: "Available up to", v: "R 50k", s: "unsecured" },
+                  ].map((m, i) => (
+                    <div key={m.k} className="cf-fade rounded-[20px] border border-white/10 bg-white/10 p-3.5 backdrop-blur-md" style={{ animationDelay: `${0.15 + i * 0.07}s` }}>
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-white/45">{m.k}</p>
+                      <p className={`mt-1 font-semibold text-white ${m.small ? "text-[13px]" : "text-[18px]"}`}>{m.v}</p>
+                      <p className="text-[10px] text-white/40">{m.s}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <ChevronRight className="h-5 w-5 text-white/70" />
-            </button>
-          </>
-        )}
+
+              {/* BODY */}
+              <div className="px-5 pb-12 pt-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[15px] font-semibold text-slate-900">Your applications</p>
+                  {applications.length > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-600">{applications.length}</span>}
+                </div>
+
+                {applicationsLoading ? (
+                  <div className="flex justify-center py-10 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : applications.length === 0 ? (
+                  <div className="cf-fade rounded-3xl border border-dashed border-violet-200 bg-violet-50/40 p-8 text-center" style={{ animationDelay: ".2s" }}>
+                    <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-100 text-violet-600" style={{ animation: "cfFloat 3s ease-in-out infinite" }}><Store className="h-7 w-7" /></div>
+                    <p className="text-sm font-semibold text-slate-800">No applications yet</p>
+                    <p className="mt-1 text-xs text-slate-500">Your score's ready — start your first application below and compare lenders side by side.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-3">
+                    {applications.map((app, idx) => {
+                      const st = APP_STATUS[app.status] || APP_STATUS.in_review;
+                      const sel = Array.isArray(app.selected_providers) ? app.selected_providers : [];
+                      const isComplete = app.status === "complete";
+                      return (
+                        <li key={app.id} className="cf-fade" style={{ animationDelay: `${0.1 + idx * 0.08}s` }}>
+                          <button
+                            type="button"
+                            onClick={() => openApplication(app)}
+                            className="block w-full rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-violet-200 hover:shadow-md active:scale-[0.99]"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[20px] font-semibold leading-none text-slate-900">R {Number(app.requested_amount || 0).toLocaleString("en-ZA")}</p>
+                                <p className="mt-1.5 text-xs text-slate-400">{app.requested_term_months} month{app.requested_term_months > 1 ? "s" : ""} · {new Date(app.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</p>
+                              </div>
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.cls}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />{st.label}
+                              </span>
+                            </div>
+
+                            {sel.length > 0 && (
+                              <div className="mt-4 border-t border-slate-100 pt-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{isComplete ? "Accepted by" : "Submitted to"}</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                  {sel.map((s) => {
+                                    const p = STUB_PROVIDERS.find((x) => x.id === s.provider_id);
+                                    return (
+                                      <span key={s.provider_id} className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[11px] font-medium ${isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"}`}>
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: p?.bg || "#6C3FE0" }}>{p?.short || (s.provider_name || "?").slice(0, 2)}</span>
+                                        {s.provider_name || p?.name}
+                                        {isComplete && <Check className="h-3 w-3" />}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="mt-3 flex items-center justify-between">
+                              <span className="text-[12px] font-semibold text-violet-600">{sel.length > 0 ? (isComplete ? "View offers" : "Edit lenders") : "Choose lenders"}</span>
+                              <ChevronRight className="h-4 w-4 text-slate-300" />
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {/* Create a new application — purple CTA card */}
+                <button
+                  type="button"
+                  onClick={() => { setLoanAmount(50000); setLoanTermMonths(3); setStep("newApplication"); }}
+                  className="cf-fade mt-4 flex w-full items-center gap-4 overflow-hidden rounded-3xl px-5 py-5 text-left active:scale-[0.99]"
+                  style={{ background: CARD, animationDelay: ".35s", animation: "cfFadeUp .6s cubic-bezier(.22,1,.36,1) forwards, cfPulse 3.2s ease-in-out 1s infinite" }}
+                >
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white"><Plus className="h-6 w-6" /></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">Create a new application</p>
+                    <p className="mt-0.5 text-xs text-white/60">Set your amount and term, then compare lenders</p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-white/60" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── New application — amount + term, then create & jump to comparison ── */}
         {step === "newApplication" && (
