@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, SlidersHorizontal, Star, Plus, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
@@ -181,6 +182,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [providerSubmitted, setProviderSubmitted] = useState(false);
   const [showScoreBack, setShowScoreBack] = useState(false); // flip the score card
+  const [portalTarget, setPortalTarget] = useState(null);    // for the fixed selection tray
+  useEffect(() => { setPortalTarget(typeof document !== "undefined" ? document.body : null); }, []);
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -1184,12 +1187,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               </p>
             )}
 
-            {/* Spacer so the fixed tray never covers the last provider card. */}
-            {providerSel.size > 0 && !providerSubmitted && <div className="h-24" />}
+            {/* Spacer so the portaled tray never covers the last provider card. */}
+            {providerSel.size > 0 && !providerSubmitted && <div className="h-28" />}
 
-            {/* Selection tray */}
-            {providerSel.size > 0 && !providerSubmitted && (
-              <div className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-sm rounded-t-3xl bg-slate-900 px-5 py-4 shadow-2xl md:max-w-md">
+            {/* Selection tray — portaled to <body> so it escapes any transformed
+                ancestor (page transitions) and sits above the app's bottom nav. */}
+            {providerSel.size > 0 && !providerSubmitted && portalTarget && createPortal(
+              <div className="fixed inset-x-0 bottom-0 z-[200] mx-auto w-full max-w-sm rounded-t-3xl bg-slate-900 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-2xl md:max-w-md" style={{ animation: "cfTrayUp .28s cubic-bezier(.22,1,.36,1)" }}>
+                <style>{`@keyframes cfTrayUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+                <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-white/15" />
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-white/50"><b className="font-semibold text-white">{providerSel.size}</b> selected</p>
                   <div className="flex items-center gap-2">
@@ -1204,7 +1210,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              portalTarget
             )}
           </>
         )}
