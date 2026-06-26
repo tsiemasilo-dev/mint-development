@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Smartphone, ScanFace, Search, CheckCircle2, Loader2, Store } from "lucide-react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Smartphone, ScanFace, Search, CheckCircle2, Loader2, Store, ChevronRight, SlidersHorizontal, Star, X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -23,6 +23,23 @@ const bandFor = (s) => {
   if (s >= 614) return "Fair";
   if (s >= 583) return "Average";
   return "Below average";
+};
+
+// Lender marketplace — stub providers until AlgoLend's marketplace is wired in
+// (per spec, AlgoLend supplies the real lender list + live terms; this gets the
+// comparison/select/submit UX working end-to-end today).
+const STUB_PROVIDERS = [
+  { id: "std", name: "Standard Bank", short: "SB", bg: "#0A7B5E", type: "Home loan", cat: "home", rate: 11.75, limit: "R 5,000,000", rawLimit: 5000000, term: "30 yrs", minIncome: "R 15k/mo", rating: 4.6, reviews: 1840, eligible: true, badge: "Lowest rate" },
+  { id: "cap", name: "Capitec", short: "CA", bg: "#4C3AA3", type: "Personal loan", cat: "personal", rate: 12.0, limit: "R 250,000", rawLimit: 250000, term: "84 mo", minIncome: "R 5k/mo", rating: 4.4, reviews: 3120, eligible: true, badge: "Most popular" },
+  { id: "absa", name: "ABSA", short: "AB", bg: "#B02020", type: "Personal loan", cat: "personal", rate: 12.5, limit: "R 350,000", rawLimit: 350000, term: "72 mo", minIncome: "R 8k/mo", rating: 4.2, reviews: 2760, eligible: true, badge: null },
+  { id: "ned", name: "Nedbank", short: "NB", bg: "#5B2FD4", type: "Vehicle finance", cat: "vehicle", rate: 13.25, limit: "R 500,000", rawLimit: 500000, term: "72 mo", minIncome: "R 10k/mo", rating: 4.1, reviews: 1490, eligible: false, badge: "Fast approval" },
+  { id: "fnb", name: "FNB", short: "FNB", bg: "#15457A", type: "Credit card", cat: "personal", rate: 14.0, limit: "R 80,000", rawLimit: 80000, term: "Revolving", minIncome: "R 7k/mo", rating: 4.3, reviews: 2180, eligible: true, badge: null },
+];
+
+const APP_STATUS = {
+  in_review: { label: "In review", cls: "bg-amber-50 text-amber-700" },
+  rejected: { label: "Rejected", cls: "bg-red-50 text-red-600" },
+  complete: { label: "Complete", cls: "bg-emerald-50 text-emerald-700" },
 };
 
 // Segmented semicircle gauge — canvas port of the reference design: 4 thick
@@ -89,7 +106,7 @@ const ScoreGauge = ({ value }) => {
 };
 
 const CreditFlow = ({ profile, onBack, onTabChange }) => {
-  // steps: checking | overview | consent | kyc | bureau | marketplace
+  // steps: checking | overview | consent | kyc | bureau | marketplace | marketplaceOffers
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
   const [consentDone, setConsentDone] = useState(false);
@@ -112,6 +129,17 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [addr3, setAddr3] = useState("");   // city / line 3 (optional)
   const [addrPostal, setAddrPostal] = useState("");
   const [addrLookupLoading, setAddrLookupLoading] = useState(false);
+
+  // Marketplace: "My applications" list → tap one → provider comparison.
+  const [applications, setApplications] = useState([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [activeApplication, setActiveApplication] = useState(null);
+  const [providerSel, setProviderSel] = useState(new Set());
+  const [providerFilterOpen, setProviderFilterOpen] = useState(false);
+  const [providerEligOnly, setProviderEligOnly] = useState(false);
+  const [providerSort, setProviderSort] = useState("rate");
+  const [providerSubmitting, setProviderSubmitting] = useState(false);
+  const [providerSubmitted, setProviderSubmitted] = useState(false);
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -226,7 +254,76 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     return () => { cancelled = true; };
   }, []);
 
-  const goMarketplace = useCallback(() => setStep("marketplace"), []);
+  const loadApplications = useCallback(async () => {
+    setApplicationsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) { setApplications([]); return; }
+      const { data } = await supabase
+        .from("credit_marketplace_applications")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false });
+      setApplications(data || []);
+    } catch (e) {
+      console.warn("[CreditFlow] loadApplications failed:", e?.message || e);
+      setApplications([]);
+    } finally {
+      setApplicationsLoading(false);
+    }
+  }, []);
+
+  const goMarketplace = useCallback(() => { setStep("marketplace"); loadApplications(); }, [loadApplications]);
+
+  const openApplication = useCallback(async (app) => {
+    setActiveApplication(app);
+    setProviderSubmitted(false);
+    setProviderSel(new Set());
+    try {
+      const { data } = await supabase.from("credit_marketplace_selections").select("provider_id").eq("application_id", app.id);
+      setProviderSel(new Set((data || []).map((r) => r.provider_id)));
+      if (data?.length) setProviderSubmitted(true);
+    } catch (e) {
+      console.warn("[CreditFlow] load selections failed:", e?.message || e);
+    }
+    setStep("marketplaceOffers");
+  }, []);
+
+  const toggleProviderSel = useCallback((id) => {
+    setProviderSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const submitProviderSelections = useCallback(async () => {
+    if (!activeApplication || providerSel.size === 0) return;
+    setProviderSubmitting(true);
+    try {
+      await supabase.from("credit_marketplace_selections").delete().eq("application_id", activeApplication.id);
+      const rows = [...providerSel].map((id) => {
+        const p = STUB_PROVIDERS.find((x) => x.id === id);
+        return { application_id: activeApplication.id, provider_id: id, provider_name: p?.name || id };
+      });
+      await supabase.from("credit_marketplace_selections").insert(rows);
+      setProviderSubmitted(true);
+    } catch (e) {
+      console.warn("[CreditFlow] submit selections failed:", e?.message || e);
+    } finally {
+      setProviderSubmitting(false);
+    }
+  }, [activeApplication, providerSel]);
+
+  const sortedProviders = useMemo(() => {
+    let list = STUB_PROVIDERS.filter((p) => !providerEligOnly || p.eligible);
+    list = [...list];
+    if (providerSort === "rate") list.sort((a, b) => a.rate - b.rate);
+    else if (providerSort === "limit") list.sort((a, b) => b.rawLimit - a.rawLimit);
+    else list.sort((a, b) => b.rating - a.rating);
+    return list;
+  }, [providerEligOnly, providerSort]);
 
   // Auto-fetch the applicant's address from Experian's KYC lookup (reuses the
   // bureau record), so the credit check has a valid address without typing.
@@ -325,6 +422,20 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         credit_requested_term: loanTermMonths,
         credit_address: { address1: street, address2: suburb, address3: line3, postal_code: postal },
       });
+      // One "application" per completed bureau run — what the user picks from in the marketplace list.
+      try {
+        const uid = session.user?.id;
+        if (uid) {
+          await supabase.from("credit_marketplace_applications").insert({
+            user_id: uid,
+            requested_amount: loanAmount,
+            requested_term_months: loanTermMonths,
+            status: "in_review",
+          });
+        }
+      } catch (e) {
+        console.warn("[CreditFlow] application record failed:", e?.message || e);
+      }
     } catch (e) {
       setScoreError(e?.message || "Credit check could not be completed.");
     } finally {
@@ -617,15 +728,182 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           </>
         )}
 
+        {/* ── My applications — every completed bureau run, tap one to compare lenders ── */}
         {step === "marketplace" && (
           <>
-            <Header title="Your credit offers" />
-            <Stub
-              icon={Store}
-              tone="slate"
-              title="Comparing lenders…"
-              body="This is where the lender marketplace will appear — every lender that would extend you an offer, side by side. Powered by AlgoLend (integration coming later)."
-            />
+            <Header title="My applications" />
+            {applicationsLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : applications.length === 0 ? (
+              <Stub icon={Store} tone="slate" title="No applications yet" body="Run a credit check to start your first application." />
+            ) : (
+              <ul className="space-y-3">
+                {applications.map((app) => {
+                  const st = APP_STATUS[app.status] || APP_STATUS.in_review;
+                  return (
+                    <li key={app.id}>
+                      <button
+                        type="button"
+                        onClick={() => openApplication(app)}
+                        className="flex w-full items-center justify-between gap-3 rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm active:scale-[0.99]"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">R {Number(app.requested_amount || 0).toLocaleString("en-ZA")} · {app.requested_term_months} mo</p>
+                          <p className="mt-1 text-xs text-slate-400">{new Date(app.created_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</p>
+                          <span className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.cls}`}>{st.label}</span>
+                        </div>
+                        <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+
+        {/* ── Provider comparison for one application — select up to 5, submit ── */}
+        {step === "marketplaceOffers" && activeApplication && (
+          <>
+            <header className="flex items-center gap-3 mb-6 relative">
+              <button type="button" onClick={() => setStep("marketplace")} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm flex-shrink-0">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-lg font-semibold text-slate-900">Credit marketplace</h1>
+            </header>
+
+            {/* Score strip */}
+            <section className="mb-5 flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div>
+                <p className="text-3xl font-bold leading-none tracking-tight text-slate-900">{Number.isFinite(score) ? score : "—"}</p>
+                <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{scoreBand || "Score on file"}
+                </span>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-slate-400">{SCORE_MIN} – {SCORE_MAX}</p>
+                <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400" style={{ width: `${Number.isFinite(score) ? Math.min(100, Math.max(0, ((score - SCORE_MIN) / (SCORE_MAX - SCORE_MIN)) * 100) ) : 0}%` }} />
+                </div>
+              </div>
+            </section>
+
+            {/* Toolbar */}
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex-1 text-xs text-slate-400">Showing <b className="font-semibold text-slate-600">{sortedProviders.length} providers</b></span>
+              <button
+                type="button"
+                onClick={() => setProviderFilterOpen((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium ${providerFilterOpen ? "border-violet-400 bg-violet-50 text-violet-600" : "border-slate-200 bg-white text-slate-600"}`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />Filter
+              </button>
+              <select
+                value={providerSort}
+                onChange={(e) => setProviderSort(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 outline-none"
+              >
+                <option value="rate">Rate ↑</option>
+                <option value="limit">Limit ↓</option>
+                <option value="rating">Rating</option>
+              </select>
+            </div>
+
+            {providerFilterOpen && (
+              <section className="mb-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input type="checkbox" checked={providerEligOnly} onChange={(e) => setProviderEligOnly(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" />
+                  Likely eligible only
+                </label>
+              </section>
+            )}
+
+            {/* Provider list */}
+            <div className="space-y-3">
+              {sortedProviders.map((p) => {
+                const sel = providerSel.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleProviderSel(p.id)}
+                    className={`block w-full rounded-2xl border bg-white text-left shadow-sm transition ${sel ? "border-violet-500 ring-1 ring-violet-500" : "border-slate-100"}`}
+                  >
+                    <div className="p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[11px] font-bold text-white" style={{ background: p.bg }}>{p.short}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                            {p.badge && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-semibold text-violet-600">{p.badge}</span>}
+                          </div>
+                          <p className="text-xs text-slate-400">{p.type} · {p.term}</p>
+                        </div>
+                        <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                          <div className="text-right">
+                            <p className="text-lg font-bold leading-none text-slate-900">{p.rate}%</p>
+                            <p className="text-[10px] text-slate-400">p.a. from</p>
+                          </div>
+                          <span className={`flex h-5 w-5 items-center justify-center rounded-md border ${sel ? "border-violet-600 bg-violet-600" : "border-slate-200"}`}>
+                            {sel && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-3">
+                        <div>
+                          <p className="truncate text-xs font-semibold text-slate-900">{p.limit}</p>
+                          <p className="text-[10px] text-slate-400">Max loan</p>
+                        </div>
+                        <div className="pl-3">
+                          <p className="truncate text-xs font-semibold text-slate-900">{p.minIncome}</p>
+                          <p className="text-[10px] text-slate-400">Min. income</p>
+                        </div>
+                        <div className="pl-3">
+                          <p className="flex items-center gap-1 text-xs font-semibold text-slate-900">{p.rating}<Star className="h-3 w-3 fill-amber-400 text-amber-400" /></p>
+                          <p className="text-[10px] text-slate-400">Rating ({(p.reviews / 1000).toFixed(1)}k)</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-b-2xl border-t border-slate-100 bg-slate-50 px-4 py-2.5">
+                      {p.eligible ? (
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Likely eligible</span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">May not qualify</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {providerSubmitted && (
+              <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />Submitted to {providerSel.size} lender{providerSel.size !== 1 ? "s" : ""}
+              </p>
+            )}
+
+            {/* Selection tray */}
+            {providerSel.size > 0 && !providerSubmitted && (
+              <div className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-sm rounded-t-3xl bg-slate-900 px-5 py-4 shadow-2xl md:max-w-md">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-white/50"><b className="font-semibold text-white">{providerSel.size}</b> selected</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setProviderSel(new Set())} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/60">Clear</button>
+                    <button
+                      type="button"
+                      onClick={submitProviderSelections}
+                      disabled={providerSubmitting}
+                      className="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      {providerSubmitting ? "Submitting…" : `Submit to ${providerSel.size} →`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
