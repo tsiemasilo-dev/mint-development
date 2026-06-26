@@ -1153,7 +1153,6 @@ export default function MintBasketsExplainer({
   onCloseStrategyForCoach,
   onNavigateToInvest,
 }) {
-  const [showIntro, setShowIntro]  = useState(true);
   const [phase, setPhase]         = useState(0);
   const [tabRect, setTabRect]     = useState(null);
   const [cardRect, setCardRect]   = useState(null);
@@ -1267,18 +1266,17 @@ export default function MintBasketsExplainer({
   // Phase 0 → 1: advance 2.5 s after Lottie loads, or after 5 s max as fallback
   // The fallback ensures the tour continues even if the Lottie load event never fires
   // (network error, DotLottie API mismatch, browser blocking external URLs).
-  // Both timers are gated on !showIntro so they don't fire during the intro card.
   useEffect(() => {
-    if (phase !== 0 || showIntro) return;
+    if (phase !== 0) return;
     const fallback = setTimeout(() => setPhase(1), 5000);
     return () => clearTimeout(fallback);
-  }, [phase, showIntro]);
+  }, [phase]);
 
   useEffect(() => {
-    if (phase !== 0 || !lottieReady || showIntro) return;
+    if (phase !== 0 || !lottieReady) return;
     phaseTimer.current = setTimeout(() => setPhase(1), 2500);
     return () => clearTimeout(phaseTimer.current);
-  }, [phase, lottieReady, showIntro]);
+  }, [phase, lottieReady]);
 
   // Phase 1 — three-beat choreography:
   //   Beat 1 (~0 ms)   : sections ABOVE fade out + collapse height → section
@@ -1692,135 +1690,63 @@ export default function MintBasketsExplainer({
         </div>
       )}
 
-      {/* ── Intro frame — shown before phase 0 starts ─────────────────────── */}
-      <AnimatePresence>
-        {showIntro && (
-          <motion.div
-            key="intro"
-            className="fixed inset-0 z-[10010] flex items-center justify-center px-5"
-            style={{ background: "rgba(6,4,18,0.82)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              style={{
-                background: "rgba(18,10,42,0.92)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                backdropFilter: "blur(32px)",
-                WebkitBackdropFilter: "blur(32px)",
-                borderRadius: 28,
-                width: "100%",
-                maxWidth: 360,
-                padding: "32px 28px 28px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 0,
-              }}
-            >
-              {/* Badge */}
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                background: "rgba(124,58,237,0.22)", border: "1px solid rgba(167,139,250,0.35)",
-                borderRadius: 99, padding: "4px 14px", marginBottom: 22,
-              }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="7" stroke="#a78bfa" strokeWidth="1.6"/>
-                  <path d="M8 5v3.5l2 1.5" stroke="#a78bfa" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#c4b5fd" }}>
-                  Interactive Guide
-                </span>
-              </div>
+      {/* ── Phone frame — wraps the entire animation like a device bezel ───── */}
+      <motion.div
+        className="pointer-events-none fixed inset-0 z-[10020]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.4 }}
+        style={{
+          boxShadow: "inset 0 0 0 12px #1a0f35, inset 0 0 0 14px rgba(167,139,250,0.55)",
+          borderRadius: 44,
+        }}
+      >
+        {/* Dynamic island */}
+        <div style={{
+          position: "absolute", top: 14, left: "50%",
+          transform: "translateX(-50%)",
+          width: 110, height: 32,
+          background: "#1a0f35",
+          borderRadius: 99,
+          boxShadow: "0 0 0 2px rgba(167,139,250,0.35)",
+        }} />
 
-              {/* Icon */}
-              <div style={{
-                width: 64, height: 64, borderRadius: 20,
-                background: "linear-gradient(135deg,#4c1d95 0%,#7c3aed 100%)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                marginBottom: 20, boxShadow: "0 8px 32px rgba(124,58,237,0.35)",
-              }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L9.5 9.5H2L7.5 13.5L5.5 21L12 17L18.5 21L16.5 13.5L22 9.5H14.5L12 2Z"
-                    fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.6"
-                    strokeLinejoin="round"/>
-                </svg>
-              </div>
+        {/* Left side buttons */}
+        <div style={{ position: "absolute", left: -4, top: 100, width: 4, height: 32, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
+        <div style={{ position: "absolute", left: -4, top: 142, width: 4, height: 50, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
+        <div style={{ position: "absolute", left: -4, top: 202, width: 4, height: 50, background: "#2d1b5e", borderRadius: "4px 0 0 4px" }} />
 
-              {/* Title */}
-              <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: 0, textAlign: "center", lineHeight: 1.25 }}>
-                How Mint Baskets Work
-              </h2>
+        {/* Right side button */}
+        <div style={{ position: "absolute", right: -4, top: 160, width: 4, height: 70, background: "#2d1b5e", borderRadius: "0 4px 4px 0" }} />
 
-              {/* Subtitle */}
-              <p style={{ fontSize: 14, color: "rgba(196,181,253,0.8)", textAlign: "center", margin: "10px 0 24px", lineHeight: 1.6 }}>
-                A quick interactive tour showing you how to explore, research, and invest in a strategy.
-              </p>
+        {/* Home indicator */}
+        <div style={{
+          position: "absolute", bottom: 8, left: "50%",
+          transform: "translateX(-50%)",
+          width: 120, height: 4,
+          background: "rgba(167,139,250,0.5)",
+          borderRadius: 99,
+        }} />
 
-              {/* Step pills */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", marginBottom: 28 }}>
-                {[
-                  { n: "1", label: "Find a Basket" },
-                  { n: "2", label: "Read the Factsheet" },
-                  { n: "3", label: "Make your first investment" },
-                ].map(({ n, label }) => (
-                  <div key={n} style={{
-                    display: "flex", alignItems: "center", gap: 12,
-                    background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "10px 14px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}>
-                    <div style={{
-                      width: 26, height: 26, borderRadius: 99, flexShrink: 0,
-                      background: "linear-gradient(135deg,#5b21b6,#7c3aed)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, fontWeight: 700, color: "#fff",
-                    }}>{n}</div>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>{label}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* CTA */}
-              <button
-                onClick={() => setShowIntro(false)}
-                style={{
-                  width: "100%", padding: "14px 0", borderRadius: 99,
-                  background: "linear-gradient(135deg,#5b21b6 0%,#7c3aed 100%)",
-                  border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700,
-                  color: "#fff", letterSpacing: "0.02em",
-                  boxShadow: "0 4px 20px rgba(124,58,237,0.45)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}
-              >
-                Let's go
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              {/* Skip */}
-              <button
-                onClick={handleDone}
-                style={{
-                  marginTop: 14, background: "none", border: "none", cursor: "pointer",
-                  fontSize: 13, color: "rgba(255,255,255,0.38)", fontWeight: 500,
-                }}
-              >
-                Skip tour
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        {/* "Guide" label — top-right corner */}
+        <div style={{
+          position: "absolute", top: 18, right: 24,
+          display: "flex", alignItems: "center", gap: 5,
+          background: "rgba(124,58,237,0.85)",
+          border: "1px solid rgba(167,139,250,0.5)",
+          borderRadius: 99, padding: "3px 10px",
+          backdropFilter: "blur(8px)",
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#a78bfa", animation: "pulse 1.5s infinite" }} />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#e9d5ff" }}>
+            Guide
+          </span>
+        </div>
+      </motion.div>
 
       <AnimatePresence>
-        {!showIntro && phase === 0 && (
+        {phase === 0 && (
           <motion.div key="phase0" exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <TabSpotlight rect={tabRect} onLottieLoad={() => setLottieReady(true)} />
           </motion.div>
