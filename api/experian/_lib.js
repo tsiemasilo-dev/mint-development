@@ -15,9 +15,11 @@ export const EXPERIAN_KYC_URL =
     : "https://apis-uat.experian.co.za:9443/KycService/RequestNewKYC";
 
 export function experianKycAuth() {
+  // IDMN creds are the primary login for the KYC address lookup (validated working);
+  // EXPERIAN_KYC_* kept as an optional override if a dedicated KYC login is ever set.
   return {
-    username: process.env.EXPERIAN_KYC_USERNAME || process.env.EXPERIAN_IDMN_USERNAME || "",
-    password: process.env.EXPERIAN_KYC_PASSWORD || process.env.EXPERIAN_IDMN_PASSWORD || "",
+    username: process.env.EXPERIAN_IDMN_USERNAME || process.env.EXPERIAN_KYC_USERNAME || "",
+    password: process.env.EXPERIAN_IDMN_PASSWORD || process.env.EXPERIAN_KYC_PASSWORD || "",
     version: "1.0",
     origin: "MINT",
   };

@@ -106,9 +106,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [loanTermMonths, setLoanTermMonths] = useState(3);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
-  const [addr1, setAddr1] = useState("");   // street
-  const [addr2, setAddr2] = useState("");   // suburb / area
+  const [addr1, setAddr1] = useState("");   // street / line 1
+  const [addr2, setAddr2] = useState("");   // suburb / line 2
+  const [addr3, setAddr3] = useState("");   // city / line 3 (optional)
   const [addrPostal, setAddrPostal] = useState("");
+  const [addrLookupLoading, setAddrLookupLoading] = useState(false);
 
   // KYC step: ID-number capture (reuses /api/onboarding/check-id-number — which also
   // creates the Sumsub applicant + saves profiles.id_number) → ExperianVerification.
@@ -209,6 +211,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const kyc0 = (Array.isArray(raw.experian_kyc_addresses) && raw.experian_kyc_addresses[0]) || {};
       setAddr1(ca.address1 || ad.street || (kyc0.lines && kyc0.lines[0]) || profile?.address || "");
       setAddr2(ca.address2 || ad.city || ad.suburb || (kyc0.lines && kyc0.lines[1]) || "");
+      setAddr3(ca.address3 || (kyc0.lines && kyc0.lines[2]) || "");
       setAddrPostal(ca.postal_code || ad.postal_code || kyc0.postalCode || profile?.postalCode || profile?.postal_code || "");
       if (Number.isFinite(Number(raw.credit_score))) { setScore(Number(raw.credit_score)); setScoreBand(bandFor(Number(raw.credit_score))); }
       if (raw.credit_requested_amount) setLoanAmount(Number(raw.credit_requested_amount));
@@ -223,10 +226,33 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const goMarketplace = useCallback(() => setStep("marketplace"), []);
 
+  // Auto-fetch the applicant's address from Experian's KYC lookup (reuses the
+  // bureau record), so the credit check has a valid address without typing.
+  // Returns { address1, address2, address3, postal_code } or null.
+  const fetchKycAddress = useCallback(async (idNum, forename, surname) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return null;
+      const res = await fetch("/api/experian/kyc-addresses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ identity_number: idNum, forename, surname }),
+      });
+      const data = await res.json();
+      const a = (data?.addresses || []).find((x) => Array.isArray(x.lines) && x.lines.length) || (data?.addresses || [])[0];
+      if (!a || !Array.isArray(a.lines) || !a.lines.length) return null;
+      return { address1: a.lines[0] || "", address2: a.lines[1] || "", address3: a.lines[2] || "", postal_code: a.postalCode || "" };
+    } catch (e) {
+      console.warn("[CreditFlow] KYC address lookup failed:", e?.message || e);
+      return null;
+    }
+  }, []);
+
   // The single credit bureau enquiry — real Experian pull via /api/credit-check.
   // ID is mandatory (fetched first). Address (street+suburb+postal) is required by
-  // Experian; if it's missing we prompt for it before/after the call rather than
-  // burning a guaranteed-fail enquiry. ClientRef is sanitized server-side (≤20).
+  // Experian; we auto-fetch it from the KYC lookup, and only prompt if the bureau
+  // has none on file. ClientRef is sanitized server-side (≤20).
   const runBureau = useCallback(async () => {
     setScoreError("");
     const idNum = (idOnFile || profile?.idNumber || profile?.id_number || "").replace(/\D/g, "");
@@ -237,13 +263,22 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setScoreError("We couldn't find your verified ID — please complete the identity step first.");
       return;
     }
-    // Address must be complete or Experian rejects the enquiry (-121/-122). If it's
-    // missing, prompt instead of wasting a billable call + the 30-min cooldown.
-    const street = (addr1 || "").trim(), suburb = (addr2 || "").trim(), postal = (addrPostal || "").trim();
+
+    // Resolve the address: use what we have, else auto-fetch from Experian KYC,
+    // else prompt. Experian rejects the enquiry without address1+address2+postal.
+    let street = (addr1 || "").trim(), suburb = (addr2 || "").trim(), line3 = (addr3 || "").trim(), postal = (addrPostal || "").trim();
     if (!street || !suburb || !postal) {
-      setAddrPrompt(true);
-      setScoreError("We need your address to run the credit check.");
-      return;
+      setAddrLookupLoading(true);
+      const got = await fetchKycAddress(idNum, forename, surname);
+      setAddrLookupLoading(false);
+      if (got && got.address1 && got.address2 && got.postal_code) {
+        street = got.address1; suburb = got.address2; line3 = got.address3 || ""; postal = got.postal_code;
+        setAddr1(street); setAddr2(suburb); setAddr3(line3); setAddrPostal(postal);
+      } else {
+        setAddrPrompt(true);
+        setScoreError("We couldn't find your address on file — please enter it to continue.");
+        return;
+      }
     }
 
     setBureauRunning(true);
@@ -259,7 +294,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
             identity_number: idNum, forename, surname,
             gender: profile?.gender || undefined,
             date_of_birth: profile?.dateOfBirth || profile?.date_of_birth || undefined,
-            address1: street, address2: suburb, postal_code: postal,
+            address1: street, address2: suburb, address3: line3 || undefined, postal_code: postal,
           },
         }),
       });
@@ -283,14 +318,14 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         credit_score_at: new Date().toISOString(),
         credit_requested_amount: loanAmount,
         credit_requested_term: loanTermMonths,
-        credit_address: { address1: street, address2: suburb, postal_code: postal },
+        credit_address: { address1: street, address2: suburb, address3: line3, postal_code: postal },
       });
     } catch (e) {
       setScoreError(e?.message || "Credit check could not be completed.");
     } finally {
       setBureauRunning(false);
     }
-  }, [idOnFile, profile, addr1, addr2, addrPostal, loanAmount, loanTermMonths, saveCreditFlag]);
+  }, [idOnFile, profile, addr1, addr2, addr3, addrPostal, loanAmount, loanTermMonths, saveCreditFlag, fetchKycAddress]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -488,11 +523,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <button
                 type="button"
                 onClick={runBureau}
-                disabled={bureauRunning}
+                disabled={bureauRunning || addrLookupLoading}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
               >
-                {bureauRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                {bureauRunning ? "Checking your credit…" : creditDone ? "Run again" : "Run credit check"}
+                {(bureauRunning || addrLookupLoading) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {addrLookupLoading ? "Finding your address…" : bureauRunning ? "Checking your credit…" : creditDone ? "Run again" : "Run credit check"}
               </button>
             </section>
 
