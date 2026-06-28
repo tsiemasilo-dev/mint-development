@@ -116,10 +116,11 @@ export default function WithdrawPage({ onBack }) {
           const sid = h.strategy_id;
           if (!sid) return;
           const e = enrich(h);
-          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null };
+          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null, assets: [] };
           stratMap[sid].value += e.value;
           stratMap[sid].cost += e.cost;
           stratMap[sid].count += 1;
+          stratMap[sid].assets.push({ logo: h.logo_url || null, symbol: h.symbol || "" });
         });
         const stratIds = Object.keys(stratMap);
         if (stratIds.length) {
@@ -160,6 +161,7 @@ export default function WithdrawPage({ onBack }) {
             symbol: s.name || "Strategy",
             name: `${s.count} asset${s.count === 1 ? "" : "s"}`,
             logo: s.logo,
+            assets: s.assets.slice(0, 3),
             value: adjustedValue,
             cost: adjustedCost,
             change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
@@ -246,9 +248,10 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
     o += 0.03 / denom * sm * 1.2;
   }
   float v = tanh(o.r);
+  vec3 base   = vec3(0.10, 0.03, 0.20);   // dark purple background
   vec3 purple = vec3(0.45, 0.16, 0.85);
   vec3 lilac  = vec3(0.80, 0.60, 1.0);
-  vec3 col = purple * v + lilac * pow(v, 4.0) * 0.7;
+  vec3 col = base + purple * v + lilac * pow(v, 4.0) * 0.7;
   fragColor = vec4(col, 1.0);
 }
 void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
@@ -319,6 +322,35 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
     </div>
   );
 
+  // Strategy/basket: show its underlying asset icons, stacked (up to 3).
+  const StackedAvatar = ({ assets, size = 42 }) => {
+    const list = (assets || []).slice(0, 3);
+    const overlap = Math.round(size * 0.34);
+    return (
+      <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+        {list.map((a, i) => (
+          <div
+            key={i}
+            className="wd-avatar"
+            style={{
+              height: size, width: size,
+              marginLeft: i === 0 ? 0 : -overlap,
+              zIndex: list.length - i,
+              border: "2px solid #fff",
+              boxShadow: "0 1px 5px rgba(60,52,137,0.18)",
+              background: a.logo ? "#fff" : colorFor(a.symbol),
+              fontSize: 11,
+            }}
+          >
+            {a.logo
+              ? <img src={a.logo} alt="" style={{ height: "100%", width: "100%", objectFit: "cover", borderRadius: 13 }} />
+              : String(a.symbol || "?").slice(0, 2).toUpperCase()}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const Card = ({ item, delay }) => {
     const sub = item.name + (item.kind === "security" && item.qty ? ` · ${item.qty} sh` : "");
     const chCol = item.up ? "#1D9E75" : "#D4537E";
@@ -328,7 +360,9 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
         onClick={() => setSelected(item)}
         style={{ animation: `wd-floatIn 0.5s cubic-bezier(0.34,1.4,0.64,1) ${delay}s forwards` }}
       >
-        <Avatar item={item} />
+        {item.kind === "strategy" && item.assets?.length
+          ? <StackedAvatar assets={item.assets} />
+          : <Avatar item={item} />}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="wd-name">{item.symbol}</div>
           <div className="wd-sub">{sub}</div>
@@ -605,7 +639,7 @@ function SellSheet({ item, onClose, onSubmit }) {
 
 const WD_CSS = `
 .wd-root { position:relative; min-height:100vh; background:#fff; font-family:var(--font-sans, system-ui, sans-serif); overflow:hidden; }
-.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; background:#08000f; }
+.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; background:#1a0833; }
 .wd-fade { position:absolute; top:0; left:0; right:0; height:340px; z-index:1; pointer-events:none;
   background:linear-gradient(180deg, rgba(26,10,58,0) 0%, rgba(26,10,58,0) 55%, rgba(255,255,255,0.4) 82%, #fff 100%); }
 .wd-topbar { display:flex; align-items:center; justify-content:space-between; padding:16px; }
