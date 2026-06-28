@@ -198,6 +198,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [algolendRequestId, setAlgolendRequestId] = useState(null);
   const [algolendLoading, setAlgolendLoading] = useState(false);
   const [algolendError, setAlgolendError] = useState("");
+  const [algolendInfo, setAlgolendInfo] = useState(null); // { message, totalLenders, evaluatedAt }
   const [showScoreBack, setShowScoreBack] = useState(false); // flip the score card
   const [customAmount, setCustomAmount] = useState(false);   // chips ↔ manual input
   const [portalTarget, setPortalTarget] = useState(null);    // for the fixed selection tray
@@ -378,10 +379,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setAlgolendRequestId(data.requestId);
       setAlgolendOffers(data.offers || []);
       setAlgolendDeclines(Array.isArray(data.declines) ? data.declines : []);
+      setAlgolendInfo({ message: data.message || "", totalLenders: Number(data.totalLenders) || 0, evaluatedAt: data.evaluatedAt || new Date().toISOString() });
     } catch (e) {
       setAlgolendError(e?.message || "Failed to load lender offers.");
       setAlgolendOffers([]);
       setAlgolendDeclines([]);
+      setAlgolendInfo(null);
     } finally {
       setAlgolendLoading(false);
     }
@@ -1428,8 +1431,23 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-2 text-xs font-semibold text-violet-600">Try again</button>
                 </div>
               )}
+              {/* Empty: distinguish "no lenders on AlgoLend yet" from "none matched". */}
               {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length === 0 && (
-                <p className="py-10 text-center text-sm text-slate-400">No lenders matched your profile for this amount.</p>
+                <div className="rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-500"><Store className="h-6 w-6" /></div>
+                  <p className="text-sm font-semibold text-slate-700">
+                    {algolendInfo?.totalLenders === 0 ? "No active lenders yet" : "No offers for this amount"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {algolendInfo?.message || "No lenders matched your profile for this amount."}
+                  </p>
+                  {algolendInfo?.evaluatedAt && (
+                    <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-600">
+                      <CheckCircle2 className="h-3 w-3" />Live from AlgoLend · {algolendInfo.totalLenders} lender{algolendInfo.totalLenders !== 1 ? "s" : ""} · checked {new Date(algolendInfo.evaluatedAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+                  <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-4 block w-full rounded-2xl border border-slate-200 py-2.5 text-xs font-semibold text-violet-600">Refresh</button>
+                </div>
               )}
               {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
                 <p className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-700">No lender made an offer for R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} yet — here's where each one stands.</p>
