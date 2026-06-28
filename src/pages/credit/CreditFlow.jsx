@@ -194,6 +194,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [providerSubmitted, setProviderSubmitted] = useState(false);
   // Live lender offers from the AlgoLend marketplace.
   const [algolendOffers, setAlgolendOffers] = useState(null);
+  const [algolendDeclines, setAlgolendDeclines] = useState([]); // lenders that didn't match
   const [algolendRequestId, setAlgolendRequestId] = useState(null);
   const [algolendLoading, setAlgolendLoading] = useState(false);
   const [algolendError, setAlgolendError] = useState("");
@@ -376,9 +377,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       if (!res.ok) throw new Error(data.error || "Could not fetch offers.");
       setAlgolendRequestId(data.requestId);
       setAlgolendOffers(data.offers || []);
+      setAlgolendDeclines(Array.isArray(data.declines) ? data.declines : []);
     } catch (e) {
       setAlgolendError(e?.message || "Failed to load lender offers.");
       setAlgolendOffers([]);
+      setAlgolendDeclines([]);
     } finally {
       setAlgolendLoading(false);
     }
@@ -1425,8 +1428,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-2 text-xs font-semibold text-violet-600">Try again</button>
                 </div>
               )}
-              {!algolendLoading && !algolendError && count === 0 && (
+              {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length === 0 && (
                 <p className="py-10 text-center text-sm text-slate-400">No lenders matched your profile for this amount.</p>
+              )}
+              {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
+                <p className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-700">No lender made an offer for R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} yet — here's where each one stands.</p>
               )}
 
               <div className="space-y-3">
@@ -1481,6 +1487,28 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   );
                 })}
               </div>
+
+              {/* Lenders that didn't make an offer for this amount (still listed). */}
+              {algolendDeclines.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Not available for this amount</p>
+                  <div className="space-y-2">
+                    {algolendDeclines.map((d, i) => {
+                      const name = d.lender || d.lenderName || "Lender";
+                      return (
+                        <div key={`${name}-${i}`} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+                          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[10px] font-bold uppercase text-white opacity-60" style={{ background: lenderColor(name) }}>{String(name).slice(0, 2)}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-600">{name}</p>
+                            {d.reason && <p className="text-[11px] text-slate-400">{d.reason}</p>}
+                          </div>
+                          <span className="flex-shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-400">No offer</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {providerSubmitted && (
                 <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
