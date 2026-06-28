@@ -4,12 +4,11 @@ import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, 
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
-// AlgoLend marketplace endpoint + key. Prefer env (set on Vercel), but fall
-// back to the published defaults so a dev server started before .env was added
-// (or a build missing the vars) doesn't fetch "/undefined/...". The key is a
-// VITE_ var — client-exposed by design.
+// AlgoLend marketplace endpoint + key — set via env (VITE_ALGOLEND_* on Vercel
+// + local .env). The URL keeps a public-host fallback so a build missing the
+// var never fetches "/undefined/..."; the key is env-only (no secret in source).
 const ALGOLEND_URL = import.meta.env.VITE_ALGOLEND_URL || "https://admin.algolend.co.za";
-const ALGOLEND_KEY = import.meta.env.VITE_ALGOLEND_API_KEY || "ecfc04569dc012b81da4b350a204e0a28f4d4a7471079f68fb55002741670b8c";
+const ALGOLEND_KEY = import.meta.env.VITE_ALGOLEND_API_KEY || "";
 
 /**
  * CreditFlow — the unsecured-credit journey per the MINT Credit Journey spec (§3).
