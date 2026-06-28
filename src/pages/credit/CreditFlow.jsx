@@ -315,10 +315,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const incomeDone = savedIncome > 0;
       // Furthest completed point — where "Continue" resumes to.
       setResumeTarget(scored ? (incomeDone ? "marketplace" : "income") : verified ? "bureau" : consented ? "kyc" : "consent");
-      // Fully onboarded (scored + income) → My applications. Scored but no income
-      // yet → the income step. Otherwise the overview checklist.
+      // Fully onboarded (scored + income) → straight to My applications (no
+      // checklist). Anyone mid-setup → the overview checklist first (ticks on
+      // what's done), and Continue resumes to resumeTarget.
       if (scored && incomeDone) { setStep("marketplace"); loadApplications(); }
-      else if (scored) setStep("income");
       else setStep("overview");
     })();
     return () => { cancelled = true; };
