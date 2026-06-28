@@ -10,6 +10,10 @@ import ExperianVerification from "../../components/ExperianVerification";
 const ALGOLEND_URL = import.meta.env.VITE_ALGOLEND_URL || "https://admin.algolend.co.za";
 const ALGOLEND_KEY = import.meta.env.VITE_ALGOLEND_API_KEY || "ecfc04569dc012b81da4b350a204e0a28f4d4a7471079f68fb55002741670b8c";
 
+// Income verification: when the bank-statement AI is wired up, flip this on
+// (VITE_INCOME_AI=true). Until then the income step falls back to manual entry.
+const INCOME_AI_ENABLED = import.meta.env.VITE_INCOME_AI === "true";
+
 /**
  * CreditFlow — the unsecured-credit journey per the MINT Credit Journey spec (§3).
  * This is the SPINE: tap Credit → branch on KYC status → (consent → real-time KYC →
@@ -143,7 +147,7 @@ const ScoreGauge = ({ value }) => {
 };
 
 const CreditFlow = ({ profile, onBack, onTabChange }) => {
-  // steps: checking | overview | consent | kyc | bureau | marketplace | newApplication | marketplaceOffers
+  // steps: checking | overview | consent | kyc | bureau | income | marketplace | newApplication | marketplaceOffers
   const [step, setStep] = useState("checking");
   const [kycVerified, setKycVerified] = useState(false);
   const [consentDone, setConsentDone] = useState(false);
@@ -160,6 +164,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
   const [loanTermMonths, setLoanTermMonths] = useState(3);
+  // Monthly income — captured once as the last onboarding step, reused by AlgoLend.
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [statementMonths, setStatementMonths] = useState(3); // 3 or 6 (AI path)
+  const [statementName, setStatementName] = useState("");
+  const [statementUploading, setStatementUploading] = useState(false);
+  const [incomeSaving, setIncomeSaving] = useState(false);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
   const [addr1, setAddr1] = useState("");   // street / line 1
@@ -299,11 +309,16 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       // Proof of address — reuse one already uploaded during invest onboarding if present.
       const poa = raw.credit_poa_path || raw.address_details?.proof_of_address_path || null;
       if (poa) { setPoaPath(poa); setPoaFileName(raw.credit_poa_name || raw.address_details?.proof_of_address_name || "Proof of address"); }
+      // Monthly income (last onboarding step). Reuse a real TruID figure if one exists.
+      const savedIncome = Number(raw.credit_monthly_income) || 0;
+      if (savedIncome > 0) setMonthlyIncome(savedIncome);
+      const incomeDone = savedIncome > 0;
       // Furthest completed point — where "Continue" resumes to.
-      setResumeTarget(scored ? "marketplace" : verified ? "bureau" : consented ? "kyc" : "consent");
-      // Once fully onboarded + scored, go straight to My applications (no checklist).
-      // Otherwise land on the overview first (like invest onboarding).
-      if (scored) { setStep("marketplace"); loadApplications(); }
+      setResumeTarget(scored ? (incomeDone ? "marketplace" : "income") : verified ? "bureau" : consented ? "kyc" : "consent");
+      // Fully onboarded (scored + income) → My applications. Scored but no income
+      // yet → the income step. Otherwise the overview checklist.
+      if (scored && incomeDone) { setStep("marketplace"); loadApplications(); }
+      else if (scored) setStep("income");
       else setStep("overview");
     })();
     return () => { cancelled = true; };
@@ -348,7 +363,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         },
         body: JSON.stringify({
           creditScore: score,
-          monthlyIncome: profile?.monthlyIncome || profile?.monthly_income || 0,
+          monthlyIncome: monthlyIncome || profile?.monthlyIncome || profile?.monthly_income || 0,
           existingMonthlyObligations: 0,
           openDefaults: 0,
           idVerified: true,
@@ -367,7 +382,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     } finally {
       setAlgolendLoading(false);
     }
-  }, [score, profile]);
+  }, [score, profile, monthlyIncome]);
 
   const openApplication = useCallback((app) => {
     setActiveApplication(app);
@@ -493,6 +508,51 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setPoaUploading(false);
     }
   }, [saveCreditFlag]);
+
+  // Bank-statement upload for the income step (AI path). Reuses the POA signed-URL
+  // endpoint/bucket for now; stores the path so the income AI can read it later.
+  const handleStatementUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const okType = /(pdf|csv|xls|xlsx)$/i.test(file.type) || /\.(pdf|csv|xls|xlsx)$/i.test(file.name);
+    if (!okType) return;
+    setStatementUploading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sign in required");
+      const res = await fetch("/api/onboarding/poa-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || "application/octet-stream" }),
+      });
+      const info = await res.json().catch(() => ({}));
+      if (!res.ok || !info.success) throw new Error(info.error || "Upload failed");
+      const { error: upErr } = await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path, info.token, file, { contentType: file.type || undefined, upsert: true });
+      if (upErr) throw upErr;
+      setStatementName(file.name);
+      await saveCreditFlag({ credit_bank_statement_path: info.path, credit_bank_statement_months: statementMonths });
+      // TODO: when the income AI is live, POST this path for salary/pay-date detection
+      // and set monthlyIncome from the result instead of manual entry.
+    } catch (err) {
+      console.warn("[CreditFlow] statement upload failed:", err?.message || err);
+    } finally {
+      setStatementUploading(false);
+    }
+  }, [saveCreditFlag, statementMonths]);
+
+  // Save monthly income (last onboarding step) and move on to My applications.
+  const saveIncome = useCallback(async () => {
+    if (!(monthlyIncome > 0)) return;
+    setIncomeSaving(true);
+    try {
+      await saveCreditFlag({ credit_monthly_income: monthlyIncome, credit_income_at: new Date().toISOString() });
+      setStep("marketplace");
+      loadApplications();
+    } finally {
+      setIncomeSaving(false);
+    }
+  }, [monthlyIncome, saveCreditFlag, loadApplications]);
 
   // Explicitly create a new application from the My-applications page (amount +
   // term live here now, not on the bureau step — the single score is reused).
@@ -666,6 +726,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   { done: consentDone, label: "Consent", sub: "Permission to verify & check your credit" },
                   { done: kycVerified, label: "Identity verification", sub: "ID number, document & facial match" },
                   { done: creditDone, label: "Credit check", sub: "A single credit bureau enquiry" },
+                  { done: monthlyIncome > 0, label: "Income", sub: INCOME_AI_ENABLED ? "Bank statement check" : "Your monthly income" },
                   { done: false, label: "Your offers", sub: "Compare lenders side by side" },
                 ].map((s) => (
                   <li key={s.label} className="flex items-center gap-3">
@@ -870,12 +931,105 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
             </section>
 
             {creditDone && (
-              <button type="button" onClick={goMarketplace} className="mt-4 w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
-                Continue to my applications
+              <button type="button" onClick={() => (monthlyIncome > 0 ? goMarketplace() : setStep("income"))} className="mt-4 w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
+                {monthlyIncome > 0 ? "Continue to my applications" : "Continue"}
               </button>
             )}
           </>
         )}
+
+        {/* ── Income — final onboarding step (bank statement → AI, or manual) ── */}
+        {step === "income" && (() => {
+          const CARD = "linear-gradient(135deg, #2a1a46 0%, #4c2e75 55%, #7a4aa7 100%)";
+          return (
+            <div className="-mx-3 -mt-12 md:-mx-6">
+              <style>{`
+                @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+                .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+              `}</style>
+
+              {/* HERO */}
+              <div
+                className="relative overflow-hidden rounded-b-[34px] px-5 pt-12 pb-24"
+                style={{ background: "linear-gradient(170deg, #0d0d12 0%, #25173e 22%, #5b3486 55%, #9a64c4 80%, #e7d4f0 100%)" }}
+              >
+                <div className="pointer-events-none absolute -right-10 top-6 h-40 w-40 rounded-full bg-fuchsia-300/15 blur-3xl" />
+                <div className="pointer-events-none absolute -left-12 top-24 h-36 w-36 rounded-full bg-violet-400/15 blur-3xl" />
+                <div className="relative z-10 mb-7 flex items-center justify-between">
+                  <button type="button" onClick={() => setStep("bureau")} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm active:scale-95">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <p className="text-sm font-semibold text-white/90">Last step</p>
+                  <div className="h-10 w-10" />
+                </div>
+                <p className="relative z-10 text-[22px] font-semibold leading-tight text-white">{INCOME_AI_ENABLED ? <>Verify your<br />income</> : <>What do you<br />earn each month?</>}</p>
+                <p className="relative z-10 mt-1.5 text-xs text-white/55">{INCOME_AI_ENABLED ? "Upload your recent bank statement — we'll detect your salary automatically." : "This helps lenders show you offers you can afford."}</p>
+              </div>
+
+              {/* BODY */}
+              <div className="-mt-14 px-5 pb-12">
+                {INCOME_AI_ENABLED ? (
+                  /* AI path — bank statement (3 or 6 months) for salary detection */
+                  <div className="cf-fade rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                    <p className="text-sm font-semibold text-slate-900">Bank statement</p>
+                    <p className="mt-0.5 text-xs text-slate-400">PDF or CSV from your bank</p>
+                    <div className="mt-4 flex gap-2">
+                      {[3, 6].map((m) => (
+                        <button key={m} type="button" onClick={() => setStatementMonths(m)}
+                          className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition ${statementMonths === m ? "border-violet-600 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
+                          {m} months
+                        </button>
+                      ))}
+                    </div>
+                    {statementName ? (
+                      <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                        <span className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span className="max-w-[180px] truncate">{statementName}</span></span>
+                        <label className="cursor-pointer text-[12px] font-semibold text-violet-600">Replace<input type="file" accept=".pdf,.csv,.xls,.xlsx" className="hidden" onChange={handleStatementUpload} /></label>
+                      </div>
+                    ) : (
+                      <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center hover:border-violet-300">
+                        {statementUploading ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Uploading…</span> : <><span className="text-sm font-semibold text-violet-600">Tap to upload</span><span className="mt-0.5 text-[11px] text-slate-400">Last {statementMonths} months</span></>}
+                        <input type="file" accept=".pdf,.csv,.xls,.xlsx" className="hidden" onChange={handleStatementUpload} disabled={statementUploading} />
+                      </label>
+                    )}
+                    <p className="mt-3 text-[11px] text-slate-400">We'll automatically detect your salary and pay date. You can confirm before continuing.</p>
+                  </div>
+                ) : (
+                  /* Manual fallback — income AI not wired yet */
+                  <div className="cf-fade relative overflow-hidden rounded-[28px] px-5 pt-5 pb-6 shadow-xl" style={{ background: CARD }}>
+                    <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+                    <p className="relative text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Monthly income</p>
+                    <div className="relative mt-2 flex items-end gap-1">
+                      <span className="mb-2 text-2xl font-light text-white/70">R</span>
+                      <input
+                        autoFocus type="text" inputMode="numeric"
+                        value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
+                        onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                        placeholder="0"
+                        className="w-full bg-transparent text-[44px] font-light leading-none text-white placeholder-white/30 outline-none"
+                      />
+                    </div>
+                    <p className="relative mt-3 text-[11px] text-white/45">Your average take-home pay per month, after deductions.</p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={saveIncome}
+                  disabled={incomeSaving || !(monthlyIncome > 0)}
+                  className="cf-fade mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+                  style={{ background: CARD, animationDelay: ".1s" }}
+                >
+                  {incomeSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {incomeSaving ? "Saving…" : "Continue"}
+                </button>
+                {INCOME_AI_ENABLED && !(monthlyIncome > 0) && (
+                  <p className="mt-2 text-center text-[11px] text-slate-400">Upload a statement, then confirm the detected amount.</p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── My applications — immersive hero (flip score card), metrics, list, CTA ── */}
         {step === "marketplace" && (() => {
