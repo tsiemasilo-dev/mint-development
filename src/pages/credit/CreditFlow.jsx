@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, SlidersHorizontal, Star, Plus, Check } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -29,15 +29,13 @@ const bandFor = (s) => {
 // Lender marketplace — stub providers until AlgoLend's marketplace is wired in
 // (per spec, AlgoLend supplies the real lender list + live terms; this gets the
 // comparison/select/submit UX working end-to-end today).
-// Unsecured personal-loan lenders sized to this product (credit up to R50k).
-// Placeholder until AlgoLend supplies the real lender list + live terms.
-const STUB_PROVIDERS = [
-  { id: "oldmutual", name: "Old Mutual", short: "OM", bg: "#009677", type: "Personal loan", rate: 21.5, limit: "R 200,000", rawLimit: 200000, term: "Up to 72 mo", minIncome: "R 5k/mo", rating: 4.2, reviews: 1620, eligible: true, badge: "Lowest rate" },
-  { id: "capitec", name: "Capitec", short: "CA", bg: "#4C3AA3", type: "Personal loan", rate: 22.9, limit: "R 250,000", rawLimit: 250000, term: "Up to 84 mo", minIncome: "R 5k/mo", rating: 4.4, reviews: 3120, eligible: true, badge: "Most popular" },
-  { id: "fnb", name: "FNB", short: "FNB", bg: "#15457A", type: "Personal loan", rate: 23.75, limit: "R 300,000", rawLimit: 300000, term: "Up to 60 mo", minIncome: "R 7k/mo", rating: 4.3, reviews: 2180, eligible: true, badge: null },
-  { id: "africanbank", name: "African Bank", short: "AB", bg: "#0072CE", type: "Personal loan", rate: 24.5, limit: "R 350,000", rawLimit: 350000, term: "Up to 72 mo", minIncome: "R 5k/mo", rating: 4.1, reviews: 2740, eligible: true, badge: null },
-  { id: "directaxis", name: "DirectAxis", short: "DA", bg: "#E2231A", type: "Personal loan", rate: 25.0, limit: "R 300,000", rawLimit: 300000, term: "Up to 72 mo", minIncome: "R 8k/mo", rating: 4.0, reviews: 1490, eligible: false, badge: null },
-];
+// Small deterministic avatar colour for a lender (no logos from AlgoLend yet).
+const lenderColor = (key) => {
+  const palette = ["#4C3AA3", "#15457A", "#0072CE", "#009677", "#B02020", "#6C3FE0", "#7a4aa7"];
+  let h = 0;
+  for (const c of String(key || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return palette[h % palette.length];
+};
 
 const APP_STATUS = {
   in_review: { label: "In review", cls: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
@@ -176,11 +174,13 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [activeApplication, setActiveApplication] = useState(null);
   const [creatingApplication, setCreatingApplication] = useState(false);
   const [providerSel, setProviderSel] = useState(new Set());
-  const [providerFilterOpen, setProviderFilterOpen] = useState(false);
-  const [providerEligOnly, setProviderEligOnly] = useState(false);
-  const [providerSort, setProviderSort] = useState("rate");
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [providerSubmitted, setProviderSubmitted] = useState(false);
+  // Live lender offers from the AlgoLend marketplace.
+  const [algolendOffers, setAlgolendOffers] = useState(null);
+  const [algolendRequestId, setAlgolendRequestId] = useState(null);
+  const [algolendLoading, setAlgolendLoading] = useState(false);
+  const [algolendError, setAlgolendError] = useState("");
   const [showScoreBack, setShowScoreBack] = useState(false); // flip the score card
   const [portalTarget, setPortalTarget] = useState(null);    // for the fixed selection tray
   useEffect(() => { setPortalTarget(typeof document !== "undefined" ? document.body : null); }, []);
@@ -324,49 +324,96 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const goMarketplace = useCallback(() => { setStep("marketplace"); loadApplications(); }, [loadApplications]);
 
+  // Ask AlgoLend to evaluate every active lender policy and return ranked
+  // offers for this application (real lender names, rates, installments).
+  const evaluateWithAlgoLend = useCallback(async (app) => {
+    setAlgolendLoading(true);
+    setAlgolendError("");
+    setAlgolendOffers(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email || "";
+      const res = await fetch(`${import.meta.env.VITE_ALGOLEND_URL}/api/marketplace/evaluate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_ALGOLEND_API_KEY}`,
+        },
+        body: JSON.stringify({
+          creditScore: score,
+          monthlyIncome: profile?.monthlyIncome || profile?.monthly_income || 0,
+          existingMonthlyObligations: 0,
+          openDefaults: 0,
+          idVerified: true,
+          requestedAmount: Number(app.requested_amount),
+          termMonths: Number(app.requested_term_months),
+          mintUserId: email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not fetch offers.");
+      setAlgolendRequestId(data.requestId);
+      setAlgolendOffers(data.offers || []);
+    } catch (e) {
+      setAlgolendError(e?.message || "Failed to load lender offers.");
+      setAlgolendOffers([]);
+    } finally {
+      setAlgolendLoading(false);
+    }
+  }, [score, profile]);
+
   const openApplication = useCallback((app) => {
     setActiveApplication(app);
     const existing = Array.isArray(app.selected_providers) ? app.selected_providers : [];
     setProviderSel(new Set(existing.map((p) => p.provider_id)));
     setProviderSubmitted(existing.length > 0);
     setStep("marketplaceOffers");
-  }, []);
+    evaluateWithAlgoLend(app);
+  }, [evaluateWithAlgoLend]);
 
+  // Single-select: AlgoLend accepts exactly one lender per application.
   const toggleProviderSel = useCallback((id) => {
-    setProviderSel((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    // Changing the selection after a submit re-opens the tray so you can resubmit.
+    setProviderSel((prev) => (prev.has(id) ? new Set() : new Set([id])));
     setProviderSubmitted(false);
   }, []);
 
+  // Accept the chosen offer via AlgoLend — this marks it accepted, declines the
+  // rest, and pushes a loan_application row into the lender's own dashboard.
   const submitProviderSelections = useCallback(async () => {
-    if (!activeApplication || providerSel.size === 0) return;
+    if (!activeApplication || providerSel.size === 0 || !algolendRequestId) return;
     setProviderSubmitting(true);
     try {
-      const selected = [...providerSel].map((id) => {
-        const p = STUB_PROVIDERS.find((x) => x.id === id);
-        return { provider_id: id, provider_name: p?.name || id };
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email || "";
+      const lenderId = [...providerSel][0];
+      const res = await fetch(`${import.meta.env.VITE_ALGOLEND_URL}/api/marketplace/offers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_ALGOLEND_API_KEY}`,
+        },
+        body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
       });
-      await supabase.from("credit_marketplace_applications").update({ selected_providers: selected, updated_at: new Date().toISOString() }).eq("id", activeApplication.id);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Could not submit your acceptance.");
+      }
+      const offer = (algolendOffers || []).find((o) => o.lenderId === lenderId);
+      await supabase
+        .from("credit_marketplace_applications")
+        .update({
+          selected_providers: [{ provider_id: lenderId, provider_name: offer?.lenderName || lenderId }],
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", activeApplication.id);
       setProviderSubmitted(true);
     } catch (e) {
-      console.warn("[CreditFlow] submit selections failed:", e?.message || e);
+      console.warn("[CreditFlow] submit failed:", e?.message || e);
+      setAlgolendError(e?.message || "Could not submit your acceptance.");
     } finally {
       setProviderSubmitting(false);
     }
-  }, [activeApplication, providerSel]);
-
-  const sortedProviders = useMemo(() => {
-    let list = STUB_PROVIDERS.filter((p) => !providerEligOnly || p.eligible);
-    list = [...list];
-    if (providerSort === "rate") list.sort((a, b) => a.rate - b.rate);
-    else if (providerSort === "limit") list.sort((a, b) => b.rawLimit - a.rawLimit);
-    else list.sort((a, b) => b.rating - a.rating);
-    return list;
-  }, [providerEligOnly, providerSort]);
+  }, [activeApplication, providerSel, algolendRequestId, algolendOffers]);
 
   // Auto-fetch the applicant's address from Experian's KYC lookup (reuses the
   // bureau record), so the credit check has a valid address without typing.
@@ -978,11 +1025,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{isComplete ? "Accepted by" : "Submitted to"}</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {sel.map((s) => {
-                                    const p = STUB_PROVIDERS.find((x) => x.id === s.provider_id);
+                                    const name = s.provider_name || s.provider_id;
                                     return (
                                       <span key={s.provider_id} className={`inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[11px] font-medium ${isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600"}`}>
-                                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: p?.bg || "#6C3FE0" }}>{p?.short || (s.provider_name || "?").slice(0, 2)}</span>
-                                        {s.provider_name || p?.name}
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold uppercase text-white" style={{ background: lenderColor(s.provider_id) }}>{String(name).slice(0, 2)}</span>
+                                        {name}
                                         {isComplete && <Check className="h-3 w-3" />}
                                       </span>
                                     );
@@ -1093,60 +1140,50 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
             </section>
 
             {/* Toolbar */}
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex-1 text-xs text-slate-400">Showing <b className="font-semibold text-slate-600">{sortedProviders.length} providers</b></span>
-              <button
-                type="button"
-                onClick={() => setProviderFilterOpen((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium ${providerFilterOpen ? "border-violet-400 bg-violet-50 text-violet-600" : "border-slate-200 bg-white text-slate-600"}`}
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />Filter
-              </button>
-              <select
-                value={providerSort}
-                onChange={(e) => setProviderSort(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 outline-none"
-              >
-                <option value="rate">Rate ↑</option>
-                <option value="limit">Limit ↓</option>
-                <option value="rating">Rating</option>
-              </select>
-            </div>
-
-            {providerFilterOpen && (
-              <section className="mb-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                  <input type="checkbox" checked={providerEligOnly} onChange={(e) => setProviderEligOnly(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" />
-                  Likely eligible only
-                </label>
-              </section>
+            {!algolendLoading && (algolendOffers || []).length > 0 && (
+              <div className="mb-3">
+                <span className="text-xs text-slate-400">Showing <b className="font-semibold text-slate-600">{(algolendOffers || []).length} offer{(algolendOffers || []).length !== 1 ? "s" : ""}</b> · ranked best first</span>
+              </div>
             )}
 
-            {/* Provider list */}
+            {/* Live lender offers from AlgoLend */}
+            {algolendLoading && (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+                <p className="mt-3 text-xs">Finding lenders for you…</p>
+              </div>
+            )}
+            {algolendError && (
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-center">
+                <p className="text-sm font-medium text-red-600">{algolendError}</p>
+                <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-2 text-xs font-semibold text-violet-600">Try again</button>
+              </div>
+            )}
+            {!algolendLoading && !algolendError && (algolendOffers || []).length === 0 && (
+              <p className="py-10 text-center text-sm text-slate-400">No lenders matched your profile for this amount.</p>
+            )}
+
             <div className="space-y-3">
-              {sortedProviders.map((p) => {
-                const sel = providerSel.has(p.id);
+              {(algolendOffers || []).map((o) => {
+                const sel = providerSel.has(o.lenderId);
                 return (
                   <button
-                    key={p.id}
+                    key={o.lenderId}
                     type="button"
-                    onClick={() => toggleProviderSel(p.id)}
+                    onClick={() => toggleProviderSel(o.lenderId)}
                     className={`block w-full rounded-2xl border bg-white text-left shadow-sm transition ${sel ? "border-violet-500 ring-1 ring-violet-500" : "border-slate-100"}`}
                   >
                     <div className="p-4">
                       <div className="flex items-start gap-3">
-                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[11px] font-bold text-white" style={{ background: p.bg }}>{p.short}</span>
+                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-[11px] font-bold uppercase text-white" style={{ background: lenderColor(o.lenderId) }}>{String(o.lenderName || "?").slice(0, 2)}</span>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-sm font-semibold text-slate-900">{p.name}</p>
-                            {p.badge && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[9px] font-semibold text-violet-600">{p.badge}</span>}
-                          </div>
-                          <p className="text-xs text-slate-400">{p.type} · {p.term}</p>
+                          <p className="text-sm font-semibold text-slate-900">{o.lenderName}</p>
+                          {o.tagline && <p className="text-xs text-slate-400">{o.tagline}</p>}
                         </div>
                         <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
                           <div className="text-right">
-                            <p className="text-lg font-bold leading-none text-slate-900">{p.rate}%</p>
-                            <p className="text-[10px] text-slate-400">p.a. from</p>
+                            <p className="text-lg font-bold leading-none text-slate-900">{o.offeredRatePct}%</p>
+                            <p className="text-[10px] text-slate-400">p.a.</p>
                           </div>
                           <span className={`flex h-5 w-5 items-center justify-center rounded-md border ${sel ? "border-violet-600 bg-violet-600" : "border-slate-200"}`}>
                             {sel && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
@@ -1156,36 +1193,36 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
                       <div className="mt-3 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-3">
                         <div>
-                          <p className="truncate text-xs font-semibold text-slate-900">{p.limit}</p>
-                          <p className="text-[10px] text-slate-400">Max loan</p>
+                          <p className="truncate text-xs font-semibold text-slate-900">R {Number(o.offeredAmount || 0).toLocaleString("en-ZA")}</p>
+                          <p className="text-[10px] text-slate-400">Approved</p>
                         </div>
                         <div className="pl-3">
-                          <p className="truncate text-xs font-semibold text-slate-900">{p.minIncome}</p>
-                          <p className="text-[10px] text-slate-400">Min. income</p>
+                          <p className="truncate text-xs font-semibold text-slate-900">R {Number(o.monthlyInstallment || 0).toLocaleString("en-ZA")}</p>
+                          <p className="text-[10px] text-slate-400">Per month</p>
                         </div>
                         <div className="pl-3">
-                          <p className="flex items-center gap-1 text-xs font-semibold text-slate-900">{p.rating}<Star className="h-3 w-3 fill-amber-400 text-amber-400" /></p>
-                          <p className="text-[10px] text-slate-400">Rating ({(p.reviews / 1000).toFixed(1)}k)</p>
+                          <p className="truncate text-xs font-semibold text-slate-900">{o.avgTurnaroundDays} day{o.avgTurnaroundDays !== 1 ? "s" : ""}</p>
+                          <p className="text-[10px] text-slate-400">Turnaround</p>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center justify-between rounded-b-2xl border-t border-slate-100 bg-slate-50 px-4 py-2.5">
-                      {p.eligible ? (
-                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Likely eligible</span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">May not qualify</span>
-                      )}
+                      <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Eligible</span>
+                      <span className="text-[10px] text-slate-400">Total: R {Number(o.totalRepayment || 0).toLocaleString("en-ZA")}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            {providerSubmitted && (
-              <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />Submitted to {providerSel.size} lender{providerSel.size !== 1 ? "s" : ""}
-              </p>
-            )}
+            {providerSubmitted && (() => {
+              const chosen = (algolendOffers || []).find((o) => providerSel.has(o.lenderId));
+              return (
+                <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4" />Submitted to {chosen?.lenderName || "your lender"}
+                </p>
+              );
+            })()}
 
             {/* Spacer so the floating tray + bottom nav never cover the last card. */}
             {providerSel.size > 0 && !providerSubmitted && <div className="h-44" />}
@@ -1199,8 +1236,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               >
                 <style>{`@keyframes cfTrayUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
                 <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 shadow-2xl ring-1 ring-black/5">
-                  <p className="text-xs text-white/50"><b className="font-semibold text-white">{providerSel.size}</b> selected</p>
-                  <div className="flex items-center gap-2">
+                  <p className="text-xs text-white/50 truncate"><b className="font-semibold text-white">{(algolendOffers || []).find((o) => providerSel.has(o.lenderId))?.lenderName || "Lender"}</b> selected</p>
+                  <div className="flex flex-shrink-0 items-center gap-2">
                     <button type="button" onClick={() => setProviderSel(new Set())} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/60">Clear</button>
                     <button
                       type="button"
@@ -1208,7 +1245,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       disabled={providerSubmitting}
                       className="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     >
-                      {providerSubmitting ? "Submitting…" : `Submit to ${providerSel.size} →`}
+                      {providerSubmitting ? "Submitting…" : "Accept offer →"}
                     </button>
                   </div>
                 </div>
