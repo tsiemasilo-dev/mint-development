@@ -212,73 +212,100 @@ export default function WithdrawPage({ onBack }) {
   const investedAnim = useCountUp(invested);
   const cashAnim = useCountUp(cash);
 
-  // ── Cosmic particle header ────────────────────────────────────────────────
+  // ── WebGL2 shader header (purple & black) ─────────────────────────────────
   const canvasRef = useRef(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let W, H, raf;
-    let particles = [];
-    const dpr = window.devicePixelRatio || 1;
+    const gl = canvas.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+    if (!gl) return; // no WebGL2 → leave the header blank (CSS bg shows through)
+
+    const VERT = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`;
+    // Recoloured to purple/black: accumulate a single intensity, then ramp it
+    // through purple with a lilac highlight; black where there's no energy.
+    const FRAG = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec3 iResolution;
+uniform float iTime;
+void mainImage(out vec4 fragColor, in vec2 fragCoord){
+  vec2 r = iResolution.xy;
+  float t = iTime;
+  vec2 p = fragCoord - r * 0.5;
+  vec4 o = vec4(0.0);
+  for (float i = 0.0, a; i++ < 9.0; ) {
+    a = (i * i) / 80.0 - length(p) / r.y;
+    float denom = max(a, -a * 3.0) + 2.0 / r.y;
+    a = cos(i - t);
+    float edge0 = a;
+    a = atan(p.y, p.x) + a + i * i;
+    float sm = smoothstep(edge0, 2.0, cos(a));
+    o += 0.03 / denom * sm * 1.2;
+  }
+  float v = tanh(o.r);
+  vec3 purple = vec3(0.45, 0.16, 0.85);
+  vec3 lilac  = vec3(0.80, 0.60, 1.0);
+  vec3 col = purple * v + lilac * pow(v, 4.0) * 0.7;
+  fragColor = vec4(col, 1.0);
+}
+void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
+
+    const compile = (type, src) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+      return s;
+    };
+    const vs = compile(gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) return;
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+    gl.deleteShader(vs); gl.deleteShader(fs);
+
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    const uRes = gl.getUniformLocation(prog, "iResolution");
+    const uTime = gl.getUniformLocation(prog, "iTime");
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
 
     const resize = () => {
-      const r = canvas.getBoundingClientRect();
-      W = canvas.width = r.width * dpr;
-      H = canvas.height = r.height * dpr;
+      const rct = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rct.width * dpr));
+      const h = Math.max(1, Math.floor(rct.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
     };
     resize();
     window.addEventListener("resize", resize);
 
-    const CX = () => W / 2, CY = () => H * 0.32;
-    const mk = () => ({
-      angle: Math.random() * Math.PI * 2,
-      dist: Math.random() * 0.3,
-      speed: 0.0015 + Math.random() * 0.004,
-      size: Math.random() * 1.6 + 0.4,
-      life: Math.random(),
-    });
-    for (let i = 0; i < 90; i++) particles.push(mk());
-
-    const draw = () => {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#1a0a3a";
-      ctx.fillRect(0, 0, W, H);
-      const g = ctx.createRadialGradient(CX(), CY(), 0, CX(), CY(), W * 0.7);
-      g.addColorStop(0, "rgba(83,74,183,0.5)");
-      g.addColorStop(0.5, "rgba(38,33,92,0.3)");
-      g.addColorStop(1, "rgba(26,10,58,0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-
-      particles.forEach((p) => {
-        p.dist += p.speed;
-        p.life -= 0.004;
-        if (p.dist > 0.95 || p.life <= 0) { Object.assign(p, mk()); p.dist = 0.02; p.life = 1; }
-        const r = p.dist * W * 0.62;
-        const x = CX() + Math.cos(p.angle) * r;
-        const y = CY() + Math.sin(p.angle) * r * 0.75;
-        const op = Math.min(p.dist * 2.2, 1) * Math.min(p.life * 1.5, 1) * 0.9;
-        const sz = p.size * (1 + p.dist * 2.5) * dpr;
-        ctx.beginPath();
-        ctx.arc(x, y, sz, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${op})`;
-        ctx.fill();
-        if (p.dist > 0.4) {
-          ctx.beginPath();
-          const tx = CX() + Math.cos(p.angle) * (r - sz * 4);
-          const ty = CY() + Math.sin(p.angle) * (r - sz * 4) * 0.75;
-          ctx.moveTo(x, y); ctx.lineTo(tx, ty);
-          ctx.strokeStyle = `rgba(255,255,255,${op * 0.3})`;
-          ctx.lineWidth = sz * 0.5;
-          ctx.stroke();
-        }
-      });
-      raf = requestAnimationFrame(draw);
+    let raf, disposed = false;
+    const start = performance.now();
+    const tick = (now) => {
+      if (disposed) return;
+      if (gl.isContextLost()) { raf = requestAnimationFrame(tick); return; }
+      resize();
+      gl.useProgram(prog);
+      gl.uniform3f(uRes, canvas.width, canvas.height, dpr);
+      gl.uniform1f(uTime, (now - start) / 1000);
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      raf = requestAnimationFrame(tick);
     };
-    draw();
+    raf = requestAnimationFrame(tick);
 
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+    return () => {
+      disposed = true;
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      try { gl.deleteBuffer(vbo); gl.deleteVertexArray(vao); gl.deleteProgram(prog); } catch {}
+    };
   }, []);
 
   const Avatar = ({ item, size = 42 }) => (
@@ -578,7 +605,7 @@ function SellSheet({ item, onClose, onSubmit }) {
 
 const WD_CSS = `
 .wd-root { position:relative; min-height:100vh; background:#fff; font-family:var(--font-sans, system-ui, sans-serif); overflow:hidden; }
-.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; }
+.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; background:#08000f; }
 .wd-fade { position:absolute; top:0; left:0; right:0; height:340px; z-index:1; pointer-events:none;
   background:linear-gradient(180deg, rgba(26,10,58,0) 0%, rgba(26,10,58,0) 55%, rgba(255,255,255,0.4) 82%, #fff 100%); }
 .wd-topbar { display:flex; align-items:center; justify-content:space-between; padding:16px; }
