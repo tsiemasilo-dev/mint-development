@@ -75,6 +75,104 @@ registerCacheResetCallback(() => {
   _cachedHasAnyHoldings = false;
 });
 
+// ── PendingSellsSection ──────────────────────────────────────────────────────
+// Red counterpart to the (purple) pending-buy orders: lists holdings the user
+// has requested to sell (trade_side='SELL', not yet exit-filled). Self-contained
+// — fetches its own data so it doesn't disturb the buy-pending pipeline.
+const PendingSellsSection = () => {
+  const [groups, setGroups] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id;
+        if (!uid) return;
+        const { data: rows } = await supabase
+          .from("stock_holdings_c")
+          .select("id, strategy_id, security_id, quantity, market_value, avg_exit, trade_side, sell_requested_at, strategy_name_snapshot")
+          .eq("user_id", uid).is("family_member_id", null)
+          .eq("Status", "active").eq("trade_side", "SELL");
+        const pending = (rows || []).filter((r) => !(Number(r.avg_exit) > 0));
+        if (!pending.length) { if (!cancelled) setGroups([]); return; }
+        const stratIds = [...new Set(pending.filter((r) => r.strategy_id).map((r) => r.strategy_id))];
+        const secIds = [...new Set(pending.map((r) => r.security_id).filter(Boolean))];
+        const [stratRes, secRes] = await Promise.all([
+          stratIds.length ? supabase.from("strategies_c").select("id, name, short_name, icon_url").in("id", stratIds) : Promise.resolve({ data: [] }),
+          secIds.length ? supabase.from("securities_c").select("id, symbol, name, logo_url").in("id", secIds) : Promise.resolve({ data: [] }),
+        ]);
+        const stratMeta = {}; (stratRes.data || []).forEach((s) => { stratMeta[s.id] = s; });
+        const secMeta = {}; (secRes.data || []).forEach((s) => { secMeta[s.id] = s; });
+        const g = {};
+        for (const r of pending) {
+          const sm = secMeta[r.security_id] || {};
+          if (r.strategy_id) {
+            const k = `strat:${r.strategy_id}`;
+            const m = stratMeta[r.strategy_id] || {};
+            if (!g[k]) g[k] = { key: k, kind: "strategy", title: m.short_name || m.name || r.strategy_name_snapshot || "Strategy", valueCents: 0, assets: [] };
+            g[k].valueCents += Number(r.market_value || 0);
+            g[k].assets.push({ logo: sm.logo_url || null, symbol: sm.symbol || "" });
+          } else {
+            g[`sec:${r.id}`] = { key: `sec:${r.id}`, kind: "security", title: sm.name || sm.symbol || "Asset", valueCents: Number(r.market_value || 0), assets: [{ logo: sm.logo_url || null, symbol: sm.symbol || "" }] };
+          }
+        }
+        if (!cancelled) setGroups(Object.values(g));
+      } catch (e) { console.warn("[PendingSells] load failed:", e?.message || e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!groups.length) return null;
+  const fmtR = (c) => "R" + (Number(c || 0) / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <section className="pt-2 pb-3">
+      <div className="flex items-end justify-between px-5 mb-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-slate-900">Pending sells</p>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600"><Clock3 className="h-3 w-3" /></span>
+            <span>Selling — proceeds land in your wallet once filled</span>
+          </div>
+        </div>
+      </div>
+      <div className="mx-4 space-y-3">
+        {groups.map((grp) => (
+          <div key={grp.key} className="relative overflow-hidden rounded-3xl p-4 text-white shadow-[0_10px_32px_-10px_rgba(159,18,57,0.45)]"
+            style={{ background: "linear-gradient(135deg,#9f1239 0%,#dc2626 55%,#fb7185 100%)" }}>
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+            <div className="relative flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {grp.kind === "strategy" && grp.assets.length ? (
+                  <div className="flex -space-x-2 flex-shrink-0">
+                    {grp.assets.slice(0, 3).map((a, i) => (
+                      <div key={i} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-white/80 bg-white text-[8px] font-bold text-slate-600">
+                        {a.logo ? <img src={a.logo} alt="" className="h-full w-full object-cover" /> : (a.symbol || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/15 ring-1 ring-white/25 flex-shrink-0">
+                    {grp.assets[0]?.logo ? <img src={grp.assets[0].logo} alt="" className="h-full w-full object-cover" /> : <Clock3 className="h-5 w-5 text-white" />}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold truncate">{grp.title}</p>
+                  <p className="text-[11px] text-white/70 mt-0.5">Selling · pending</p>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-sm font-bold">{fmtR(grp.valueCents)}</p>
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ring-1 ring-white/25"><Clock3 className="h-2.5 w-2.5" />Pending</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 // ── StrategyStackedModal ─────────────────────────────────────────────────────
 // Bottom-sheet modal showing each purchase batch as a stacked card.
 // Click a card → it expands (height grows), other cards slide below.
@@ -1790,6 +1888,9 @@ const HomePage = ({
             )}
           </div>
         </section>
+
+        {/* Pending sells (red) — requested sells awaiting broker fill */}
+        <PendingSellsSection />
 
         {/* Pending Orders */}
         {(() => {
