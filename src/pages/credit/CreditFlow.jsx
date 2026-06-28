@@ -371,45 +371,57 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     evaluateWithAlgoLend(app);
   }, [evaluateWithAlgoLend]);
 
-  // Single-select: AlgoLend accepts exactly one lender per application.
+  // Multi-select — the CEO's model lets a borrower apply to several lenders.
   const toggleProviderSel = useCallback((id) => {
-    setProviderSel((prev) => (prev.has(id) ? new Set() : new Set([id])));
+    setProviderSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
     setProviderSubmitted(false);
   }, []);
 
-  // Accept the chosen offer via AlgoLend — this marks it accepted, declines the
-  // rest, and pushes a loan_application row into the lender's own dashboard.
+  // Submit the chosen lender(s) to AlgoLend — one accept call per selected
+  // lender (same requestId); each pushes a loan_application into that lender's
+  // own dashboard. We record every lender that accepted successfully.
   const submitProviderSelections = useCallback(async () => {
     if (!activeApplication || providerSel.size === 0 || !algolendRequestId) return;
     setProviderSubmitting(true);
+    setAlgolendError("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || "";
-      const lenderId = [...providerSel][0];
-      const res = await fetch(`${import.meta.env.VITE_ALGOLEND_URL}/api/marketplace/offers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_ALGOLEND_API_KEY}`,
-        },
-        body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
+      const lenderIds = [...providerSel];
+      const results = await Promise.allSettled(
+        lenderIds.map((lenderId) =>
+          fetch(`${import.meta.env.VITE_ALGOLEND_URL}/api/marketplace/offers`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_ALGOLEND_API_KEY}`,
+            },
+            body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
+          }).then(async (res) => {
+            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "rejected"); }
+            return lenderId;
+          })
+        )
+      );
+      const accepted = lenderIds.filter((_, i) => results[i].status === "fulfilled");
+      if (accepted.length === 0) throw new Error("None of your selected lenders could be submitted. Please try again.");
+      const selected = accepted.map((lenderId) => {
+        const offer = (algolendOffers || []).find((o) => o.lenderId === lenderId);
+        return { provider_id: lenderId, provider_name: offer?.lenderName || lenderId };
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Could not submit your acceptance.");
-      }
-      const offer = (algolendOffers || []).find((o) => o.lenderId === lenderId);
       await supabase
         .from("credit_marketplace_applications")
-        .update({
-          selected_providers: [{ provider_id: lenderId, provider_name: offer?.lenderName || lenderId }],
-          updated_at: new Date().toISOString(),
-        })
+        .update({ selected_providers: selected, updated_at: new Date().toISOString() })
         .eq("id", activeApplication.id);
+      setProviderSel(new Set(accepted));
       setProviderSubmitted(true);
     } catch (e) {
       console.warn("[CreditFlow] submit failed:", e?.message || e);
-      setAlgolendError(e?.message || "Could not submit your acceptance.");
+      setAlgolendError(e?.message || "Could not submit your application.");
     } finally {
       setProviderSubmitting(false);
     }
@@ -1068,60 +1080,111 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           );
         })()}
 
-        {/* ── New application — amount + term, then create & jump to comparison ── */}
-        {step === "newApplication" && (
-          <>
-            <header className="flex items-center gap-3 mb-6 relative">
-              <button type="button" onClick={() => setStep("marketplace")} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm flex-shrink-0">
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <h1 className="text-lg font-semibold text-slate-900">New application</h1>
-            </header>
+        {/* ── New application — beautiful amount + term picker ── */}
+        {step === "newApplication" && (() => {
+          const CARD = "linear-gradient(135deg, #2a1a46 0%, #4c2e75 55%, #7a4aa7 100%)";
+          const quickAmounts = [5000, 10000, 25000, 50000];
+          const terms = Array.from({ length: 24 }, (_, i) => i + 1);
+          return (
+            <div className="-mx-3 -mt-12 md:-mx-6">
+              <style>{`
+                @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes cfPulse { 0%,100% { box-shadow: 0 10px 30px -8px rgba(108,63,224,.55); } 50% { box-shadow: 0 14px 42px -6px rgba(108,63,224,.85); } }
+                .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+                .cf-noscroll::-webkit-scrollbar { display: none; }
+              `}</style>
 
-            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900">What you're looking for</h3>
-              <p className="mt-1 text-xs text-slate-400">We'll match you to lenders for this amount and term. Your existing credit score is reused — no new check.</p>
-
-              <div className="mt-5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
-                <div className="mt-2 flex items-center rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-violet-400">
-                  <span className="mr-1 text-base font-semibold text-slate-400">R</span>
-                  <input
-                    type="text" inputMode="numeric"
-                    value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
-                    onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
-                    placeholder="0"
-                    className="w-full bg-transparent text-xl font-extrabold text-violet-600 outline-none"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-400">Up to R 50,000</p>
-              </div>
-
-              <div className="mt-5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repayment term</span>
-                <select
-                  value={loanTermMonths}
-                  onChange={(e) => setLoanTermMonths(Number(e.target.value))}
-                  className="mt-2 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-violet-400"
-                >
-                  {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>{m} month{m > 1 ? "s" : ""}</option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={createApplication}
-                disabled={creatingApplication || !loanAmount}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
+              {/* HERO */}
+              <div
+                className="relative overflow-hidden rounded-b-[34px] px-5 pt-12 pb-24"
+                style={{ background: "linear-gradient(170deg, #0d0d12 0%, #25173e 22%, #5b3486 55%, #9a64c4 80%, #e7d4f0 100%)" }}
               >
-                {creatingApplication ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {creatingApplication ? "Creating…" : "Create application"}
-              </button>
-            </section>
-          </>
-        )}
+                <div className="pointer-events-none absolute -right-10 top-6 h-40 w-40 rounded-full bg-fuchsia-300/15 blur-3xl" />
+                <div className="pointer-events-none absolute -left-12 top-24 h-36 w-36 rounded-full bg-violet-400/15 blur-3xl" />
+                <div className="relative z-10 mb-7 flex items-center justify-between">
+                  <button type="button" onClick={() => setStep("marketplace")} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm active:scale-95">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <p className="text-sm font-semibold text-white/90">New application</p>
+                  <div className="h-10 w-10" />
+                </div>
+                <p className="relative z-10 text-[22px] font-semibold leading-tight text-white">How much do<br />you need?</p>
+                <p className="relative z-10 mt-1.5 text-xs text-white/55">Your credit score is reused — no new check.</p>
+              </div>
+
+              {/* BODY — cards overlap the hero */}
+              <div className="-mt-14 px-5 pb-12">
+                {/* Amount card */}
+                <div className="cf-fade relative overflow-hidden rounded-[28px] px-5 pt-5 pb-6 shadow-xl" style={{ background: CARD }}>
+                  <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+                  <p className="relative text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Loan amount</p>
+                  <div className="relative mt-2 flex items-end gap-1">
+                    <span className="mb-2 text-2xl font-light text-white/70">R</span>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
+                      onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
+                      placeholder="0"
+                      className="w-full bg-transparent text-[44px] font-light leading-none text-white placeholder-white/30 outline-none"
+                    />
+                  </div>
+                  <div className="relative mt-3 h-[5px] w-full overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-300 to-white/85 transition-all duration-300" style={{ width: `${Math.min(100, (loanAmount / 50000) * 100)}%` }} />
+                  </div>
+                  <div className="relative mt-3 flex flex-wrap gap-2">
+                    {quickAmounts.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setLoanAmount(a)}
+                        className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${loanAmount === a ? "bg-white text-violet-700" : "bg-white/10 text-white/70"}`}
+                      >
+                        R {a.toLocaleString("en-ZA")}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="relative mt-2.5 text-[10px] text-white/40">Up to R 50,000 unsecured</p>
+                </div>
+
+                {/* Term card */}
+                <div className="cf-fade mt-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm" style={{ animationDelay: ".08s" }}>
+                  <p className="text-sm font-semibold text-slate-900">Repayment term</p>
+                  <p className="mt-0.5 text-xs text-slate-400">How long to pay it back</p>
+                  <div className="cf-noscroll mt-4 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                    {terms.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setLoanTermMonths(m)}
+                        className={`flex h-16 w-14 flex-shrink-0 flex-col items-center justify-center rounded-2xl border text-center transition ${loanTermMonths === m ? "border-violet-600 bg-violet-600 text-white shadow-md" : "border-slate-200 bg-white text-slate-600"}`}
+                      >
+                        <span className="text-lg font-bold leading-none">{m}</span>
+                        <span className={`mt-1 text-[9px] uppercase tracking-wide ${loanTermMonths === m ? "text-white/70" : "text-slate-400"}`}>{m === 1 ? "month" : "months"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Summary + create */}
+                <div className="cf-fade mt-4 flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm" style={{ animationDelay: ".16s" }}>
+                  <span className="text-xs text-slate-400">You're requesting</span>
+                  <span className="text-sm font-semibold text-slate-900">R {Number(loanAmount || 0).toLocaleString("en-ZA")} · {loanTermMonths} mo</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={createApplication}
+                  disabled={creatingApplication || !loanAmount}
+                  className="cf-fade mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+                  style={{ background: CARD, animationDelay: ".22s" }}
+                >
+                  {creatingApplication ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
+                  {creatingApplication ? "Creating…" : "Find my lenders"}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Provider comparison for one application — select up to 5, submit ── */}
         {step === "marketplaceOffers" && activeApplication && (
@@ -1215,14 +1278,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               })}
             </div>
 
-            {providerSubmitted && (() => {
-              const chosen = (algolendOffers || []).find((o) => providerSel.has(o.lenderId));
-              return (
-                <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" />Submitted to {chosen?.lenderName || "your lender"}
-                </p>
-              );
-            })()}
+            {providerSubmitted && (
+              <p className="mt-4 flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />Submitted to {providerSel.size} lender{providerSel.size !== 1 ? "s" : ""}
+              </p>
+            )}
 
             {/* Spacer so the floating tray + bottom nav never cover the last card. */}
             {providerSel.size > 0 && !providerSubmitted && <div className="h-44" />}
@@ -1236,7 +1296,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               >
                 <style>{`@keyframes cfTrayUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
                 <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 shadow-2xl ring-1 ring-black/5">
-                  <p className="text-xs text-white/50 truncate"><b className="font-semibold text-white">{(algolendOffers || []).find((o) => providerSel.has(o.lenderId))?.lenderName || "Lender"}</b> selected</p>
+                  <p className="text-xs text-white/50"><b className="font-semibold text-white">{providerSel.size}</b> lender{providerSel.size !== 1 ? "s" : ""} selected</p>
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <button type="button" onClick={() => setProviderSel(new Set())} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white/60">Clear</button>
                     <button
@@ -1245,7 +1305,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       disabled={providerSubmitting}
                       className="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     >
-                      {providerSubmitting ? "Submitting…" : "Accept offer →"}
+                      {providerSubmitting ? "Submitting…" : `Submit to ${providerSel.size} →`}
                     </button>
                   </div>
                 </div>
