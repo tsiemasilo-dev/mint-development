@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     // SELECT now includes Expected_fill — the price the client saw at click time.
     // Stays alongside avg_fill (broker fill price). Client PnL anchors to
     // Expected_fill so the company spread doesn't leak into client gains/losses.
-    const holdingsSelect = "id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, transaction_id";
+    const holdingsSelect = "id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, transaction_id, trade_side, sell_requested_at, avg_exit";
     const holdingsSelectWithSettlement = `${holdingsSelect}, settlement_status`;
 
     let holdings, holdingsError;

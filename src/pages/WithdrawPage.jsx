@@ -52,6 +52,7 @@ export default function WithdrawPage({ onBack }) {
   const [invested, setInvested] = useState(0);
   const [cash, setCash] = useState(0);
   const [sinceDate, setSinceDate] = useState(null);
+  const [justSold, setJustSold] = useState(() => new Set()); // ids sold this session
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +92,8 @@ export default function WithdrawPage({ onBack }) {
           return { qty, value, cost, change: cost > 0 ? (pnl / cost) * 100 : 0, up: pnl >= 0 };
         };
 
+        const isSellHolding = (h) => String(h.trade_side || "").toUpperCase() === "SELL" || String(h.side || "").toLowerCase() === "sell";
+
         const singleAssets = holdings.filter((h) => !h.strategy_id).map((h) => {
           const e = enrich(h);
           return {
@@ -107,6 +110,7 @@ export default function WithdrawPage({ onBack }) {
             cost: e.cost,
             change: e.change,
             up: e.up,
+            pendingSell: isSellHolding(h),
           };
         });
 
@@ -116,11 +120,12 @@ export default function WithdrawPage({ onBack }) {
           const sid = h.strategy_id;
           if (!sid) return;
           const e = enrich(h);
-          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null, assets: [] };
+          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null, assets: [], pendingSell: false };
           stratMap[sid].value += e.value;
           stratMap[sid].cost += e.cost;
           stratMap[sid].count += 1;
           stratMap[sid].assets.push({ logo: h.logo_url || null, symbol: h.symbol || "" });
+          if (isSellHolding(h)) stratMap[sid].pendingSell = true;
         });
         const stratIds = Object.keys(stratMap);
         if (stratIds.length) {
@@ -166,6 +171,7 @@ export default function WithdrawPage({ onBack }) {
             cost: adjustedCost,
             change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
             up: pnl >= 0,
+            pendingSell: s.pendingSell,
           };
         });
 
@@ -203,12 +209,22 @@ export default function WithdrawPage({ onBack }) {
     return () => { cancelled = true; };
   }, []);
 
+  // An item is pending-sell if the server says so OR we just sold it this session.
+  const isItemSelling = (item) => item.pendingSell || justSold.has(item.id);
+
   const totalValue = useMemo(
     () => [...strategies, ...singles].reduce((s, x) => s + x.value, 0),
     [strategies, singles]
   );
   const totalPnl = totalValue - invested;
   const totalPct = invested > 0 ? (totalPnl / invested) * 100 : 0;
+
+  // Total value tied up in pending sells — shown as the amount the portfolio
+  // will drop by once the broker fills, and a projected "after" value.
+  const pendingSellTotal = useMemo(
+    () => [...strategies, ...singles].filter(isItemSelling).reduce((s, x) => s + x.value, 0),
+    [strategies, singles, justSold]
+  );
 
   const totalAnim = useCountUp(totalValue);
   const investedAnim = useCountUp(invested);
@@ -354,24 +370,39 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
   const Card = ({ item, delay }) => {
     const sub = item.name + (item.kind === "security" && item.qty ? ` · ${item.qty} sh` : "");
     const chCol = item.up ? "#1D9E75" : "#D4537E";
+    const selling = isItemSelling(item);
     return (
       <div
         className="wd-hcard"
-        onClick={() => setSelected(item)}
-        style={{ animation: `wd-floatIn 0.5s cubic-bezier(0.34,1.4,0.64,1) ${delay}s forwards` }}
+        onClick={selling ? undefined : () => setSelected(item)}
+        style={{
+          animation: `wd-floatIn 0.5s cubic-bezier(0.34,1.4,0.64,1) ${delay}s forwards`,
+          ...(selling ? { opacity: 0.55, cursor: "default", filter: "grayscale(0.6)" } : {}),
+        }}
       >
         {item.kind === "strategy" && item.assets?.length
           ? <StackedAvatar assets={item.assets} />
           : <Avatar item={item} />}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="wd-name">{item.symbol}</div>
-          <div className="wd-sub">{sub}</div>
+          {selling ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 2, fontSize: 11, fontWeight: 600, color: "#D4537E" }}>
+              <span style={{ height: 6, width: 6, borderRadius: "50%", background: "#D4537E", display: "inline-block" }} />
+              Selling · pending
+            </div>
+          ) : (
+            <div className="wd-sub">{sub}</div>
+          )}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0, minWidth: 74 }}>
           <div className="wd-cardval">{fmtR(item.value)}</div>
-          <div style={{ fontSize: 11.5, fontWeight: 500, color: chCol }}>
-            {item.up ? "↑" : "↓"} {Math.abs(item.change).toFixed(1)}%
-          </div>
+          {selling ? (
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: "#D4537E" }}>−{fmtR(item.value)}</div>
+          ) : (
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: chCol }}>
+              {item.up ? "↑" : "↓"} {Math.abs(item.change).toFixed(1)}%
+            </div>
+          )}
         </div>
       </div>
     );
@@ -406,6 +437,19 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
             }}>
               {totalPnl >= 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
               <span>{(totalPnl >= 0 ? "+" : "−") + fmtR(Math.abs(totalPnl)) + " · " + Math.abs(totalPct).toFixed(1) + "%"}</span>
+            </div>
+          )}
+          {pendingSellTotal > 0 && (
+            <div style={{ marginTop: 12, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div className="wd-pill" style={{
+                background: "rgba(212,83,126,0.18)", borderColor: "rgba(212,83,126,0.4)", color: "#F2A6BE",
+              }}>
+                <TrendingDown size={15} />
+                <span>−{fmtR(pendingSellTotal)} selling</span>
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(207,188,255,0.65)" }}>
+                After fills ≈ <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>{fmtR(Math.max(0, totalValue - pendingSellTotal))}</span>
+              </div>
             </div>
           )}
           {sinceDate && (
@@ -497,6 +541,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       {selected && (
         <SellSheet
           item={selected}
+          onSold={() => setJustSold((prev) => new Set(prev).add(selected.id))}
           onClose={() => setSelected(null)}
           onSubmit={async () => {
             const session = await getSession();
@@ -532,7 +577,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
 /* ── Confirmation bottom-sheet ──────────────────────────────────────────────
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
-function SellSheet({ item, onClose, onSubmit }) {
+function SellSheet({ item, onClose, onSubmit, onSold }) {
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -548,6 +593,7 @@ function SellSheet({ item, onClose, onSubmit }) {
       const reference = await onSubmit();
       setRef(reference || "—");
       setDone(true);
+      onSold?.(); // grey out the sold card + reflect the pending drop immediately
     } catch (e) {
       setErr(e.message || "Could not submit your sell. Please try again.");
     } finally {
