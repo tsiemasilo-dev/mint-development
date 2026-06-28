@@ -509,9 +509,17 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
               headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
               body: JSON.stringify(body),
             });
-            const json = await res.json().catch(() => ({}));
+            // Read as text first so we can surface the real reason even when the
+            // response isn't JSON (e.g. a 404 HTML page from an older server build).
+            let json = {};
+            const rawText = await res.text().catch(() => "");
+            try { json = rawText ? JSON.parse(rawText) : {}; } catch { json = {}; }
             if (!res.ok || !json.success) {
-              throw new Error(json.error || "Could not submit your sell. Please try again.");
+              const detail = json.error
+                || (res.status === 404
+                  ? "Sell service not found (404) — the server may be running an older build. Try again after it redeploys/restarts."
+                  : `Could not submit your sell (server returned ${res.status}). Please try again.`);
+              throw new Error(detail);
             }
             return json.reference;
           }}
