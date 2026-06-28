@@ -981,6 +981,7 @@ const App = () => {
               onOpenNotifications={noOp}
               onOpenInvest={noOp}
               onOpenStrategies={noOp}
+              onWithdraw={() => navigateTo("withdraw")}
             />
           </AppLayout>
         );
@@ -1439,6 +1440,7 @@ const App = () => {
                   onOpenNotifications={() => { setNotificationReturnPage("investments"); navigateTo("notifications"); }}
                   onOpenInvest={() => navigateTo("markets")}
                   onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
+                  onWithdraw={() => navigateTo("withdraw")}
                   deepLink={portfolioDeepLink}
                   onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
                 />

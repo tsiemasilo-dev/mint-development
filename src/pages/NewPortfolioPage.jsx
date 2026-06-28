@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight } from "lucide-react";
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
@@ -81,7 +81,7 @@ const getReturnColor = (value) => {
 };
 
 
-const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail }) => {
+const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [activeTab, setActiveTab] = useState("holdings");
   const [timeFilter, setTimeFilter] = useState("ytd");
@@ -2810,6 +2810,30 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                 </div>
               );
             })()}
+
+            {/* Withdraw — sell-flow entry point (relocated here from the balance card) */}
+            {!holdingsLoading && allStrategyHoldings.length > 0 && onWithdraw && (
+              <div className="relative mx-auto w-full max-w-sm px-4 pb-10 md:max-w-md md:px-8">
+                <div className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/40 p-5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+                      <ArrowUpRight size={20} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">Withdraw</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Sell a holding or strategy to cash out.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onWithdraw}
+                    className="mt-4 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white transition active:scale-[0.99]"
+                  >
+                    Withdraw
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
