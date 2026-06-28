@@ -182,6 +182,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [algolendLoading, setAlgolendLoading] = useState(false);
   const [algolendError, setAlgolendError] = useState("");
   const [showScoreBack, setShowScoreBack] = useState(false); // flip the score card
+  const [customAmount, setCustomAmount] = useState(false);   // chips ↔ manual input
   const [portalTarget, setPortalTarget] = useState(null);    // for the fixed selection tray
   useEffect(() => { setPortalTarget(typeof document !== "undefined" ? document.body : null); }, []);
 
@@ -1064,7 +1065,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 {/* Create a new application — purple CTA card */}
                 <button
                   type="button"
-                  onClick={() => { setLoanAmount(50000); setLoanTermMonths(3); setStep("newApplication"); }}
+                  onClick={() => { setLoanAmount(50000); setLoanTermMonths(3); setCustomAmount(false); setStep("newApplication"); }}
                   className="cf-fade mt-4 flex w-full items-center gap-4 overflow-hidden rounded-3xl px-5 py-5 text-left active:scale-[0.99]"
                   style={{ background: CARD, animationDelay: ".35s", animation: "cfFadeUp .6s cubic-bezier(.22,1,.36,1) forwards, cfPulse 3.2s ease-in-out 1s infinite" }}
                 >
@@ -1090,7 +1091,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <style>{`
                 @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
                 @keyframes cfPulse { 0%,100% { box-shadow: 0 10px 30px -8px rgba(108,63,224,.55); } 50% { box-shadow: 0 14px 42px -6px rgba(108,63,224,.85); } }
+                @keyframes cfSwap { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
                 .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+                .cf-swap { animation: cfSwap .3s cubic-bezier(.22,1,.36,1); }
                 .cf-noscroll::-webkit-scrollbar { display: none; }
               `}</style>
 
@@ -1120,30 +1123,52 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   <p className="relative text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Loan amount</p>
                   <div className="relative mt-2 flex items-end gap-1">
                     <span className="mb-2 text-2xl font-light text-white/70">R</span>
-                    <input
-                      type="text" inputMode="numeric"
-                      value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
-                      onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
-                      placeholder="0"
-                      className="w-full bg-transparent text-[44px] font-light leading-none text-white placeholder-white/30 outline-none"
-                    />
+                    <span className="text-[44px] font-light leading-none text-white">{loanAmount ? loanAmount.toLocaleString("en-ZA") : "0"}</span>
                   </div>
                   <div className="relative mt-3 h-[5px] w-full overflow-hidden rounded-full bg-white/15">
                     <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-300 to-white/85 transition-all duration-300" style={{ width: `${Math.min(100, (loanAmount / 50000) * 100)}%` }} />
                   </div>
-                  <div className="relative mt-3 flex flex-wrap gap-2">
-                    {quickAmounts.map((a) => (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => setLoanAmount(a)}
-                        className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${loanAmount === a ? "bg-white text-violet-700" : "bg-white/10 text-white/70"}`}
-                      >
-                        R {a.toLocaleString("en-ZA")}
-                      </button>
-                    ))}
+
+                  {/* Preset chips ↔ manual input (animated switch) */}
+                  <div className="relative mt-4">
+                    {!customAmount ? (
+                      <div key="chips" className="cf-swap flex flex-wrap items-center gap-2">
+                        {quickAmounts.map((a) => (
+                          <button
+                            key={a}
+                            type="button"
+                            onClick={() => setLoanAmount(a)}
+                            className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${loanAmount === a ? "bg-white text-violet-700" : "bg-white/10 text-white/70"}`}
+                          >
+                            R {a.toLocaleString("en-ZA")}
+                          </button>
+                        ))}
+                        <button type="button" onClick={() => setCustomAmount(true)} className="ml-0.5 text-[11px] font-semibold text-white/75 underline decoration-white/40 underline-offset-2">
+                          I'll add my own
+                        </button>
+                      </div>
+                    ) : (
+                      <div key="input" className="cf-swap">
+                        <div className="flex items-center rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/15 transition focus-within:ring-2 focus-within:ring-white/40">
+                          <span className="mr-1.5 text-base font-semibold text-white/60">R</span>
+                          <input
+                            autoFocus
+                            type="text" inputMode="numeric"
+                            value={loanAmount ? loanAmount.toLocaleString("en-ZA") : ""}
+                            onChange={(e) => { const n = Math.min(50000, Number(e.target.value.replace(/\D/g, "")) || 0); setLoanAmount(n); }}
+                            placeholder="Enter amount"
+                            className="w-full bg-transparent text-lg font-semibold text-white placeholder-white/30 outline-none"
+                          />
+                          <button type="button" onClick={() => setCustomAmount(false)} className="ml-2 flex-shrink-0 text-[11px] font-semibold text-white/55">Presets</button>
+                        </div>
+                        <p className={`mt-1.5 text-[10px] ${loanAmount > 0 && loanAmount < 100 ? "text-rose-200" : "text-white/45"}`}>
+                          {loanAmount > 0 && loanAmount < 100 ? "Minimum is R100" : "Enter between R100 and R50,000"}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <p className="relative mt-2.5 text-[10px] text-white/40">Up to R 50,000 unsecured</p>
+
+                  {!customAmount && <p className="relative mt-2.5 text-[10px] text-white/40">Up to R 50,000 unsecured</p>}
                 </div>
 
                 {/* Term card */}
@@ -1174,7 +1199,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                 <button
                   type="button"
                   onClick={createApplication}
-                  disabled={creatingApplication || !loanAmount}
+                  disabled={creatingApplication || loanAmount < 100}
                   className="cf-fade mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
                   style={{ background: CARD, animationDelay: ".22s" }}
                 >
