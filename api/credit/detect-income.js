@@ -105,9 +105,117 @@ function buildPrompt(months) {
     `You are analysing a ${months}-month bank statement PDF to verify income for a credit application. ` +
     `Identify every CREDIT transaction that is a salary, wage, or payroll deposit (look for keywords like salary, sal, pay, payroll, wages, ` +
     `remuneration, emolument, stipend; also weigh regular cadence, consistent sender, and consistent or gradually-changing amounts, typically near ` +
-    `month-end or a fixed mid-month date). Ignore one-off transfers, refunds, interest, and non-salary income. ` +
+    `month-end or a fixed mid-month date). Ignore one-off transfers, refunds, interest, and non-salary income.\n\n` +
+    `CRITICAL RULES:\n` +
+    `1. Each entry in salary_transactions MUST be exactly ONE deposit line from the statement. NEVER merge, add, or sum multiple ` +
+    `deposits into a single entry, and NEVER report a total of several pay cycles as one amount.\n` +
+    `2. estimated_monthly_income is the income for a SINGLE month — it must NEVER be the sum of all salary deposits across the statement. ` +
+    `If you see (for example) three salary deposits of R4,000, R4,000 and R7,000, the monthly income is NOT R15,000.\n` +
+    `3. A salary often arrives under a company, payroll, or sender NAME with NO salary keyword at all (e.g. a recurring real-time transfer from ` +
+    `the same company). Treat a recurring credit of similar amount and regular cadence from the same sender as salary even when no keyword is present. ` +
+    `Do not skip a pay deposit just because the word "salary" is absent.\n` +
+    `4. If the salary AMOUNT or SENDER changes partway through the statement (a raise or a change of employer), base estimated_monthly_income on the ` +
+    `MOST RECENT recurring amount, not the older amounts and not a blend of both.\n` +
+    `5. List salary_transactions in chronological order (oldest first).\n\n` +
     `Return ONLY the structured JSON described by the schema — no commentary.`
   );
+}
+
+// ── Deterministic reconciliation ────────────────────────────────────────────
+// The model is reliable at SPOTTING individual salary deposits but unreliable at
+// turning them into one monthly figure (it tends to sum pay cycles). So we ignore
+// the model's estimated_monthly_income and recompute it in code from the
+// per-deposit list, using the most-recent recurring "tier" of deposits and the
+// gaps BETWEEN them (never by summing calendar months).
+
+function parseStatementDate(s) {
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function median(nums) {
+  if (!nums.length) return null;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// Map the typical gap (in days) between consecutive salary deposits to a pay
+// frequency and a per-month multiplier. This is what distinguishes "two R7,000
+// deposits 28 days apart = R7,000/month" from "two R7,000 deposits 15 days
+// apart = R14,000/month" — the gap, not the calendar month.
+function frequencyForGap(gapDays) {
+  if (gapDays == null) return { frequency: "monthly", perMonth: 1, certain: false };
+  if (gapDays <= 10) return { frequency: "weekly", perMonth: 30.44 / 7, certain: true };
+  if (gapDays <= 18) return { frequency: "fortnightly", perMonth: 30.44 / 14, certain: true };
+  if (gapDays <= 45) return { frequency: "monthly", perMonth: 1, certain: true };
+  return { frequency: "monthly", perMonth: 1, certain: false };
+}
+
+function reconcileIncome(result) {
+  const txns = Array.isArray(result?.salary_transactions) ? result.salary_transactions : [];
+  const valid = txns
+    .map((t) => ({ raw: t, date: parseStatementDate(t.salary_date), amount: Number(t.salary_amount) }))
+    .filter((t) => t.date && Number.isFinite(t.amount) && t.amount > 0)
+    .sort((a, b) => a.date - b.date);
+
+  // Nothing usable to reconcile — leave the model output untouched.
+  if (!valid.length) return result;
+
+  // Write the deposits back in chronological order so the UI's "last deposit"
+  // is genuinely the most recent one.
+  result.salary_transactions = valid.map((t) => t.raw);
+
+  const latestAmount = valid[valid.length - 1].amount;
+
+  // Most-recent recurring tier: walk back from the newest deposit, keeping
+  // consecutive deposits within ±20% of the latest amount. This drops a
+  // superseded older salary level (e.g. an old R4,000 run before a raise to R7,000).
+  const tier = [];
+  for (let i = valid.length - 1; i >= 0; i--) {
+    if (Math.abs(valid[i].amount - latestAmount) <= latestAmount * 0.2) tier.unshift(valid[i]);
+    else break;
+  }
+
+  const representative = median(tier.map((t) => t.amount)) ?? latestAmount;
+
+  // Cadence is inferred ONLY from gaps within the recent tier. If the tier is a
+  // single deposit we cannot establish its own cadence — we deliberately do NOT
+  // borrow gaps from older, differently-sized pay (that would, e.g., misread a
+  // lone recent R7,000 against an older R4,000 run as "fortnightly R7,000").
+  // A single recent deposit defaults to monthly and is flagged for confirmation.
+  const gaps = [];
+  if (tier.length >= 2) {
+    for (let i = 1; i < tier.length; i++) {
+      gaps.push(Math.round((tier[i].date - tier[i - 1].date) / 86400000));
+    }
+  }
+  const medGap = median(gaps);
+  const { frequency, perMonth, certain } = frequencyForGap(medGap);
+
+  const computed = Math.round(representative * perMonth);
+  const modelEstimate = Number(result.estimated_monthly_income) || null;
+  const diverged = modelEstimate ? Math.abs(modelEstimate - computed) / computed > 0.25 : false;
+
+  result.model_estimated_monthly_income = modelEstimate;
+  result.estimated_monthly_income = computed;
+  result.pay_frequency = frequency;
+  result.detection_method = "deterministic_reconciled";
+
+  const repLabel = `R${representative.toLocaleString("en-ZA")}`;
+  if (diverged) {
+    result.confidence_score = Math.min(Number(result.confidence_score) || 0.5, 0.6);
+    result.confidence_reason =
+      `Using most recent recurring deposit (${repLabel}, ~${frequency}). ` +
+      `Automated estimate differed (R${(modelEstimate || 0).toLocaleString("en-ZA")}) — please confirm.`;
+  } else if (!certain) {
+    result.confidence_score = Math.min(Number(result.confidence_score) || 0.7, 0.7);
+    result.confidence_reason =
+      `Based on the most recent deposit (${repLabel}); pay cadence unclear, assumed ${frequency}. Please confirm.`;
+  }
+
+  return result;
 }
 
 export default async function handler(req, res) {
@@ -154,6 +262,8 @@ export default async function handler(req, res) {
       config: {
         responseMimeType: "application/json",
         responseSchema: SCHEMA,
+        // Deterministic decoding — same statement should yield the same read.
+        temperature: 0,
       },
     });
 
@@ -165,6 +275,10 @@ export default async function handler(req, res) {
       console.error("[detect-income] Gemini returned non-JSON:", raw);
       return res.status(502).json({ success: false, error: "Could not parse income detection result" });
     }
+
+    // Recompute estimated_monthly_income deterministically from the per-deposit
+    // list — never trust the model's own summed figure.
+    result = reconcileIncome(result);
 
     return res.status(200).json({ success: true, result });
   } catch (error) {
