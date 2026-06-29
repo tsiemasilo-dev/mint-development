@@ -29,16 +29,19 @@ function removeBeneficiary(email) {
   } catch {}
 }
 
-function avatarColor(name) {
-  const colors = [
-    "bg-violet-100 text-violet-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-sky-100 text-sky-700",
-    "bg-amber-100 text-amber-700",
-    "bg-rose-100 text-rose-700",
-    "bg-fuchsia-100 text-fuchsia-700",
-  ];
-  return colors[(name?.charCodeAt(0) || 0) % colors.length];
+const AVATAR_GRADIENTS = [
+  "from-violet-500 to-purple-600",
+  "from-emerald-400 to-teal-600",
+  "from-sky-400 to-blue-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-400 to-pink-600",
+  "from-fuchsia-500 to-violet-600",
+  "from-indigo-400 to-blue-600",
+  "from-cyan-400 to-sky-600",
+];
+
+function avatarGradient(name) {
+  return AVATAR_GRADIENTS[(name?.charCodeAt(0) || 0) % AVATAR_GRADIENTS.length];
 }
 
 function ConfettiBurst({ active }) {
@@ -137,19 +140,36 @@ function SwipeableRow({ b, onSelect, onDeleteRequest }) {
           if (revealed) { snapClose(); return; }
           onSelect(b);
         }}
-        className="flex items-center gap-3.5 px-5 py-3.5 relative z-10 cursor-pointer select-none"
+        className="flex items-center gap-3.5 px-4 py-3 relative z-10 cursor-pointer select-none"
       >
-        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${avatarColor(b.firstName)}`}>
-          {b.firstName?.[0]?.toUpperCase() || "?"}
+        {/* Gradient avatar */}
+        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${avatarGradient(b.firstName)} flex items-center justify-center shrink-0 shadow-sm`}>
+          <span className="text-[17px] font-black text-white drop-shadow-sm">
+            {b.firstName?.[0]?.toUpperCase() || "?"}
+          </span>
         </div>
+
+        {/* Name + subtitle */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+          <p className="text-[14px] font-bold text-slate-900 leading-tight">
             {b.firstName} {b.lastName}
           </p>
-          <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-            {b.mintNumber ? `MINT: ${b.mintNumber}` : b.email}
-          </p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {b.mintNumber ? (
+              <>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-[9px] font-bold text-violet-600 uppercase tracking-wide">MINT</span>
+                <span className="text-[11px] text-slate-400 font-mono truncate">{b.mintNumber}</span>
+              </>
+            ) : (
+              <span className="text-[11px] text-slate-400 truncate">{b.email}</span>
+            )}
+          </div>
         </div>
+
+        {/* Chevron */}
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none" className="shrink-0 text-slate-300">
+          <path d="M1 1l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </motion.div>
     </div>
   );
@@ -601,8 +621,8 @@ export default function GiftToggleV2({
                           {mintSearchResult && (
                             <>
                               <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
-                                <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${avatarColor(mintSearchResult.first_name)}`}>
-                                  {mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}
+                                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${avatarGradient(mintSearchResult.first_name)} flex items-center justify-center shrink-0 shadow-sm`}>
+                                  <span className="text-base font-black text-white">{mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
