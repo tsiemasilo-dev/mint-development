@@ -768,7 +768,7 @@ async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
-const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY') || readEnv('SUPABASE_SERVICE_KEY');
 
 console.log('[startup] Supabase URL set:', !!SUPABASE_URL);
 console.log('[startup] Supabase anon key set:', !!SUPABASE_ANON_KEY);
@@ -5653,9 +5653,8 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
 
 app.get("/api/user/lookup-by-mint", async (req, res) => {
   try {
-    const db = supabaseAdmin || supabase;
-    if (!db) {
-      return res.status(500).json({ error: "Database not connected" });
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
     }
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) {
@@ -5665,9 +5664,11 @@ app.get("/api/user/lookup-by-mint", async (req, res) => {
     if (!mintNumber || mintNumber.length < 3) {
       return res.status(400).json({ error: "Mint number too short" });
     }
-    const { data: profile, error: profileError } = await db
+
+    // Use supabaseAdmin so RLS never blocks cross-user lookups
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, first_name, last_name, mint_number')
+      .select('id, first_name, last_name, mint_number, email')
       .ilike('mint_number', mintNumber)
       .maybeSingle();
 
@@ -5681,9 +5682,23 @@ app.get("/api/user/lookup-by-mint", async (req, res) => {
     if (profile.id === user.id) {
       return res.status(400).json({ error: "You cannot gift to yourself" });
     }
-    const adminDb = supabaseAdmin || db;
-    const { data: authUser } = await adminDb.auth.admin.getUserById(profile.id);
-    const email = authUser?.user?.email || null;
+
+    // Prefer email stored in profiles; fall back to auth.admin lookup
+    let email = profile.email || null;
+    if (!email) {
+      try {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+        email = authUser?.user?.email || null;
+        // Retry once on failure
+        if (!email) {
+          const { data: authUser2 } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+          email = authUser2?.user?.email || null;
+        }
+      } catch (e) {
+        console.warn('[mint] lookup-by-mint auth.admin fallback error:', e.message);
+      }
+    }
+
     if (!email) {
       return res.status(404).json({ error: "User account not found" });
     }
