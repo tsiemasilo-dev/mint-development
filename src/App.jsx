@@ -85,7 +85,8 @@ const PERSISTENT_KEYS = [
   'mint_device_id',
   'mint_theme',
   'mint_language',
-  'mint_onboarding_completed'
+  'mint_onboarding_completed',
+  'mint_baskets_explainer_seen'
 ];
 
 const clearUserStorage = () => {
