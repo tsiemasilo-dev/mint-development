@@ -1,16 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Gift, Copy, Check, AlertCircle, X, Search, Star, Hash, User, ChevronRight } from "lucide-react";
+import { Gift, Copy, Check, AlertCircle, X, Search, Star, Hash, User, ChevronLeft, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 
 const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
-
 const BENEFICIARIES_KEY = "mint_gift_beneficiaries";
 
 function getBeneficiaries() {
-  try {
-    return JSON.parse(localStorage.getItem(BENEFICIARIES_KEY) || "[]");
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(BENEFICIARIES_KEY) || "[]"); }
+  catch { return []; }
 }
 
 function saveBeneficiary({ firstName, lastName, email, mintNumber }) {
@@ -18,7 +16,7 @@ function saveBeneficiary({ firstName, lastName, email, mintNumber }) {
     const existing = getBeneficiaries();
     const key = email.toLowerCase();
     const filtered = existing.filter(b => b.email.toLowerCase() !== key);
-    const updated = [{ firstName, lastName, email, mintNumber: mintNumber || null, usedAt: Date.now() }, ...filtered].slice(0, 10);
+    const updated = [{ firstName, lastName, email, mintNumber: mintNumber || null, usedAt: Date.now() }, ...filtered].slice(0, 20);
     localStorage.setItem(BENEFICIARIES_KEY, JSON.stringify(updated));
   } catch {}
 }
@@ -36,9 +34,7 @@ function ConfettiBurst({ active }) {
       shape: Math.random() > 0.5 ? "rect" : "circle",
     }))
   ).current;
-
   if (!active) return null;
-
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden" style={{ zIndex: 50 }}>
       {particles.map(p => (
@@ -70,29 +66,11 @@ function ConfettiBurst({ active }) {
   );
 }
 
-function BeneficiaryChips({ beneficiaries, onSelect }) {
-  if (!beneficiaries.length) return null;
+function Row({ label, value, bold }) {
   return (
-    <div className="mb-3">
-      <p className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
-        <Star size={10} className="text-violet-400" />Recent recipients
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {beneficiaries.slice(0, 4).map((b, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onSelect(b)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-100 text-[11px] font-semibold text-violet-700 active:scale-95 transition-all hover:bg-violet-100"
-          >
-            <div className="w-4 h-4 rounded-full bg-violet-200 flex items-center justify-center text-[8px] font-bold text-violet-700">
-              {b.firstName?.[0]?.toUpperCase() || "?"}
-            </div>
-            {b.firstName} {b.lastName}
-            <ChevronRight size={9} className="text-violet-400" />
-          </button>
-        ))}
-      </div>
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-[11px] text-slate-400 shrink-0">{label}</span>
+      <span className={`text-[11px] text-right ${bold ? "font-bold text-slate-800" : "text-slate-700"}`}>{value}</span>
     </div>
   );
 }
@@ -106,12 +84,12 @@ export default function GiftToggleV2({
   amountDisplay,
   assetType = "stock",
 }) {
-  const [inputMode, setInputMode] = useState("manual");
+  const [step, setStep] = useState("picker");
+  const [inputMode, setInputMode] = useState("mint");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [step, setStep] = useState("form");
   const [giftCode, setGiftCode] = useState(null);
   const [expiresAt, setExpiresAt] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -125,10 +103,11 @@ export default function GiftToggleV2({
   const mintDebounceRef = useRef(null);
 
   const [beneficiaries, setBeneficiaries] = useState([]);
-  const [askSaveBeneficiary, setAskSaveBeneficiary] = useState(false);
-  const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
+  const [beneficiarySearch, setBeneficiarySearch] = useState("");
   const [showAddBeneficiaryPrompt, setShowAddBeneficiaryPrompt] = useState(false);
   const [beneficiarySaved, setBeneficiarySaved] = useState(false);
+  const [askSaveBeneficiary, setAskSaveBeneficiary] = useState(false);
+  const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
 
   useEffect(() => {
     if (enabled) setBeneficiaries(getBeneficiaries());
@@ -138,7 +117,8 @@ export default function GiftToggleV2({
   const canProceed = firstName.trim() && lastName.trim() && emailValid;
 
   function resetForm() {
-    setInputMode("manual");
+    setStep("picker");
+    setInputMode("mint");
     setFirstName("");
     setLastName("");
     setRecipientEmail("");
@@ -148,23 +128,28 @@ export default function GiftToggleV2({
     setMintSearch("");
     setMintSearchResult(null);
     setMintSearchError(null);
-    setAskSaveBeneficiary(false);
-    setPendingBeneficiary(null);
+    setBeneficiarySearch("");
     setShowAddBeneficiaryPrompt(false);
     setBeneficiarySaved(false);
-    setStep("form");
+    setAskSaveBeneficiary(false);
+    setPendingBeneficiary(null);
   }
 
   function handleToggle(val) {
-    resetForm();
+    if (!val) resetForm();
     onToggle?.(val);
   }
 
+  function handleClose() {
+    resetForm();
+    onToggle?.(false);
+  }
+
   function handleSelectBeneficiary(b) {
-    setInputMode("manual");
     setFirstName(b.firstName || "");
     setLastName(b.lastName || "");
     setRecipientEmail(b.email || "");
+    setStep("confirming");
   }
 
   const searchByMintNumber = useCallback(async (mintNum) => {
@@ -207,23 +192,12 @@ export default function GiftToggleV2({
     mintDebounceRef.current = setTimeout(() => searchByMintNumber(val), 600);
   }
 
-  function handleSelectMintResult() {
-    if (!mintSearchResult) return;
-    setFirstName(mintSearchResult.first_name || "");
-    setLastName(mintSearchResult.last_name || "");
-    setRecipientEmail(mintSearchResult.email || "");
-    setInputMode("manual");
-    setMintSearch("");
-    setMintSearchResult(null);
-  }
-
   async function handleConfirm() {
     setStep("loading");
     setError(null);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-
       const senderEmail = sessionData?.session?.user?.email?.toLowerCase() || "";
       if (senderEmail && recipientEmail.trim().toLowerCase() === senderEmail) {
         setError("You cannot gift to yourself.");
@@ -291,8 +265,25 @@ export default function GiftToggleV2({
       " on " + d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
   }
 
+  const filteredBeneficiaries = beneficiaries.filter(b => {
+    if (!beneficiarySearch.trim()) return true;
+    const q = beneficiarySearch.toLowerCase();
+    return (
+      `${b.firstName} ${b.lastName}`.toLowerCase().includes(q) ||
+      (b.mintNumber || "").toLowerCase().includes(q) ||
+      (b.email || "").toLowerCase().includes(q)
+    );
+  });
+
+  const avatarColor = (name) => {
+    const colors = ["bg-violet-200 text-violet-700","bg-emerald-100 text-emerald-700","bg-sky-100 text-sky-700","bg-amber-100 text-amber-700","bg-rose-100 text-rose-700","bg-fuchsia-100 text-fuchsia-700"];
+    const idx = (name?.charCodeAt(0) || 0) % colors.length;
+    return colors[idx];
+  };
+
   return (
     <div className="mt-4">
+      {/* Toggle row */}
       <button
         type="button"
         onClick={() => handleToggle(!enabled)}
@@ -315,7 +306,7 @@ export default function GiftToggleV2({
             animate={{ x: enabled ? 22 : 0 }}
             transition={{ type: "spring", stiffness: 700, damping: 35 }}
             className="w-6 h-6 rounded-full bg-white flex items-center justify-center"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)" }}
+            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
           >
             <AnimatePresence mode="wait">
               {enabled ? (
@@ -330,317 +321,401 @@ export default function GiftToggleV2({
         </div>
       </button>
 
-      <AnimatePresence mode="wait">
-      {enabled && step === "form" && (
-        <motion.div
-          key="gift-form"
-          initial={{ opacity: 0, height: 0, marginTop: 0 }}
-          animate={{ opacity: 1, height: "auto", marginTop: 12 }}
-          exit={{ opacity: 0, height: 0, marginTop: 0 }}
-          transition={{ type: "spring", stiffness: 400, damping: 35 }}
-          className="overflow-hidden"
-        >
-        <div className="space-y-3 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+      {/* Bottom sheet */}
+      <AnimatePresence>
+        {enabled && step !== "success" && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="gift-backdrop"
+              className="fixed inset-0 z-40 bg-black/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={handleClose}
+            />
 
-          {/* Beneficiary chips */}
-          <BeneficiaryChips beneficiaries={beneficiaries} onSelect={handleSelectBeneficiary} />
-
-          {/* Input mode toggle */}
-          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
-            <button
-              type="button"
-              onClick={() => { setInputMode("manual"); setMintSearch(""); setMintSearchResult(null); setMintSearchError(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${inputMode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+            {/* Sheet */}
+            <motion.div
+              key="gift-sheet"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl overflow-hidden"
+              style={{ maxHeight: "92vh" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 400, damping: 40 }}
             >
-              <User size={11} />Enter details
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode("mintNumber")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${inputMode === "mintNumber" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
-            >
-              <Hash size={11} />MINT
-            </button>
-          </div>
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-slate-200" />
+              </div>
 
-          {/* Mint number search */}
-          {inputMode === "mintNumber" && (
-            <div className="space-y-3">
-              {/* MINT recent recipients — only those saved with a mint number */}
-              {!mintSearchResult && (() => {
-                const mintBeneficiaries = beneficiaries.filter(b => b.mintNumber);
-                if (!mintBeneficiaries.length) return null;
-                return (
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
-                      <Star size={10} className="text-violet-400" />Recent MINT recipients
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {mintBeneficiaries.slice(0, 4).map((b, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setMintSearchResult({ first_name: b.firstName, last_name: b.lastName, email: b.email, mint_number: b.mintNumber })}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-100 text-[11px] font-semibold text-violet-700 active:scale-95 transition-all hover:bg-violet-100"
-                        >
-                          <div className="w-4 h-4 rounded-full bg-violet-200 flex items-center justify-center text-[8px] font-bold text-violet-700">
-                            {b.firstName?.[0]?.toUpperCase() || "?"}
-                          </div>
-                          {b.firstName} {b.lastName}
-                          <ChevronRight size={9} className="text-violet-400" />
-                        </button>
-                      ))}
+              {/* ── PICKER STEP ── */}
+              {step === "picker" && (
+                <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                  {/* Header */}
+                  <div className="px-5 pt-2 pb-4">
+                    <h2 className="text-center text-[17px] font-bold text-slate-900 mb-4">Beneficiary</h2>
+
+                    {/* Search + Plus row */}
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={beneficiarySearch}
+                          onChange={e => setBeneficiarySearch(e.target.value)}
+                          placeholder="Search for beneficiary"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setInputMode("mint"); setStep("form"); }}
+                        className="w-11 h-11 rounded-xl bg-[#e63946] flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-sm"
+                      >
+                        <Plus size={20} className="text-white" strokeWidth={2.5} />
+                      </button>
                     </div>
                   </div>
-                );
-              })()}
 
-              {/* Search input — hide once a result is found */}
-              {!mintSearchResult && (
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Search by MINT number</label>
-                  <div className="relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={mintSearch}
-                      onChange={e => handleMintSearchChange(e.target.value)}
-                      placeholder="e.g. TSI5260100626"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-                    />
-                    {mintSearching && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                  {/* Beneficiary list */}
+                  <div className="flex-1 overflow-y-auto px-5 pb-2">
+                    {filteredBeneficiaries.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                          <User size={24} className="text-slate-300" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-500">No saved recipients yet</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Tap <span className="font-bold text-[#e63946]">+</span> to find someone by MINT number</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {filteredBeneficiaries.map((b, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectBeneficiary(b)}
+                            className="w-full flex items-center gap-3.5 py-3.5 active:bg-slate-50 transition-colors text-left"
+                          >
+                            <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${avatarColor(b.firstName)}`}>
+                              {b.firstName?.[0]?.toUpperCase() || "?"}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                                {b.firstName} {b.lastName}
+                              </p>
+                              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                {b.mintNumber ? `MINT: ${b.mintNumber}` : b.email}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {mintSearchError && (
-                    <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
-                      <AlertCircle size={10} />{mintSearchError}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's MINT number to find them.</p>
+
+                  {/* Cancel */}
+                  <div className="px-5 pb-8 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="w-full rounded-2xl border border-[#e63946] py-3.5 text-sm font-bold text-[#e63946] active:scale-[0.98] transition-all"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Found user — stay on MINT tab, show details + message */}
-              {mintSearchResult && (
-                <>
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
-                    <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
-                      <span className="text-base font-bold text-violet-700">{mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
+              {/* ── FORM STEP ── */}
+              {step === "form" && (
+                <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                  {/* Header */}
+                  <div className="flex items-center px-4 pt-2 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setStep("picker"); }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">New recipient</h2>
+                    <div className="w-8" />
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-4">
+                    {/* Tab toggle */}
+                    <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => { setInputMode("mint"); setMintSearch(""); setMintSearchResult(null); setMintSearchError(null); }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${inputMode === "mint" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+                      >
+                        <Hash size={11} />MINT number
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputMode("manual")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${inputMode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+                      >
+                        <User size={11} />Enter details
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* + add as beneficiary button */}
-                      {!beneficiarySaved && (
+
+                    {/* MINT number tab */}
+                    {inputMode === "mint" && (
+                      <div className="space-y-3">
+                        {!mintSearchResult && (
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Search by MINT number</label>
+                            <div className="relative">
+                              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                              <input
+                                type="text"
+                                value={mintSearch}
+                                onChange={e => handleMintSearchChange(e.target.value)}
+                                placeholder="e.g. TSI5260100626"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                              />
+                              {mintSearching && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                              )}
+                            </div>
+                            {mintSearchError && (
+                              <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+                                <AlertCircle size={10} />{mintSearchError}
+                              </p>
+                            )}
+                            <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's MINT number to find them.</p>
+                          </div>
+                        )}
+
+                        {mintSearchResult && (
+                          <>
+                            {/* Found user card */}
+                            <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                              <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold shrink-0 ${avatarColor(mintSearchResult.first_name)}`}>
+                                {mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
+                                <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
+                                <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {!beneficiarySaved ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAddBeneficiaryPrompt(p => !p)}
+                                    className="w-7 h-7 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 hover:bg-violet-300 transition-colors font-bold text-base leading-none"
+                                  >
+                                    +
+                                  </button>
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                    <Check size={12} className="text-emerald-600" strokeWidth={3} />
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(false); }}
+                                  className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Inline save prompt */}
+                            {showAddBeneficiaryPrompt && !beneficiarySaved && (
+                              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-violet-200">
+                                <p className="text-[11px] text-slate-700 font-medium flex-1">
+                                  Save <span className="font-semibold text-violet-700">{mintSearchResult.first_name}</span> as a recipient?
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    saveBeneficiary({ firstName: mintSearchResult.first_name, lastName: mintSearchResult.last_name, email: mintSearchResult.email, mintNumber: mintSearchResult.mint_number });
+                                    setBeneficiaries(getBeneficiaries());
+                                    setShowAddBeneficiaryPrompt(false);
+                                    setBeneficiarySaved(true);
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddBeneficiaryPrompt(false)}
+                                  className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Message */}
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                                Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                              </label>
+                              <textarea
+                                value={message}
+                                onChange={e => setMessage(e.target.value)}
+                                placeholder="Add a personal note…"
+                                rows={3}
+                                maxLength={200}
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                              />
+                            </div>
+
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              Your wallet is debited immediately. The recipient has 4 hours to claim.
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFirstName(mintSearchResult.first_name || "");
+                                setLastName(mintSearchResult.last_name || "");
+                                setRecipientEmail(mintSearchResult.email || "");
+                                setStep("confirming");
+                              }}
+                              className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
+                            >
+                              <Gift size={15} /> Continue
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Manual entry tab */}
+                    {inputMode === "manual" && (
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <label className="text-[11px] font-semibold text-slate-500 mb-1 block">First Name</label>
+                            <input
+                              type="text" value={firstName}
+                              onChange={e => setFirstName(e.target.value)}
+                              placeholder="John"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Last Name</label>
+                            <input
+                              type="text" value={lastName}
+                              onChange={e => setLastName(e.target.value)}
+                              placeholder="Doe"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Recipient Email</label>
+                          <input
+                            type="email" value={recipientEmail}
+                            onChange={e => setRecipientEmail(e.target.value)}
+                            placeholder="john@example.com"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                            Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                          </label>
+                          <textarea
+                            value={message} onChange={e => setMessage(e.target.value)}
+                            placeholder="Add a personal note…" rows={2} maxLength={200}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Your wallet is debited immediately. The recipient has 4 hours to claim.
+                        </p>
                         <button
                           type="button"
-                          onClick={() => setShowAddBeneficiaryPrompt(p => !p)}
-                          className="w-7 h-7 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 hover:bg-violet-300 transition-colors font-bold text-base leading-none"
-                          title="Add as beneficiary"
+                          onClick={() => setStep("confirming")}
+                          disabled={!canProceed}
+                          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${canProceed ? "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg" : "bg-slate-300 cursor-not-allowed"}`}
                         >
-                          +
+                          <Gift size={15} /> Continue
                         </button>
-                      )}
-                      {beneficiarySaved && (
-                        <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                          <Check size={12} className="text-emerald-600" strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── CONFIRMING STEP ── */}
+              {step === "confirming" && (
+                <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                  <div className="flex items-center px-4 pt-2 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep("form")}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Confirm gift</h2>
+                    <div className="w-8" />
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                      <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-700">Your wallet will be debited immediately once you confirm.</p>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-xl p-4 space-y-2.5">
+                      <Row label="To" value={`${firstName} ${lastName}`} />
+                      <Row label="Email" value={recipientEmail.trim().toLowerCase()} />
+                      <Row label="Asset" value={security?.name || security?.symbol} />
+                      {amountDisplay && <Row label="Amount" value={amountDisplay} bold />}
+                      {message && (
+                        <div className="pt-2 border-t border-slate-200">
+                          <p className="text-[11px] text-slate-400 mb-0.5">Message</p>
+                          <p className="text-xs text-slate-600 italic">"{message}"</p>
                         </div>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(false); }}
-                        className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
-                      >
-                        <X size={13} />
-                      </button>
                     </div>
-                  </div>
 
-                  {/* Inline add-beneficiary prompt */}
-                  {showAddBeneficiaryPrompt && !beneficiarySaved && (
-                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-violet-200">
-                      <p className="text-[11px] text-slate-700 font-medium flex-1">
-                        Add <span className="font-semibold text-violet-700">{mintSearchResult.first_name}</span> as a saved recipient?
+                    {error && (
+                      <p className="text-xs text-red-500 flex items-center gap-1.5">
+                        <AlertCircle size={11} />{error}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          saveBeneficiary({ firstName: mintSearchResult.first_name, lastName: mintSearchResult.last_name, email: mintSearchResult.email, mintNumber: mintSearchResult.mint_number });
-                          setBeneficiaries(getBeneficiaries());
-                          setShowAddBeneficiaryPrompt(false);
-                          setBeneficiarySaved(true);
-                        }}
-                        className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all"
-                      >
-                        Yes
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={() => setStep("form")} className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-600 active:scale-[0.98] transition-all">
+                        Edit
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddBeneficiaryPrompt(false)}
-                        className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all"
-                      >
-                        No
+                      <button type="button" onClick={handleConfirm} className="flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg">
+                        Confirm & Send
                       </button>
                     </div>
-                  )}
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
-                      Personal message <span className="text-slate-300 font-normal">(optional)</span>
-                    </label>
-                    <textarea
-                      value={message}
-                      onChange={e => setMessage(e.target.value)}
-                      placeholder="Add a personal note…"
-                      rows={3}
-                      maxLength={200}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
-                    />
                   </div>
-
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Your wallet is debited immediately. The recipient has 4 hours to claim using their SA ID and the code you share.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFirstName(mintSearchResult.first_name || "");
-                      setLastName(mintSearchResult.last_name || "");
-                      setRecipientEmail(mintSearchResult.email || "");
-                      setStep("confirming");
-                    }}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
-                  >
-                    <Gift size={15} /> Continue
-                  </button>
-                </>
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Manual entry */}
-          {inputMode === "manual" && (
-            <>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">First Name</label>
-                  <input
-                    type="text" value={firstName}
-                    onChange={e => setFirstName(e.target.value)}
-                    placeholder="John"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-                  />
+              {/* ── LOADING STEP ── */}
+              {step === "loading" && (
+                <div className="flex flex-col items-center justify-center gap-4 py-16 px-5">
+                  <div className="w-10 h-10 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                  <p className="text-sm text-slate-500 font-medium">Creating your gift…</p>
                 </div>
-                <div className="flex-1">
-                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Last Name</label>
-                  <input
-                    type="text" value={lastName}
-                    onChange={e => setLastName(e.target.value)}
-                    placeholder="Doe"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Recipient Email</label>
-                <input
-                  type="email" value={recipientEmail}
-                  onChange={e => setRecipientEmail(e.target.value)}
-                  placeholder="john@example.com"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
-                  Personal message <span className="text-slate-300 font-normal">(optional)</span>
-                </label>
-                <textarea
-                  value={message} onChange={e => setMessage(e.target.value)}
-                  placeholder="Add a personal note…" rows={2} maxLength={200}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
-                />
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Your wallet is debited immediately. The recipient has 4 hours to claim using their SA ID and the code you share.
-              </p>
-              <button
-                type="button"
-                onClick={() => setStep("confirming")}
-                disabled={!canProceed}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all active:scale-[0.98] ${canProceed ? "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg" : "bg-slate-300 cursor-not-allowed"}`}
-              >
-                <Gift size={15} /> Continue
-              </button>
-            </>
-          )}
-        </div>
-        </motion.div>
-      )}
-
-      {enabled && step === "confirming" && (
-        <motion.div
-          key="gift-confirm"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          className="mt-3"
-        >
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4 shadow-sm">
-          <div className="flex items-start gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 mt-0.5">
-              <AlertCircle size={14} className="text-amber-600" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Confirm gift details</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Your wallet will be debited immediately.</p>
-            </div>
-          </div>
-          <div className="bg-slate-50 rounded-xl p-3 space-y-2">
-            <Row label="To" value={`${firstName} ${lastName}`} />
-            <Row label="Email" value={recipientEmail.trim().toLowerCase()} />
-            <Row label="Asset" value={security?.name || security?.symbol} />
-            {amountDisplay && <Row label="Amount" value={amountDisplay} bold />}
-            {message && (
-              <div className="pt-1 border-t border-slate-200">
-                <p className="text-[11px] text-slate-400 mb-0.5">Message</p>
-                <p className="text-xs text-slate-600 italic">"{message}"</p>
-              </div>
-            )}
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setStep("form")} className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 active:scale-[0.98] transition-all">
-              Edit
-            </button>
-            <button type="button" onClick={handleConfirm} className="flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-2.5 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg">
-              Confirm & Send
-            </button>
-          </div>
-        </div>
-        </motion.div>
-      )}
-
-      {enabled && step === "loading" && (
-        <motion.div
-          key="gift-loading"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.25 }}
-          className="mt-3 bg-white border border-slate-200 rounded-2xl p-6 flex flex-col items-center gap-3 shadow-sm"
-        >
-          <div className="w-8 h-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          <p className="text-sm text-slate-500">Creating your gift…</p>
-        </motion.div>
-      )}
+              )}
+            </motion.div>
+          </>
+        )}
       </AnimatePresence>
 
+      {/* ── SUCCESS MODAL ── */}
       {enabled && step === "success" && giftCode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(10,10,20,0.6)", backdropFilter: "blur(12px)", animation: "gtv-fade 0.3s ease forwards" }}>
           <style>{`
@@ -654,11 +729,11 @@ export default function GiftToggleV2({
             <div className="bg-white rounded-[28px] overflow-hidden" style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04)" }}>
               <div className="h-1 bg-gradient-to-r from-violet-500 via-fuchsia-400 to-violet-500" />
 
-              <div className="px-6 pt-5 pb-5">
+              <div className="px-6 pt-5 pb-5 relative">
                 <button
                   type="button"
                   onClick={() => { resetForm(); onDone?.(); }}
-                  className="absolute top-8 right-7 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors z-10"
+                  className="absolute top-4 right-5 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
                 >
                   <X size={14} className="text-slate-500" />
                 </button>
@@ -670,31 +745,30 @@ export default function GiftToggleV2({
                     <rect x="36" y="30" width="8" height="42" rx="1" fill="#e9d5ff" opacity="0.6" />
                     <rect x="8" y="35" width="64" height="4" rx="1" fill="#e9d5ff" opacity="0.4" />
                     <path d="M40 30C40 30 32 14 24 18C16 22 28 30 40 30Z" fill="#f0abfc" opacity="0.8" />
-                    <path d="M40 30C40 30 48 14 56 18C64 22 52 30 40 30Z" fill="#c4b5fd" opacity="0.8" />
-                    <circle cx="40" cy="28" r="5" fill="#a78bfa" />
-                    <circle cx="40" cy="28" r="2.5" fill="#f5f3ff" />
+                    <path d="M40 30C40 30 48 14 56 18C64 22 52 30 40 30Z" fill="#f0abfc" opacity="0.8" />
                     <defs>
                       <linearGradient id="giftBox" x1="12" y1="38" x2="68" y2="72" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#8b5cf6" />
-                        <stop offset="1" stopColor="#d946ef" />
+                        <stop stopColor="#8b5cf6" /><stop offset="1" stopColor="#6d28d9" />
                       </linearGradient>
                       <linearGradient id="giftLid" x1="8" y1="30" x2="72" y2="44" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#7c3aed" />
-                        <stop offset="1" stopColor="#c026d3" />
+                        <stop stopColor="#a78bfa" /><stop offset="1" stopColor="#7c3aed" />
                       </linearGradient>
                     </defs>
                   </svg>
                 </div>
 
                 <div className="text-center mb-4">
-                  <p className="text-[16px] font-bold text-slate-900">Gift sent to {firstName}!</p>
-                  <p className="text-[12px] text-slate-400 mt-0.5">
-                    {expiresAt ? `Expires ${formatExpiry(expiresAt)}` : "Share the code below"}
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">Gift sent! 🎉</h3>
+                  <p className="text-[13px] text-slate-500">
+                    Share the code below with <span className="font-semibold text-slate-700">{firstName}</span>
                   </p>
+                  {expiresAt && (
+                    <p className="text-[11px] text-slate-400 mt-1">Expires {formatExpiry(expiresAt)}</p>
+                  )}
                 </div>
 
-                {/* Add as beneficiary prompt */}
-                {askSaveBeneficiary && pendingBeneficiary ? (
+                {/* Ask save beneficiary prompt */}
+                {askSaveBeneficiary && pendingBeneficiary && (
                   <div className="mb-4 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
                     <p className="text-[11px] font-semibold text-violet-800 mb-2">
                       Save {pendingBeneficiary.firstName} as a recipient?
@@ -721,19 +795,18 @@ export default function GiftToggleV2({
                       </button>
                     </div>
                   </div>
-                ) : !askSaveBeneficiary && pendingBeneficiary === null && firstName ? (
-                  <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
-                    <Star size={11} className="text-emerald-500 shrink-0" />
-                    <p className="text-[11px] text-emerald-700 font-medium">{firstName} saved as a recipient</p>
-                  </div>
-                ) : null}
+                )}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-4">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.12em] mb-2.5 text-center">Claim code</p>
                   <div className="flex justify-center gap-1.5">
-                    {String(giftCode).split("").map((digit, i) => (
-                      <div key={i} className="w-10 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-                        <span className="text-xl font-bold text-slate-900 font-mono">{digit}</span>
+                    {giftCode.split("").map((char, i) => (
+                      <div
+                        key={i}
+                        className="w-9 h-11 rounded-xl bg-white border-2 border-slate-200 flex items-center justify-center text-[18px] font-black text-violet-700 shadow-sm"
+                        style={{ fontFamily: "monospace", letterSpacing: "0" }}
+                      >
+                        {char}
                       </div>
                     ))}
                   </div>
@@ -742,37 +815,24 @@ export default function GiftToggleV2({
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white active:scale-[0.98] transition-all mb-2"
+                  className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all active:scale-[0.98] mb-2 ${copied ? "bg-emerald-500 text-white" : "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] text-white shadow-lg"}`}
                 >
-                  {copied ? <Check size={15} /> : <Copy size={15} />}
-                  {copied ? "Copied!" : "Copy Code"}
+                  {copied ? <Check size={15} strokeWidth={3} /> : <Copy size={15} />}
+                  {copied ? "Copied!" : "Copy code"}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => { resetForm(); onDone?.(); }}
-                  className="w-full py-3 rounded-2xl text-slate-500 text-sm font-medium active:scale-[0.98] transition-all"
+                  className="w-full rounded-xl py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors"
                 >
                   Done
                 </button>
-
-                <p className="text-[10px] text-slate-300 text-center mt-1">
-                  Recipient enters code + SA ID on Mint to claim
-                </p>
               </div>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, bold }) {
-  return (
-    <div className="flex justify-between items-center">
-      <span className="text-[11px] text-slate-400">{label}</span>
-      <span className={`text-xs text-right max-w-[60%] ${bold ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{value}</span>
     </div>
   );
 }
