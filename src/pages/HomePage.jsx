@@ -90,7 +90,7 @@ const PendingSellsSection = () => {
         if (!uid) return;
         const { data: rows } = await supabase
           .from("stock_holdings_c")
-          .select("id, strategy_id, security_id, quantity, market_value, avg_exit, trade_side, sell_requested_at, strategy_name_snapshot")
+          .select("id, strategy_id, security_id, quantity, market_value, avg_exit, expected_exit, trade_side, sell_requested_at, strategy_name_snapshot")
           .eq("user_id", uid).is("family_member_id", null)
           .eq("Status", "active").eq("trade_side", "SELL");
         const pending = (rows || []).filter((r) => !(Number(r.avg_exit) > 0));
@@ -103,6 +103,11 @@ const PendingSellsSection = () => {
         ]);
         const stratMeta = {}; (stratRes.data || []).forEach((s) => { stratMeta[s.id] = s; });
         const secMeta = {}; (secRes.data || []).forEach((s) => { secMeta[s.id] = s; });
+        // Value at the expected exit (price the client saw × qty); fall back to
+        // market_value only if expected_exit wasn't captured.
+        const rowValueCents = (r) => (Number(r.expected_exit) > 0
+          ? Number(r.expected_exit) * Number(r.quantity || 0)
+          : Number(r.market_value || 0));
         const g = {};
         for (const r of pending) {
           const sm = secMeta[r.security_id] || {};
@@ -110,10 +115,10 @@ const PendingSellsSection = () => {
             const k = `strat:${r.strategy_id}`;
             const m = stratMeta[r.strategy_id] || {};
             if (!g[k]) g[k] = { key: k, kind: "strategy", title: m.short_name || m.name || r.strategy_name_snapshot || "Strategy", valueCents: 0, assets: [] };
-            g[k].valueCents += Number(r.market_value || 0);
+            g[k].valueCents += rowValueCents(r);
             g[k].assets.push({ logo: sm.logo_url || null, symbol: sm.symbol || "" });
           } else {
-            g[`sec:${r.id}`] = { key: `sec:${r.id}`, kind: "security", title: sm.name || sm.symbol || "Asset", valueCents: Number(r.market_value || 0), assets: [{ logo: sm.logo_url || null, symbol: sm.symbol || "" }] };
+            g[`sec:${r.id}`] = { key: `sec:${r.id}`, kind: "security", title: sm.name || sm.symbol || "Asset", valueCents: rowValueCents(r), assets: [{ logo: sm.logo_url || null, symbol: sm.symbol || "" }] };
           }
         }
         if (!cancelled) setGroups(Object.values(g));
