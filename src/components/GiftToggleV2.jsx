@@ -125,6 +125,8 @@ export default function GiftToggleV2({
   const mintDebounceRef = useRef(null);
 
   const [beneficiaries, setBeneficiaries] = useState([]);
+  const [askSaveBeneficiary, setAskSaveBeneficiary] = useState(false);
+  const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
 
   useEffect(() => {
     if (enabled) setBeneficiaries(getBeneficiaries());
@@ -144,6 +146,8 @@ export default function GiftToggleV2({
     setMintSearch("");
     setMintSearchResult(null);
     setMintSearchError(null);
+    setAskSaveBeneficiary(false);
+    setPendingBeneficiary(null);
     setStep("form");
   }
 
@@ -249,8 +253,9 @@ export default function GiftToggleV2({
         return;
       }
 
-      saveBeneficiary({ firstName: firstName.trim(), lastName: lastName.trim(), email: recipientEmail.trim().toLowerCase(), mintNumber: null });
-      setBeneficiaries(getBeneficiaries());
+      const mintNum = mintSearchResult?.mint_number || null;
+      setPendingBeneficiary({ firstName: firstName.trim(), lastName: lastName.trim(), email: recipientEmail.trim().toLowerCase(), mintNumber: mintNum });
+      setAskSaveBeneficiary(true);
 
       setGiftCode(data.token);
       setExpiresAt(data.expires_at);
@@ -357,6 +362,35 @@ export default function GiftToggleV2({
           {/* Mint number search */}
           {inputMode === "mintNumber" && (
             <div className="space-y-3">
+              {/* MINT recent recipients — only those saved with a mint number */}
+              {!mintSearchResult && (() => {
+                const mintBeneficiaries = beneficiaries.filter(b => b.mintNumber);
+                if (!mintBeneficiaries.length) return null;
+                return (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+                      <Star size={10} className="text-violet-400" />Recent MINT recipients
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {mintBeneficiaries.slice(0, 4).map((b, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setMintSearchResult({ first_name: b.firstName, last_name: b.lastName, email: b.email, mint_number: b.mintNumber })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-100 text-[11px] font-semibold text-violet-700 active:scale-95 transition-all hover:bg-violet-100"
+                        >
+                          <div className="w-4 h-4 rounded-full bg-violet-200 flex items-center justify-center text-[8px] font-bold text-violet-700">
+                            {b.firstName?.[0]?.toUpperCase() || "?"}
+                          </div>
+                          {b.firstName} {b.lastName}
+                          <ChevronRight size={9} className="text-violet-400" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Search input — hide once a result is found */}
               {!mintSearchResult && (
                 <div>
@@ -393,6 +427,7 @@ export default function GiftToggleV2({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
                       <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
                     </div>
                     <button
                       type="button"
@@ -608,11 +643,40 @@ export default function GiftToggleV2({
                   </p>
                 </div>
 
-                {/* Saved as beneficiary notice */}
-                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <Star size={11} className="text-emerald-500 shrink-0" />
-                  <p className="text-[11px] text-emerald-700 font-medium">{firstName} saved as a beneficiary</p>
-                </div>
+                {/* Add as beneficiary prompt */}
+                {askSaveBeneficiary && pendingBeneficiary ? (
+                  <div className="mb-4 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
+                    <p className="text-[11px] font-semibold text-violet-800 mb-2">
+                      Save {pendingBeneficiary.firstName} as a recipient?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveBeneficiary(pendingBeneficiary);
+                          setBeneficiaries(getBeneficiaries());
+                          setAskSaveBeneficiary(false);
+                          setPendingBeneficiary(null);
+                        }}
+                        className="flex-1 rounded-lg bg-violet-600 py-1.5 text-[11px] font-semibold text-white active:scale-95 transition-all"
+                      >
+                        Yes, save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAskSaveBeneficiary(false); setPendingBeneficiary(null); }}
+                        className="flex-1 rounded-lg bg-white border border-violet-200 py-1.5 text-[11px] font-semibold text-violet-600 active:scale-95 transition-all"
+                      >
+                        No thanks
+                      </button>
+                    </div>
+                  </div>
+                ) : !askSaveBeneficiary && pendingBeneficiary === null && firstName ? (
+                  <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                    <Star size={11} className="text-emerald-500 shrink-0" />
+                    <p className="text-[11px] text-emerald-700 font-medium">{firstName} saved as a recipient</p>
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-4">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.12em] mb-2.5 text-center">Claim code</p>
