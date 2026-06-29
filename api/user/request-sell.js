@@ -68,7 +68,29 @@ export default async function handler(req, res) {
       return res.status(409).json({ success: false, error: "A sell is already pending for this holding", alreadyPending: true });
 
     const ids = sellable.map((r) => r.id);
-    const estValueCents = sellable.reduce((s, r) => s + Number(r.market_value || 0), 0);
+
+    // Capture the live price the client is seeing right now (per-share, cents) —
+    // this is their "expected exit". Source: latest stock_intraday_c (same as the
+    // holdings API). Stored per holding as expected_exit; the client is credited
+    // at this price on settlement (MINT keeps the spread vs the broker's avg_exit).
+    const secIds = [...new Set(sellable.map((r) => r.security_id).filter(Boolean))];
+    const priceBySec = {};
+    await Promise.all(secIds.map(async (sid) => {
+      const { data } = await db
+        .from("stock_intraday_c").select("current_price")
+        .eq("security_id", sid).order("timestamp", { ascending: false }).limit(1).maybeSingle();
+      if (data?.current_price != null) priceBySec[sid] = Math.round(Number(data.current_price)); // cents/share
+    }));
+    const expectedExitCents = (r) => {
+      const px = priceBySec[r.security_id];
+      return Number.isFinite(px) && px > 0 ? px : null;
+    };
+    // Expected proceeds total (what they saw): live price × qty, else market_value.
+    const estValueCents = sellable.reduce((s, r) => {
+      const px = expectedExitCents(r);
+      const v = px != null ? px * Number(r.quantity || 0) : Number(r.market_value || 0);
+      return s + v;
+    }, 0);
 
     // Friendly label for the transaction row.
     let label = "holding";
@@ -86,12 +108,16 @@ export default async function handler(req, res) {
     const reference = "SELL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     const now = new Date().toISOString();
 
-    // Flip the holding(s) to a pending SELL. Set BOTH fields so the CRM order
-    // book (which reads trade_side first) recognises it as a SELL, not a BUY.
-    const { error: updErr } = await db
-      .from("stock_holdings_c")
-      .update({ side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now })
-      .in("id", ids);
+    // Flip each holding to a pending SELL (side + trade_side so the CRM order
+    // book recognises it) and stamp the expected exit price (what the client saw).
+    let updErr = null;
+    for (const r of sellable) {
+      const patch = { side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now };
+      const px = expectedExitCents(r);
+      if (px != null) patch.expected_exit = px;
+      const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
+      if (error) { updErr = error; break; }
+    }
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);
       return res.status(500).json({ success: false, error: "Could not queue the sell" });
