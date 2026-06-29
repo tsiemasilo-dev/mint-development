@@ -350,49 +350,91 @@ export default function GiftToggleV2({
               onClick={() => setInputMode("mintNumber")}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${inputMode === "mintNumber" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
             >
-              <Hash size={11} />Mint number
+              <Hash size={11} />MINT
             </button>
           </div>
 
           {/* Mint number search */}
           {inputMode === "mintNumber" && (
-            <div>
-              <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Search by Mint number</label>
-              <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={mintSearch}
-                  onChange={e => handleMintSearchChange(e.target.value)}
-                  placeholder="e.g. MNT-00123"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-                />
-                {mintSearching && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-                )}
-              </div>
-              {mintSearchError && (
-                <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
-                  <AlertCircle size={10} />{mintSearchError}
-                </p>
+            <div className="space-y-3">
+              {/* Search input — hide once a result is found */}
+              {!mintSearchResult && (
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Search by MINT number</label>
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={mintSearch}
+                      onChange={e => handleMintSearchChange(e.target.value)}
+                      placeholder="e.g. TSI5260100626"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                    />
+                    {mintSearching && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                    )}
+                  </div>
+                  {mintSearchError && (
+                    <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+                      <AlertCircle size={10} />{mintSearchError}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's MINT number to find them.</p>
+                </div>
               )}
+
+              {/* Found user — stay on MINT tab, show details + message */}
               {mintSearchResult && (
-                <button
-                  type="button"
-                  onClick={handleSelectMintResult}
-                  className="w-full mt-2 flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100 active:scale-[0.98] transition-all"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-violet-700">{mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
+                <>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                    <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                      <span className="text-base font-bold text-violet-700">{mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
+                      <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); }}
+                      className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors shrink-0"
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                      Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                    </label>
+                    <textarea
+                      value={message}
+                      onChange={e => setMessage(e.target.value)}
+                      placeholder="Add a personal note…"
+                      rows={3}
+                      maxLength={200}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                    />
                   </div>
-                  <ChevronRight size={14} className="text-violet-400 shrink-0" />
-                </button>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Your wallet is debited immediately. The recipient has 4 hours to claim using their SA ID and the code you share.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFirstName(mintSearchResult.first_name || "");
+                      setLastName(mintSearchResult.last_name || "");
+                      setRecipientEmail(mintSearchResult.email || "");
+                      setStep("confirming");
+                    }}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
+                  >
+                    <Gift size={15} /> Continue
+                  </button>
+                </>
               )}
-              <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's Mint number to auto-fill their details.</p>
             </div>
           )}
 
