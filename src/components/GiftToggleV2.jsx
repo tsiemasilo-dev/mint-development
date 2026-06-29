@@ -993,7 +993,7 @@ export default function GiftToggleV2({
             <div className="bg-white rounded-[28px] overflow-hidden" style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04)" }}>
               <div className="h-1 bg-gradient-to-r from-violet-500 via-fuchsia-400 to-violet-500" />
               <div className="px-6 pt-5 pb-5 relative">
-                <button type="button" onClick={() => { resetForm(); onDone?.(); }} className="absolute top-4 right-5 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                <button type="button" onClick={() => { handleClose(); onDone?.(); }} className="absolute top-4 right-5 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
                   <X size={14} className="text-slate-500" />
                 </button>
 
@@ -1054,7 +1054,7 @@ export default function GiftToggleV2({
                   {copied ? "Copied!" : "Copy code"}
                 </button>
 
-                <button type="button" onClick={() => { resetForm(); onDone?.(); }} className="w-full rounded-xl py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+                <button type="button" onClick={() => { handleClose(); onDone?.(); }} className="w-full rounded-xl py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700 transition-colors">
                   Done
                 </button>
               </div>
