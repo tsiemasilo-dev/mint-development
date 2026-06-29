@@ -108,23 +108,11 @@ export default async function handler(req, res) {
     const reference = "SELL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     const now = new Date().toISOString();
 
-    // Flip each holding to a pending SELL (side + trade_side so the CRM order
-    // book recognises it) and stamp the expected exit price (what the client saw).
-    let updErr = null;
-    for (const r of sellable) {
-      const patch = { side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now };
-      const px = expectedExitCents(r);
-      if (px != null) patch.expected_exit = px;
-      const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
-      if (error) { updErr = error; break; }
-    }
-    if (updErr) {
-      console.error("[request-sell] holding update error:", updErr.message);
-      return res.status(500).json({ success: false, error: "Could not queue the sell" });
-    }
-
-    // Record the instruction as a pending credit (proceeds land once the broker fills).
-    const { error: txErr } = await db.from("transactions").insert({
+    // Record the instruction as a pending credit FIRST (proceeds land once the
+    // broker fills) — its id is stamped onto every holding below so settlement
+    // can find this exact transaction deterministically, even when the broker
+    // fills each holding's exit price in separate CRM actions over time.
+    const { data: txnRow, error: txErr } = await db.from("transactions").insert({
       user_id: userId,
       family_member_id: familyMemberId || null,
       direction: "credit",
@@ -138,10 +126,31 @@ export default async function handler(req, res) {
       status: "pending",
       transaction_date: now,
       created_at: now,
-    });
+    }).select("id").single();
     if (txErr) {
-      // Holding is already flagged — log but don't fail, surface the reference regardless.
-      console.error("[request-sell] transaction insert error (non-fatal):", txErr.message);
+      // Don't queue holdings as SELL without a transaction to settle against —
+      // that would silently strand them with no way to credit the client.
+      console.error("[request-sell] transaction insert error:", txErr.message);
+      return res.status(500).json({ success: false, error: "Could not record the sell instruction" });
+    }
+
+    // Flip each holding to a pending SELL (side + trade_side so the CRM order
+    // book recognises it), stamp the expected exit price (what the client saw),
+    // and link it to this transaction for settlement.
+    let updErr = null;
+    for (const r of sellable) {
+      const patch = {
+        side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now,
+        sell_transaction_id: txnRow.id,
+      };
+      const px = expectedExitCents(r);
+      if (px != null) patch.expected_exit = px;
+      const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
+      if (error) { updErr = error; break; }
+    }
+    if (updErr) {
+      console.error("[request-sell] holding update error:", updErr.message);
+      return res.status(500).json({ success: false, error: "Could not queue the sell" });
     }
 
     console.log(`[request-sell] queued ${ids.length} holding(s) as SELL for user ${userId}, ref ${reference}`);
