@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
@@ -418,8 +419,9 @@ export default function GiftToggleV2({
         </div>
       </button>
 
-      {/* ── BOTTOM SHEET ── */}
-      <AnimatePresence>
+      {/* ── BOTTOM SHEET ── rendered via portal so CSS transforms on parent containers
+           (e.g. AdultInvestModal sliding off-screen) don't clip fixed-positioned overlays */}
+      {createPortal(<AnimatePresence>
         {enabled && step !== "success" && (
           <>
             {/* Backdrop — above AdultInvestModal (z:9998/9999) */}
@@ -780,10 +782,10 @@ export default function GiftToggleV2({
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
 
-      {/* ── SUCCESS MODAL ── */}
-      {enabled && step === "success" && giftCode && (
+      {/* ── SUCCESS MODAL ── rendered via portal for same reason as the bottom sheet */}
+      {createPortal(enabled && step === "success" && giftCode ? (
         <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 10002, background: "rgba(10,10,20,0.6)", backdropFilter: "blur(12px)", animation: "gtv-fade 0.3s ease forwards" }}>
           <style>{`
             @keyframes gtv-fade { from { opacity:0 } to { opacity:1 } }
@@ -864,7 +866,7 @@ export default function GiftToggleV2({
             </div>
           </div>
         </div>
-      )}
+      ) : null, document.body)}
     </div>
   );
 }
