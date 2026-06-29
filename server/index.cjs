@@ -5651,6 +5651,53 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
   }
 });
 
+app.get("/api/user/lookup-by-mint", async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(500).json({ error: "Database not connected" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const mintNumber = (req.query.mint_number || "").trim();
+    if (!mintNumber || mintNumber.length < 3) {
+      return res.status(400).json({ error: "Mint number too short" });
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, mint_number')
+      .ilike('mint_number', mintNumber)
+      .maybeSingle();
+
+    if (profileError) {
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: "No user found with that Mint number" });
+    }
+    if (profile.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself" });
+    }
+    const { data: authUser } = await supabase.auth.admin.getUserById(profile.id);
+    const email = authUser?.user?.email || null;
+    if (!email) {
+      return res.status(404).json({ error: "User account not found" });
+    }
+    return res.json({
+      user: {
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        email,
+        mint_number: profile.mint_number,
+      },
+    });
+  } catch (e) {
+    console.error('[mint] lookup-by-mint error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/user/holdings", async (req, res) => {
   try {
     if (!supabase) {

@@ -1,9 +1,27 @@
-import React, { useState, useRef } from "react";
-import { Gift, Copy, Check, AlertCircle, X } from "lucide-react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Gift, Copy, Check, AlertCircle, X, Search, Star, Hash, User, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 
 const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
+
+const BENEFICIARIES_KEY = "mint_gift_beneficiaries";
+
+function getBeneficiaries() {
+  try {
+    return JSON.parse(localStorage.getItem(BENEFICIARIES_KEY) || "[]");
+  } catch { return []; }
+}
+
+function saveBeneficiary({ firstName, lastName, email, mintNumber }) {
+  try {
+    const existing = getBeneficiaries();
+    const key = email.toLowerCase();
+    const filtered = existing.filter(b => b.email.toLowerCase() !== key);
+    const updated = [{ firstName, lastName, email, mintNumber: mintNumber || null, usedAt: Date.now() }, ...filtered].slice(0, 10);
+    localStorage.setItem(BENEFICIARIES_KEY, JSON.stringify(updated));
+  } catch {}
+}
 
 function ConfettiBurst({ active }) {
   const particles = useRef(
@@ -52,6 +70,33 @@ function ConfettiBurst({ active }) {
   );
 }
 
+function BeneficiaryChips({ beneficiaries, onSelect }) {
+  if (!beneficiaries.length) return null;
+  return (
+    <div className="mb-3">
+      <p className="text-[11px] font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+        <Star size={10} className="text-violet-400" />Recent recipients
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {beneficiaries.slice(0, 4).map((b, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onSelect(b)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-50 border border-violet-100 text-[11px] font-semibold text-violet-700 active:scale-95 transition-all hover:bg-violet-100"
+          >
+            <div className="w-4 h-4 rounded-full bg-violet-200 flex items-center justify-center text-[8px] font-bold text-violet-700">
+              {b.firstName?.[0]?.toUpperCase() || "?"}
+            </div>
+            {b.firstName} {b.lastName}
+            <ChevronRight size={9} className="text-violet-400" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function GiftToggleV2({
   enabled,
   onToggle,
@@ -61,6 +106,7 @@ export default function GiftToggleV2({
   amountDisplay,
   assetType = "stock",
 }) {
+  const [inputMode, setInputMode] = useState("manual");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -72,18 +118,95 @@ export default function GiftToggleV2({
   const [error, setError] = useState(null);
   const [celebrate, setCelebrate] = useState(false);
 
+  const [mintSearch, setMintSearch] = useState("");
+  const [mintSearching, setMintSearching] = useState(false);
+  const [mintSearchResult, setMintSearchResult] = useState(null);
+  const [mintSearchError, setMintSearchError] = useState(null);
+  const mintDebounceRef = useRef(null);
+
+  const [beneficiaries, setBeneficiaries] = useState([]);
+
+  useEffect(() => {
+    if (enabled) setBeneficiaries(getBeneficiaries());
+  }, [enabled]);
+
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim());
   const canProceed = firstName.trim() && lastName.trim() && emailValid;
 
-  function handleToggle(val) {
-    setStep("form");
+  function resetForm() {
+    setInputMode("manual");
     setFirstName("");
     setLastName("");
     setRecipientEmail("");
     setMessage("");
     setGiftCode(null);
     setError(null);
+    setMintSearch("");
+    setMintSearchResult(null);
+    setMintSearchError(null);
+    setStep("form");
+  }
+
+  function handleToggle(val) {
+    resetForm();
     onToggle?.(val);
+  }
+
+  function handleSelectBeneficiary(b) {
+    setInputMode("manual");
+    setFirstName(b.firstName || "");
+    setLastName(b.lastName || "");
+    setRecipientEmail(b.email || "");
+  }
+
+  const searchByMintNumber = useCallback(async (mintNum) => {
+    if (!mintNum || mintNum.trim().length < 3) {
+      setMintSearchResult(null);
+      setMintSearchError(null);
+      return;
+    }
+    setMintSearching(true);
+    setMintSearchError(null);
+    setMintSearchResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch(`/api/user/lookup-by-mint?mint_number=${encodeURIComponent(mintNum.trim())}`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setMintSearchError(data.error || "User not found");
+        setMintSearchResult(null);
+      } else if (data.user) {
+        setMintSearchResult(data.user);
+        setMintSearchError(null);
+      } else {
+        setMintSearchError("No user found with that Mint number");
+      }
+    } catch {
+      setMintSearchError("Search failed. Please try again.");
+    } finally {
+      setMintSearching(false);
+    }
+  }, []);
+
+  function handleMintSearchChange(val) {
+    setMintSearch(val);
+    setMintSearchResult(null);
+    setMintSearchError(null);
+    clearTimeout(mintDebounceRef.current);
+    mintDebounceRef.current = setTimeout(() => searchByMintNumber(val), 600);
+  }
+
+  function handleSelectMintResult() {
+    if (!mintSearchResult) return;
+    setFirstName(mintSearchResult.first_name || "");
+    setLastName(mintSearchResult.last_name || "");
+    setRecipientEmail(mintSearchResult.email || "");
+    setInputMode("manual");
+    setMintSearch("");
+    setMintSearchResult(null);
   }
 
   async function handleConfirm() {
@@ -93,7 +216,6 @@ export default function GiftToggleV2({
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
 
-      // Block self-gifting before hitting the server
       const senderEmail = sessionData?.session?.user?.email?.toLowerCase() || "";
       if (senderEmail && recipientEmail.trim().toLowerCase() === senderEmail) {
         setError("You cannot gift to yourself.");
@@ -126,13 +248,15 @@ export default function GiftToggleV2({
         setStep("confirming");
         return;
       }
+
+      saveBeneficiary({ firstName: firstName.trim(), lastName: lastName.trim(), email: recipientEmail.trim().toLowerCase(), mintNumber: null });
+      setBeneficiaries(getBeneficiaries());
+
       setGiftCode(data.token);
       setExpiresAt(data.expires_at);
       setStep("success");
       setCelebrate(true);
       setTimeout(() => setCelebrate(false), 1600);
-      // Sending debits the wallet immediately (reserve model) — nudge the balance
-      // card / financial data to refresh so the new balance shows right away.
       try {
         window.dispatchEvent(new Event("wallet-updated"));
         window.dispatchEvent(new Event("profile-updated"));
@@ -174,8 +298,6 @@ export default function GiftToggleV2({
             <p className="text-[11px] text-slate-400">Recipient claims with their SA ID + code</p>
           </div>
         </div>
-
-        {/* toggle */}
         <div
           className={`relative w-[52px] h-[30px] rounded-full flex items-center transition-colors ${enabled ? "bg-violet-600" : "bg-slate-200"}`}
           style={{ padding: 3 }}
@@ -188,24 +310,11 @@ export default function GiftToggleV2({
           >
             <AnimatePresence mode="wait">
               {enabled ? (
-                <motion.div
-                  key="check"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
+                <motion.div key="check" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ duration: 0.15 }}>
                   <Check size={12} strokeWidth={3} className="text-violet-600" />
                 </motion.div>
               ) : (
-                <motion.div
-                  key="dot"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-1.5 h-1.5 rounded-full bg-slate-300"
-                />
+                <motion.div key="dot" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="w-1.5 h-1.5 rounded-full bg-slate-300" />
               )}
             </AnimatePresence>
           </motion.div>
@@ -223,56 +332,125 @@ export default function GiftToggleV2({
           className="overflow-hidden"
         >
         <div className="space-y-3 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[11px] font-semibold text-slate-500 mb-1 block">First Name</label>
-              <input
-                type="text" value={firstName}
-                onChange={e => setFirstName(e.target.value)}
-                placeholder="John"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-              />
+
+          {/* Beneficiary chips */}
+          <BeneficiaryChips beneficiaries={beneficiaries} onSelect={handleSelectBeneficiary} />
+
+          {/* Input mode toggle */}
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => { setInputMode("manual"); setMintSearch(""); setMintSearchResult(null); setMintSearchError(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${inputMode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+            >
+              <User size={11} />Enter details
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode("mintNumber")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${inputMode === "mintNumber" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+            >
+              <Hash size={11} />Mint number
+            </button>
+          </div>
+
+          {/* Mint number search */}
+          {inputMode === "mintNumber" && (
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Search by Mint number</label>
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={mintSearch}
+                  onChange={e => handleMintSearchChange(e.target.value)}
+                  placeholder="e.g. MNT-00123"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                />
+                {mintSearching && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                )}
+              </div>
+              {mintSearchError && (
+                <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={10} />{mintSearchError}
+                </p>
+              )}
+              {mintSearchResult && (
+                <button
+                  type="button"
+                  onClick={handleSelectMintResult}
+                  className="w-full mt-2 flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100 active:scale-[0.98] transition-all"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-violet-700">{mintSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
+                  </div>
+                  <ChevronRight size={14} className="text-violet-400 shrink-0" />
+                </button>
+              )}
+              <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's Mint number to auto-fill their details.</p>
             </div>
-            <div className="flex-1">
-              <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Last Name</label>
-              <input
-                type="text" value={lastName}
-                onChange={e => setLastName(e.target.value)}
-                placeholder="Doe"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Recipient Email</label>
-            <input
-              type="email" value={recipientEmail}
-              onChange={e => setRecipientEmail(e.target.value)}
-              placeholder="john@example.com"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
-              Personal message <span className="text-slate-300 font-normal">(optional)</span>
-            </label>
-            <textarea
-              value={message} onChange={e => setMessage(e.target.value)}
-              placeholder="Add a personal note…" rows={2} maxLength={200}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
-            />
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            Your wallet is debited immediately. The recipient has 4 hours to claim using their SA ID and the code you share.
-          </p>
-          <button
-            type="button"
-            onClick={() => setStep("confirming")}
-            disabled={!canProceed}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all active:scale-[0.98] ${canProceed ? "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg" : "bg-slate-300 cursor-not-allowed"}`}
-          >
-            <Gift size={15} /> Continue
-          </button>
+          )}
+
+          {/* Manual entry */}
+          {inputMode === "manual" && (
+            <>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">First Name</label>
+                  <input
+                    type="text" value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="John"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Last Name</label>
+                  <input
+                    type="text" value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Doe"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Recipient Email</label>
+                <input
+                  type="email" value={recipientEmail}
+                  onChange={e => setRecipientEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                  Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={message} onChange={e => setMessage(e.target.value)}
+                  placeholder="Add a personal note…" rows={2} maxLength={200}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Your wallet is debited immediately. The recipient has 4 hours to claim using their SA ID and the code you share.
+              </p>
+              <button
+                type="button"
+                onClick={() => setStep("confirming")}
+                disabled={!canProceed}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition-all active:scale-[0.98] ${canProceed ? "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg" : "bg-slate-300 cursor-not-allowed"}`}
+              >
+                <Gift size={15} /> Continue
+              </button>
+            </>
+          )}
         </div>
         </motion.div>
       )}
@@ -347,20 +525,17 @@ export default function GiftToggleV2({
 
           <div className="w-full max-w-sm" style={{ animation: "gtv-slide 0.5s cubic-bezier(0.16,1,0.3,1) forwards" }}>
             <div className="bg-white rounded-[28px] overflow-hidden" style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.04)" }}>
-              {/* Top accent bar */}
               <div className="h-1 bg-gradient-to-r from-violet-500 via-fuchsia-400 to-violet-500" />
 
               <div className="px-6 pt-5 pb-5">
-                {/* Close */}
                 <button
                   type="button"
-                  onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
+                  onClick={() => { resetForm(); onDone?.(); }}
                   className="absolute top-8 right-7 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors z-10"
                 >
                   <X size={14} className="text-slate-500" />
                 </button>
 
-                {/* Gift illustration */}
                 <div className="flex justify-center mb-3">
                   <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="12" y="38" width="56" height="34" rx="6" fill="url(#giftBox)" />
@@ -384,15 +559,19 @@ export default function GiftToggleV2({
                   </svg>
                 </div>
 
-                {/* Header */}
-                <div className="text-center mb-5">
-                  <p className="text-[16px] font-bold text-slate-900">Gift sent to {firstName}</p>
+                <div className="text-center mb-4">
+                  <p className="text-[16px] font-bold text-slate-900">Gift sent to {firstName}!</p>
                   <p className="text-[12px] text-slate-400 mt-0.5">
                     {expiresAt ? `Expires ${formatExpiry(expiresAt)}` : "Share the code below"}
                   </p>
                 </div>
 
-                {/* Code card */}
+                {/* Saved as beneficiary notice */}
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <Star size={11} className="text-emerald-500 shrink-0" />
+                  <p className="text-[11px] text-emerald-700 font-medium">{firstName} saved as a beneficiary</p>
+                </div>
+
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 mb-4">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.12em] mb-2.5 text-center">Claim code</p>
                   <div className="flex justify-center gap-1.5">
@@ -404,7 +583,6 @@ export default function GiftToggleV2({
                   </div>
                 </div>
 
-                {/* Actions */}
                 <button
                   type="button"
                   onClick={handleCopy}
@@ -416,13 +594,12 @@ export default function GiftToggleV2({
 
                 <button
                   type="button"
-                  onClick={() => { setStep("form"); setGiftCode(null); onDone?.(); }}
+                  onClick={() => { resetForm(); onDone?.(); }}
                   className="w-full py-3 rounded-2xl text-slate-500 text-sm font-medium active:scale-[0.98] transition-all"
                 >
                   Done
                 </button>
 
-                {/* Footer hint */}
                 <p className="text-[10px] text-slate-300 text-center mt-1">
                   Recipient enters code + SA ID on Mint to claim
                 </p>
