@@ -704,7 +704,6 @@ export default function GiftToggleV2({
                         <div className="space-y-3">
                           {!mintSearchResult && (
                             <div>
-                              <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Search by MINT number</label>
                               <div className="relative">
                                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                 <input
@@ -805,7 +804,6 @@ export default function GiftToggleV2({
                         <div className="space-y-3">
                           {!idSearchResult && (
                             <div>
-                              <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Search by SA ID number</label>
                               <div className="relative">
                                 <CreditCard size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                 <input
