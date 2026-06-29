@@ -5651,6 +5651,51 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
   }
 });
 
+/**
+ * Reliably resolves the email for a known user ID.
+ * Priority:
+ *  1. Email already in the profiles row (fastest, no extra call)
+ *  2. Direct SQL query against auth.users via pgPool (reliable, bypasses API rate-limits)
+ *  3. supabaseAdmin.auth.admin.getUserById with up to 3 attempts (REST fallback)
+ * Returns null only when all three strategies fail.
+ */
+async function resolveUserEmail(profileId, profileEmail) {
+  if (profileEmail) return profileEmail;
+
+  // Strategy 2 — direct DB query (most reliable, immune to Supabase API blips)
+  if (pgPool) {
+    try {
+      const { rows } = await pgPool.query(
+        'SELECT email FROM auth.users WHERE id = $1 LIMIT 1',
+        [profileId]
+      );
+      if (rows[0]?.email) {
+        console.log(`[lookup] Resolved email via pgPool for ${profileId}`);
+        return rows[0].email;
+      }
+    } catch (e) {
+      console.warn('[lookup] pgPool auth.users query failed:', e.message);
+    }
+  }
+
+  // Strategy 3 — Supabase admin API with retries
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { data: authUser, error } = await supabaseAdmin.auth.admin.getUserById(profileId);
+      if (authUser?.user?.email) {
+        console.log(`[lookup] Resolved email via admin API (attempt ${attempt}) for ${profileId}`);
+        return authUser.user.email;
+      }
+      if (error) console.warn(`[lookup] admin.getUserById attempt ${attempt} error:`, error.message);
+    } catch (e) {
+      console.warn(`[lookup] admin.getUserById attempt ${attempt} threw:`, e.message);
+    }
+    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 200));
+  }
+
+  return null;
+}
+
 app.get("/api/user/lookup-by-mint", async (req, res) => {
   try {
     if (!supabaseAdmin) {
@@ -5683,24 +5728,10 @@ app.get("/api/user/lookup-by-mint", async (req, res) => {
       return res.status(400).json({ error: "You cannot gift to yourself" });
     }
 
-    // Prefer email stored in profiles; fall back to auth.admin lookup
-    let email = profile.email || null;
+    const email = await resolveUserEmail(profile.id, profile.email);
     if (!email) {
-      try {
-        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profile.id);
-        email = authUser?.user?.email || null;
-        // Retry once on failure
-        if (!email) {
-          const { data: authUser2 } = await supabaseAdmin.auth.admin.getUserById(profile.id);
-          email = authUser2?.user?.email || null;
-        }
-      } catch (e) {
-        console.warn('[mint] lookup-by-mint auth.admin fallback error:', e.message);
-      }
-    }
-
-    if (!email) {
-      return res.status(404).json({ error: "User account not found" });
+      console.error('[mint] lookup-by-mint: profile found but email unresolvable for', profile.id);
+      return res.status(503).json({ error: "Could not retrieve user details — please try again" });
     }
     return res.json({
       user: {
@@ -5747,18 +5778,10 @@ app.get("/api/user/lookup-by-id", async (req, res) => {
       return res.status(400).json({ error: "You cannot gift to yourself" });
     }
 
-    let email = profile.email || null;
+    const email = await resolveUserEmail(profile.id, profile.email);
     if (!email) {
-      try {
-        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profile.id);
-        email = authUser?.user?.email || null;
-      } catch (e) {
-        console.warn('[id] lookup-by-id auth.admin fallback error:', e.message);
-      }
-    }
-
-    if (!email) {
-      return res.status(404).json({ error: "User account not found" });
+      console.error('[id] lookup-by-id: profile found but email unresolvable for', profile.id);
+      return res.status(503).json({ error: "Could not retrieve user details — please try again" });
     }
     return res.json({
       user: {
