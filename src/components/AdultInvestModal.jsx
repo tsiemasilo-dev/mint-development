@@ -190,7 +190,7 @@ export default function AdultInvestModal({
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
             style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
             initial={{ y: "100%" }}
-            animate={{ y: 0 }}
+            animate={{ y: isGift ? "110%" : 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
           >
