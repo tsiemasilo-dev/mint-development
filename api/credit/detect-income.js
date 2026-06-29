@@ -233,7 +233,7 @@ export default async function handler(req, res) {
 
     const body = typeof req.body === "object" && req.body ? req.body : {};
     const path = String(body.path || "").trim();
-    const months = [3, 6].includes(Number(body.months)) ? Number(body.months) : 3;
+    const months = [3, 6].includes(Number(body.months)) ? Number(body.months) : 6;
     if (!path) return res.status(400).json({ success: false, error: "Missing path" });
     // A user may only analyse their own upload — paths are namespaced "<userId>/...".
     if (!path.startsWith(`${user.id}/`)) {

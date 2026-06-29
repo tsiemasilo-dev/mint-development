@@ -168,7 +168,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [loanTermMonths, setLoanTermMonths] = useState(3);
   // Monthly income — captured once as the last onboarding step, reused by AlgoLend.
   const [monthlyIncome, setMonthlyIncome] = useState(0);
-  const [statementMonths, setStatementMonths] = useState(3); // 3 or 6 (AI path)
+  const [statementMonths, setStatementMonths] = useState(6); // 3 or 6 (AI path) — default 6 for detection accuracy
   const [statementName, setStatementName] = useState("");
   const [statementUploading, setStatementUploading] = useState(false);
   const [statementDetecting, setStatementDetecting] = useState(false);
