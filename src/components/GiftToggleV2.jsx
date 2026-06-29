@@ -30,6 +30,13 @@ function removeBeneficiary(email) {
   } catch {}
 }
 
+function maskEmail(email) {
+  if (!email) return "";
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  return `${local[0]}***@${domain}`;
+}
+
 const AVATAR_GRADIENTS = [
   "from-violet-500 to-purple-600",
   "from-emerald-400 to-teal-600",
@@ -736,7 +743,7 @@ export default function GiftToggleV2({
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-slate-800">{mintSearchResult.first_name} {mintSearchResult.last_name}</p>
                                   <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
-                                  <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{maskEmail(mintSearchResult.email)}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {!beneficiarySaved ? (
@@ -839,7 +846,7 @@ export default function GiftToggleV2({
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-slate-800">{idSearchResult.first_name} {idSearchResult.last_name}</p>
                                   {idSearchResult.mint_number && <p className="text-[11px] text-slate-400 font-mono">{idSearchResult.mint_number}</p>}
-                                  <p className="text-[11px] text-slate-400 truncate">{idSearchResult.email}</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{maskEmail(idSearchResult.email)}</p>
                                 </div>
                                 <button
                                   type="button"
