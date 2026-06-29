@@ -98,7 +98,7 @@ const SCHEMA = {
 // GEMINI_API_KEY on Vercel (preview + prod) instead. User asked to hardcode
 // it for now (key will be rotated), same as the AlgoLend key fallback in
 // CreditFlow.jsx. Project: "MINT OCR SCAN".
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AQ.Ab8RN6Ij3VwagDL_dCh0BI-AGfTqn4JFSle_bD1uOZLEZqgUxA";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AQ.Ab8RN6K8nod7hdEbJHVYtor3zn3n4L2WESgEajNO9eahtlg8Cw";
 
 function buildPrompt(months) {
   return (
