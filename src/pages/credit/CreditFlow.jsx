@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -10,9 +10,11 @@ import ExperianVerification from "../../components/ExperianVerification";
 const ALGOLEND_URL = import.meta.env.VITE_ALGOLEND_URL || "https://admin.algolend.co.za";
 const ALGOLEND_KEY = import.meta.env.VITE_ALGOLEND_API_KEY || "ecfc04569dc012b81da4b350a204e0a28f4d4a7471079f68fb55002741670b8c";
 
-// Income verification: when the bank-statement AI is wired up, flip this on
-// (VITE_INCOME_AI=true). Until then the income step falls back to manual entry.
-const INCOME_AI_ENABLED = import.meta.env.VITE_INCOME_AI === "true";
+// Income verification (bank-statement AI). Hardcoded true for now — testing on
+// the PR preview, no Vercel env var access yet. TODO: switch back to
+// `import.meta.env.VITE_INCOME_AI === "true"` once VITE_INCOME_AI is set on
+// Vercel (preview + prod).
+const INCOME_AI_ENABLED = true;
 
 /**
  * CreditFlow — the unsecured-credit journey per the MINT Credit Journey spec (§3).
@@ -169,6 +171,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [statementMonths, setStatementMonths] = useState(3); // 3 or 6 (AI path)
   const [statementName, setStatementName] = useState("");
   const [statementUploading, setStatementUploading] = useState(false);
+  const [statementDetecting, setStatementDetecting] = useState(false);
+  const [statementError, setStatementError] = useState("");
+  // Gemini's salary-detection draft — the user confirms/edits before it becomes monthlyIncome.
+  const [incomeDetection, setIncomeDetection] = useState(null);
   const [incomeSaving, setIncomeSaving] = useState(false);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
@@ -515,35 +521,61 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, [saveCreditFlag]);
 
-  // Bank-statement upload for the income step (AI path). Reuses the POA signed-URL
-  // endpoint/bucket for now; stores the path so the income AI can read it later.
+  // Bank-statement upload for the income step (AI path): upload PDF to the
+  // private income-statements bucket, then ask Gemini to detect the salary.
   const handleStatementUpload = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const okType = /(pdf|csv|xls|xlsx)$/i.test(file.type) || /\.(pdf|csv|xls|xlsx)$/i.test(file.name);
-    if (!okType) return;
+    const okType = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+    if (!okType) { setStatementError("Please upload a PDF bank statement."); return; }
+    setStatementError("");
+    setIncomeDetection(null);
     setStatementUploading(true);
+    let info;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("Sign in required");
-      const res = await fetch("/api/onboarding/poa-upload-url", {
+      const res = await fetch("/api/credit/statement-upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ filename: file.name, contentType: file.type || "application/octet-stream" }),
+        body: JSON.stringify({ filename: file.name }),
       });
-      const info = await res.json().catch(() => ({}));
+      info = await res.json().catch(() => ({}));
       if (!res.ok || !info.success) throw new Error(info.error || "Upload failed");
-      const { error: upErr } = await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path, info.token, file, { contentType: file.type || undefined, upsert: true });
+      const { error: upErr } = await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path, info.token, file, { contentType: "application/pdf", upsert: true });
       if (upErr) throw upErr;
       setStatementName(file.name);
       await saveCreditFlag({ credit_bank_statement_path: info.path, credit_bank_statement_months: statementMonths });
-      // TODO: when the income AI is live, POST this path for salary/pay-date detection
-      // and set monthlyIncome from the result instead of manual entry.
     } catch (err) {
       console.warn("[CreditFlow] statement upload failed:", err?.message || err);
-    } finally {
+      setStatementError(err?.message || "Upload failed. Please try again.");
       setStatementUploading(false);
+      return;
+    }
+    setStatementUploading(false);
+
+    setStatementDetecting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/credit/detect-income", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path: info.path, months: statementMonths }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || "Could not analyse statement");
+      setIncomeDetection(data.result);
+      if (data.result?.is_salary_detected && data.result.estimated_monthly_income > 0) {
+        setMonthlyIncome(Math.round(Number(data.result.estimated_monthly_income)));
+      }
+      await saveCreditFlag({ credit_income_ai_result: data.result, credit_income_ai_at: new Date().toISOString() });
+    } catch (err) {
+      console.warn("[CreditFlow] income detection failed:", err?.message || err);
+      setStatementError(err?.message || "Couldn't detect your salary automatically — please confirm it manually below.");
+    } finally {
+      setStatementDetecting(false);
     }
   }, [saveCreditFlag, statementMonths]);
 
@@ -976,10 +1008,19 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <div className="-mt-14 px-5 pb-12">
                 {INCOME_AI_ENABLED ? (
                   /* AI path — bank statement (3 or 6 months) for salary detection */
-                  <div className="cf-fade rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
-                    <p className="text-sm font-semibold text-slate-900">Bank statement</p>
-                    <p className="mt-0.5 text-xs text-slate-400">PDF or CSV from your bank</p>
-                    <div className="mt-4 flex gap-2">
+                  <>
+                  <div className="cf-fade relative overflow-hidden rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                    <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-violet-100/60 blur-2xl" />
+                    <div className="relative flex items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Upload bank statement</p>
+                        <p className="mt-0.5 text-xs text-slate-400">PDF, last 3 or 6 months</p>
+                      </div>
+                    </div>
+                    <div className="relative mt-4 flex gap-2">
                       {[3, 6].map((m) => (
                         <button key={m} type="button" onClick={() => setStatementMonths(m)}
                           className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition ${statementMonths === m ? "border-violet-600 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600"}`}>
@@ -990,16 +1031,58 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                     {statementName ? (
                       <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                         <span className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span className="max-w-[180px] truncate">{statementName}</span></span>
-                        <label className="cursor-pointer text-[12px] font-semibold text-violet-600">Replace<input type="file" accept=".pdf,.csv,.xls,.xlsx" className="hidden" onChange={handleStatementUpload} /></label>
+                        <label className="cursor-pointer text-[12px] font-semibold text-violet-600">Replace<input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleStatementUpload} /></label>
                       </div>
                     ) : (
                       <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 px-4 py-6 text-center hover:border-violet-300">
                         {statementUploading ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Uploading…</span> : <><span className="text-sm font-semibold text-violet-600">Tap to upload</span><span className="mt-0.5 text-[11px] text-slate-400">Last {statementMonths} months</span></>}
-                        <input type="file" accept=".pdf,.csv,.xls,.xlsx" className="hidden" onChange={handleStatementUpload} disabled={statementUploading} />
+                        <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={handleStatementUpload} disabled={statementUploading} />
                       </label>
                     )}
-                    <p className="mt-3 text-[11px] text-slate-400">We'll automatically detect your salary and pay date. You can confirm before continuing.</p>
+                    {statementDetecting && (
+                      <div className="mt-4 flex items-center gap-2 rounded-2xl bg-violet-50 px-4 py-3 text-sm font-medium text-violet-700">
+                        <Loader2 className="h-4 w-4 animate-spin" />Analysing your statement…
+                      </div>
+                    )}
+                    {statementError && !statementDetecting && (
+                      <p className="mt-3 text-[11px] font-medium text-rose-500">{statementError}</p>
+                    )}
+                    {!statementName && (
+                      <p className="mt-3 text-[11px] text-slate-400">We'll automatically detect your salary and pay date. You can confirm before continuing.</p>
+                    )}
                   </div>
+
+                  {statementName && !statementDetecting && (() => {
+                    const det = incomeDetection;
+                    const found = !!det?.is_salary_detected && Number(det?.estimated_monthly_income) > 0;
+                    const score = Number(det?.confidence_score) || 0;
+                    const confLabel = score >= 0.85 ? "High confidence" : score >= 0.5 ? "Medium confidence" : "Low confidence";
+                    const confColor = score >= 0.85 ? "text-emerald-600" : score >= 0.5 ? "text-amber-600" : "text-slate-500";
+                    const lastTxn = det?.salary_transactions?.[det.salary_transactions.length - 1];
+                    return (
+                      <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                        <p className="text-sm font-semibold text-slate-900">{found ? "Detected salary" : "Couldn't confidently detect a salary"}</p>
+                        {det && (
+                          <p className={`mt-0.5 text-xs font-medium ${confColor}`}>{confLabel} — {det.confidence_reason}</p>
+                        )}
+                        <div className="relative mt-3 flex items-end gap-1">
+                          <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
+                          <input
+                            type="text" inputMode="numeric"
+                            value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
+                            onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                            placeholder="0"
+                            className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
+                          />
+                        </div>
+                        {found && lastTxn?.salary_date && (
+                          <p className="mt-1 text-[11px] text-slate-400">Last deposit detected on {lastTxn.salary_date}{lastTxn.employer_name ? ` from ${lastTxn.employer_name}` : ""}.</p>
+                        )}
+                        <p className="mt-2 text-[11px] text-slate-400">Edit the amount above if this isn't quite right, then continue.</p>
+                      </div>
+                    );
+                  })()}
+                  </>
                 ) : (
                   /* Manual fallback — income AI not wired yet */
                   <div className="cf-fade relative overflow-hidden rounded-[28px] px-5 pt-5 pb-6 shadow-xl" style={{ background: CARD }}>
