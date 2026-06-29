@@ -223,6 +223,7 @@ export default function GiftToggleV2({
   const [beneficiarySaved, setBeneficiarySaved] = useState(false);
   const [askSaveBeneficiary, setAskSaveBeneficiary] = useState(false);
   const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
+  const [confirmBackStep, setConfirmBackStep] = useState("form");
 
   useEffect(() => {
     if (enabled) setBeneficiaries(getBeneficiaries());
@@ -252,6 +253,7 @@ export default function GiftToggleV2({
     setBeneficiarySaved(false);
     setAskSaveBeneficiary(false);
     setPendingBeneficiary(null);
+    setConfirmBackStep("form");
   }
 
   function handleToggle(val) {
@@ -268,6 +270,7 @@ export default function GiftToggleV2({
     setFirstName(b.firstName || "");
     setLastName(b.lastName || "");
     setRecipientEmail(b.email || "");
+    setConfirmBackStep("picker");
     setStep("confirming");
   }
 
@@ -520,7 +523,13 @@ export default function GiftToggleV2({
                   <div className="flex flex-col" style={{ minHeight: "72vh", maxHeight: "calc(92vh - 20px)" }}>
                     {/* Header */}
                     <div className="px-5 pt-2 pb-4">
-                      <h2 className="text-center text-[17px] font-bold text-slate-900 mb-4">Beneficiary</h2>
+                      <div className="flex items-center mb-4">
+                        <div className="w-8" />
+                        <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Beneficiary</h2>
+                        <button type="button" onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                          <X size={16} />
+                        </button>
+                      </div>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -800,7 +809,7 @@ export default function GiftToggleV2({
 
                               <button
                                 type="button"
-                                onClick={() => { setFirstName(mintSearchResult.first_name || ""); setLastName(mintSearchResult.last_name || ""); setRecipientEmail(mintSearchResult.email || ""); setStep("confirming"); }}
+                                onClick={() => { setFirstName(mintSearchResult.first_name || ""); setLastName(mintSearchResult.last_name || ""); setRecipientEmail(mintSearchResult.email || ""); setConfirmBackStep("form"); setStep("confirming"); }}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
                               >
                                 <Gift size={15} /> Continue
@@ -880,7 +889,7 @@ export default function GiftToggleV2({
 
                               <button
                                 type="button"
-                                onClick={() => { setFirstName(idSearchResult.first_name || ""); setLastName(idSearchResult.last_name || ""); setRecipientEmail(idSearchResult.email || ""); setStep("confirming"); }}
+                                onClick={() => { setFirstName(idSearchResult.first_name || ""); setLastName(idSearchResult.last_name || ""); setRecipientEmail(idSearchResult.email || ""); setConfirmBackStep("form"); setStep("confirming"); }}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
                               >
                                 <Gift size={15} /> Continue
@@ -934,11 +943,13 @@ export default function GiftToggleV2({
                 {step === "confirming" && (
                   <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
                     <div className="flex items-center px-4 pt-2 pb-3">
-                      <button type="button" onClick={() => setStep("form")} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                      <button type="button" onClick={() => setStep(confirmBackStep)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
                         <ChevronLeft size={20} />
                       </button>
                       <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Confirm gift</h2>
-                      <div className="w-8" />
+                      <button type="button" onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                        <X size={16} />
+                      </button>
                     </div>
                     <div className="flex-1 overflow-y-auto px-5 pb-10 space-y-4">
                       <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-100">
