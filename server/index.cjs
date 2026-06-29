@@ -5711,16 +5711,18 @@ app.get("/api/user/lookup-by-mint", async (req, res) => {
     }
 
     // Use supabaseAdmin so RLS never blocks cross-user lookups
-    const { data: profile, error: profileError } = await supabaseAdmin
+    // Use limit(1) instead of maybeSingle() to handle duplicate rows gracefully
+    const { data: profiles, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, mint_number, email')
       .ilike('mint_number', mintNumber)
-      .maybeSingle();
+      .limit(1);
 
     if (profileError) {
       console.error('[mint] lookup-by-mint profile error:', profileError.message);
       return res.status(500).json({ error: "Lookup failed" });
     }
+    const profile = profiles?.[0] || null;
     if (!profile) {
       return res.status(404).json({ error: "No user found with that Mint number" });
     }
@@ -5761,16 +5763,18 @@ app.get("/api/user/lookup-by-id", async (req, res) => {
       return res.status(400).json({ error: "Please enter a valid 13-digit SA ID number" });
     }
 
-    const { data: profile, error: profileError } = await supabaseAdmin
+    // Use limit(1) instead of maybeSingle() to handle duplicate rows gracefully
+    const { data: idProfiles, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, mint_number, email, id_number')
       .eq('id_number', idNumber)
-      .maybeSingle();
+      .limit(1);
 
     if (profileError) {
       console.error('[id] lookup-by-id profile error:', profileError.message);
       return res.status(500).json({ error: "Lookup failed" });
     }
+    const profile = idProfiles?.[0] || null;
     if (!profile) {
       return res.status(404).json({ error: "No user found with that ID number" });
     }
