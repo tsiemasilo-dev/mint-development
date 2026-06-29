@@ -127,6 +127,8 @@ export default function GiftToggleV2({
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [askSaveBeneficiary, setAskSaveBeneficiary] = useState(false);
   const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
+  const [showAddBeneficiaryPrompt, setShowAddBeneficiaryPrompt] = useState(false);
+  const [beneficiarySaved, setBeneficiarySaved] = useState(false);
 
   useEffect(() => {
     if (enabled) setBeneficiaries(getBeneficiaries());
@@ -148,6 +150,8 @@ export default function GiftToggleV2({
     setMintSearchError(null);
     setAskSaveBeneficiary(false);
     setPendingBeneficiary(null);
+    setShowAddBeneficiaryPrompt(false);
+    setBeneficiarySaved(false);
     setStep("form");
   }
 
@@ -429,14 +433,60 @@ export default function GiftToggleV2({
                       <p className="text-[11px] text-slate-400 font-mono">{mintSearchResult.mint_number}</p>
                       <p className="text-[11px] text-slate-400 truncate">{mintSearchResult.email}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); }}
-                      className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors shrink-0"
-                    >
-                      <X size={13} />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* + add as beneficiary button */}
+                      {!beneficiarySaved && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddBeneficiaryPrompt(p => !p)}
+                          className="w-7 h-7 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 hover:bg-violet-300 transition-colors font-bold text-base leading-none"
+                          title="Add as beneficiary"
+                        >
+                          +
+                        </button>
+                      )}
+                      {beneficiarySaved && (
+                        <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Check size={12} className="text-emerald-600" strokeWidth={3} />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(false); }}
+                        className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Inline add-beneficiary prompt */}
+                  {showAddBeneficiaryPrompt && !beneficiarySaved && (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-violet-200">
+                      <p className="text-[11px] text-slate-700 font-medium flex-1">
+                        Add <span className="font-semibold text-violet-700">{mintSearchResult.first_name}</span> as a saved recipient?
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveBeneficiary({ firstName: mintSearchResult.first_name, lastName: mintSearchResult.last_name, email: mintSearchResult.email, mintNumber: mintSearchResult.mint_number });
+                          setBeneficiaries(getBeneficiaries());
+                          setShowAddBeneficiaryPrompt(false);
+                          setBeneficiarySaved(true);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddBeneficiaryPrompt(false)}
+                        className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all"
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
