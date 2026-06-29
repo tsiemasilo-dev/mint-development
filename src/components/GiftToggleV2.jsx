@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
 
@@ -203,6 +203,12 @@ export default function GiftToggleV2({
   const [mintSearchError, setMintSearchError] = useState(null);
   const mintDebounceRef = useRef(null);
 
+  const [idSearch, setIdSearch] = useState("");
+  const [idSearching, setIdSearching] = useState(false);
+  const [idSearchResult, setIdSearchResult] = useState(null);
+  const [idSearchError, setIdSearchError] = useState(null);
+  const idDebounceRef = useRef(null);
+
   const [beneficiaries, setBeneficiaries] = useState([]);
   const [beneficiarySearch, setBeneficiarySearch] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState(null);
@@ -230,6 +236,9 @@ export default function GiftToggleV2({
     setMintSearch("");
     setMintSearchResult(null);
     setMintSearchError(null);
+    setIdSearch("");
+    setIdSearchResult(null);
+    setIdSearchError(null);
     setBeneficiarySearch("");
     setDeleteCandidate(null);
     setShowAddBeneficiaryPrompt(false);
@@ -298,6 +307,47 @@ export default function GiftToggleV2({
     setMintSearchError(null);
     clearTimeout(mintDebounceRef.current);
     mintDebounceRef.current = setTimeout(() => searchByMintNumber(val), 600);
+  }
+
+  const searchByIdNumber = useCallback(async (idNum) => {
+    if (!idNum || idNum.length !== 13) {
+      setIdSearchResult(null);
+      setIdSearchError(null);
+      return;
+    }
+    setIdSearching(true);
+    setIdSearchError(null);
+    setIdSearchResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch(`/api/user/lookup-by-id?id_number=${encodeURIComponent(idNum.trim())}`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setIdSearchError(data.error || "User not found");
+      } else if (data.user) {
+        setIdSearchResult(data.user);
+      } else {
+        setIdSearchError("No user found with that ID number");
+      }
+    } catch {
+      setIdSearchError("Search failed. Please try again.");
+    } finally {
+      setIdSearching(false);
+    }
+  }, []);
+
+  function handleIdSearchChange(val) {
+    const digits = val.replace(/\D/g, "").slice(0, 13);
+    setIdSearch(digits);
+    setIdSearchResult(null);
+    setIdSearchError(null);
+    clearTimeout(idDebounceRef.current);
+    if (digits.length === 13) {
+      idDebounceRef.current = setTimeout(() => searchByIdNumber(digits), 500);
+    }
   }
 
   async function handleConfirm() {
@@ -477,7 +527,7 @@ export default function GiftToggleV2({
                         </div>
                         <button
                           type="button"
-                          onClick={() => { setInputMode("mint"); setStep("form"); }}
+                          onClick={() => setStep("selectMethod")}
                           className="w-11 h-11 rounded-xl bg-[#e63946] flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-sm"
                         >
                           <Plus size={20} className="text-white" strokeWidth={2.5} />
@@ -560,13 +610,13 @@ export default function GiftToggleV2({
                   </div>
                 )}
 
-                {/* ── FORM ── */}
-                {step === "form" && (
+                {/* ── SELECT METHOD ── */}
+                {step === "selectMethod" && (
                   <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
                     <div className="flex items-center px-4 pt-2 pb-3">
                       <button
                         type="button"
-                        onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setStep("picker"); }}
+                        onClick={() => setStep("picker")}
                         className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"
                       >
                         <ChevronLeft size={20} />
@@ -575,24 +625,79 @@ export default function GiftToggleV2({
                       <div className="w-8" />
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
-                      {/* Tab toggle */}
-                      <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                    <div className="flex-1 overflow-y-auto px-5 pb-10">
+                      <p className="text-[13px] font-semibold text-slate-500 mb-4">Please select an option</p>
+                      <div className="space-y-3">
+                        {/* MINT Number */}
                         <button
                           type="button"
-                          onClick={() => { setInputMode("mint"); setMintSearch(""); setMintSearchResult(null); setMintSearchError(null); }}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${inputMode === "mint" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+                          onClick={() => { setInputMode("mint"); setMintSearch(""); setMintSearchResult(null); setMintSearchError(null); setStep("form"); }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
                         >
-                          <Hash size={11} />MINT number
+                          <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                            <Hash size={20} className="text-violet-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-slate-800">MINT Number</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">Find a user by their MINT number</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
                         </button>
+
+                        {/* ID Number */}
                         <button
                           type="button"
-                          onClick={() => setInputMode("manual")}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${inputMode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+                          onClick={() => { setInputMode("id"); setIdSearch(""); setIdSearchResult(null); setIdSearchError(null); setStep("form"); }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
                         >
-                          <User size={11} />Enter details
+                          <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                            <CreditCard size={20} className="text-violet-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-slate-800">ID Number</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">Find a user by their SA ID number</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                        </button>
+
+                        {/* Enter details */}
+                        <button
+                          type="button"
+                          onClick={() => { setInputMode("manual"); setStep("form"); }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
+                        >
+                          <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                            <User size={20} className="text-violet-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-slate-800">Enter details</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">Manually enter name, email and a message</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
                         </button>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── FORM ── */}
+                {step === "form" && (
+                  <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                    <div className="flex items-center px-4 pt-2 pb-3">
+                      <button
+                        type="button"
+                        onClick={() => { setMintSearchResult(null); setMintSearch(""); setMintSearchError(null); setIdSearchResult(null); setIdSearch(""); setIdSearchError(null); setStep("selectMethod"); }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                      <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">
+                        {inputMode === "mint" ? "Find by MINT" : inputMode === "id" ? "Find by ID" : "Enter details"}
+                      </h2>
+                      <div className="w-8" />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
 
                       {/* MINT tab */}
                       {inputMode === "mint" && (
@@ -686,6 +791,86 @@ export default function GiftToggleV2({
                               <button
                                 type="button"
                                 onClick={() => { setFirstName(mintSearchResult.first_name || ""); setLastName(mintSearchResult.last_name || ""); setRecipientEmail(mintSearchResult.email || ""); setStep("confirming"); }}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
+                              >
+                                <Gift size={15} /> Continue
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ID Number tab */}
+                      {inputMode === "id" && (
+                        <div className="space-y-3">
+                          {!idSearchResult && (
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Search by SA ID number</label>
+                              <div className="relative">
+                                <CreditCard size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={idSearch}
+                                  onChange={e => handleIdSearchChange(e.target.value)}
+                                  placeholder="e.g. 9001015009087"
+                                  maxLength={13}
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                                />
+                                {idSearching && (
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                                )}
+                              </div>
+                              {idSearchError && (
+                                <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+                                  <AlertCircle size={10} />{idSearchError}
+                                </p>
+                              )}
+                              <p className="text-[11px] text-slate-400 mt-2">Enter the recipient's 13-digit SA ID number to find them.</p>
+                            </div>
+                          )}
+
+                          {idSearchResult && (
+                            <>
+                              <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${avatarGradient(idSearchResult.first_name)} flex items-center justify-center shrink-0 shadow-sm`}>
+                                  <span className="text-base font-black text-white">{idSearchResult.first_name?.[0]?.toUpperCase() || "?"}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-slate-800">{idSearchResult.first_name} {idSearchResult.last_name}</p>
+                                  {idSearchResult.mint_number && <p className="text-[11px] text-slate-400 font-mono">{idSearchResult.mint_number}</p>}
+                                  <p className="text-[11px] text-slate-400 truncate">{idSearchResult.email}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => { setIdSearchResult(null); setIdSearch(""); setIdSearchError(null); }}
+                                  className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors shrink-0"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+
+                              <div>
+                                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                                  Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                                </label>
+                                <textarea
+                                  value={message}
+                                  onChange={e => setMessage(e.target.value)}
+                                  placeholder="Add a personal note…"
+                                  rows={3}
+                                  maxLength={200}
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                                />
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Your wallet is debited immediately. The recipient has 4 hours to claim.
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => { setFirstName(idSearchResult.first_name || ""); setLastName(idSearchResult.last_name || ""); setRecipientEmail(idSearchResult.email || ""); setStep("confirming"); }}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
                               >
                                 <Gift size={15} /> Continue

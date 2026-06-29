@@ -5716,6 +5716,64 @@ app.get("/api/user/lookup-by-mint", async (req, res) => {
   }
 });
 
+app.get("/api/user/lookup-by-id", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const idNumber = (req.query.id_number || "").replace(/\D/g, "").trim();
+    if (!/^\d{13}$/.test(idNumber)) {
+      return res.status(400).json({ error: "Please enter a valid 13-digit SA ID number" });
+    }
+
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, first_name, last_name, mint_number, email, id_number')
+      .eq('id_number', idNumber)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('[id] lookup-by-id profile error:', profileError.message);
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+    if (!profile) {
+      return res.status(404).json({ error: "No user found with that ID number" });
+    }
+    if (profile.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself" });
+    }
+
+    let email = profile.email || null;
+    if (!email) {
+      try {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+        email = authUser?.user?.email || null;
+      } catch (e) {
+        console.warn('[id] lookup-by-id auth.admin fallback error:', e.message);
+      }
+    }
+
+    if (!email) {
+      return res.status(404).json({ error: "User account not found" });
+    }
+    return res.json({
+      user: {
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        email,
+        mint_number: profile.mint_number || null,
+      },
+    });
+  } catch (e) {
+    console.error('[id] lookup-by-id error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/user/holdings", async (req, res) => {
   try {
     if (!supabase) {
