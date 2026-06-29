@@ -750,8 +750,11 @@ export default function GiftToggleV2({
                                     <button
                                       type="button"
                                       onClick={() => setShowAddBeneficiaryPrompt(p => !p)}
-                                      className="w-7 h-7 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 hover:bg-violet-300 transition-colors font-bold text-base leading-none"
-                                    >+</button>
+                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-sm hover:shadow-md active:scale-95 transition-all"
+                                    >
+                                      <Plus size={11} strokeWidth={2.5} />
+                                      <span className="text-[11px] font-semibold">Save</span>
+                                    </button>
                                   ) : (
                                     <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center">
                                       <Check size={12} className="text-emerald-600" strokeWidth={3} />
