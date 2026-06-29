@@ -94,11 +94,8 @@ const SCHEMA = {
   required: ["is_salary_detected", "estimated_monthly_income", "pay_frequency", "confidence_score", "confidence_reason", "salary_transactions"],
 };
 
-// TODO: remove this hardcoded fallback before any real merge/deploy — set
-// GEMINI_API_KEY on Vercel (preview + prod) instead. User asked to hardcode
-// it for now (key will be rotated), same as the AlgoLend key fallback in
-// CreditFlow.jsx. Project: "MINT OCR SCAN".
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AQ.Ab8RN6K8nod7hdEbJHVYtor3zn3n4L2WESgEajNO9eahtlg8Cw";
+// GEMINI_API_KEY must be set on Vercel (preview + prod) — no hardcoded fallback.
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 function buildPrompt(months) {
   return (
@@ -227,6 +224,9 @@ export default async function handler(req, res) {
 
   try {
     if (!supabaseAdmin) return res.status(503).json({ success: false, error: "Storage not available" });
+    if (!GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: "Income AI is not configured (missing GEMINI_API_KEY)" });
+    }
 
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ success: false, error: authError || "Unauthorized" });
