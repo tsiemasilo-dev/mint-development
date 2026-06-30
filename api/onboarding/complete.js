@@ -156,9 +156,12 @@ export default async function handler(req, res) {
           };
         }
 
+        // Store the OBJECT, not JSON.stringify(...) — a stringified value in the
+        // jsonb column becomes a string scalar that later merges mangle and can
+        // drop sibling keys (e.g. the credit flow's). Readers tolerate both.
         await db
           .from("user_onboarding")
-          .update({ sumsub_raw: JSON.stringify(rawData) })
+          .update({ sumsub_raw: rawData })
           .eq("id", onboardingId);
       } catch (rawErr) {
         console.warn("[Onboarding] Failed to merge sumsub_raw:", rawErr?.message);
