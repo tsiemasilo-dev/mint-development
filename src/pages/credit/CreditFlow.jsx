@@ -320,8 +320,18 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const savedIncome = Number(raw.credit_monthly_income) || 0;
       if (savedIncome > 0) setMonthlyIncome(savedIncome);
       const incomeDone = savedIncome > 0;
-      // Furthest completed point — where "Continue" resumes to.
-      setResumeTarget(scored ? (incomeDone ? "marketplace" : "income") : verified ? "bureau" : consented ? "kyc" : "consent");
+      // Resume to the FIRST INCOMPLETE step in order (consent → kyc → bureau →
+      // income → marketplace), NOT the furthest-reachable one. The old logic
+      // checked the furthest gate first, so if a later step was satisfied (e.g.
+      // KYC marked done by INVESTMENT onboarding) it would skip an earlier
+      // incomplete step — notably credit consent, which must always be given.
+      setResumeTarget(
+        !consented ? "consent"
+        : !verified ? "kyc"
+        : !scored ? "bureau"
+        : !incomeDone ? "income"
+        : "marketplace"
+      );
       // Fully onboarded (scored + income) → straight to My applications (no
       // checklist). Anyone mid-setup → the overview checklist first (ticks on
       // what's done), and Continue resumes to resumeTarget.
@@ -330,6 +340,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Skip-completed: if the user is routed to the KYC step but identity is already
+  // verified (e.g. it was done during INVESTMENT onboarding), don't force them to
+  // re-verify — advance straight to the bureau step. This pairs with the
+  // first-incomplete resume so consent is still collected first, then KYC is
+  // skipped because it's genuinely done.
+  useEffect(() => {
+    if (step === "kyc" && kycVerified) setStep("bureau");
+  }, [step, kycVerified]);
 
   const loadApplications = useCallback(async () => {
     setApplicationsLoading(true);

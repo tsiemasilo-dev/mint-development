@@ -7568,7 +7568,7 @@ app.post("/api/onboarding/save-mandate", async (req, res) => {
       try { existingRaw = typeof currentRow.sumsub_raw === "string" ? JSON.parse(currentRow.sumsub_raw) : currentRow.sumsub_raw; } catch (e) { existingRaw = {}; }
     }
     existingRaw.mandate_data = JSON.parse(mandateJson);
-    const mergedRaw = JSON.stringify(existingRaw);
+    const mergedRaw = existingRaw; // store object, not stringified (jsonb)
 
     if (onboardingId) {
       const { error } = await db
@@ -7746,7 +7746,7 @@ app.post("/api/onboarding/upload-bank-letter", async (req, res) => {
         raw.bank_letter_uploaded = false;
         raw.bank_letter_verification_failed = true;
       }
-      await db.from("user_onboarding").update({ sumsub_raw: JSON.stringify(raw) }).eq("id", onboardingRecord.id);
+      await db.from("user_onboarding").update({ sumsub_raw: raw }).eq("id", onboardingRecord.id);
     }
 
     console.log(`[upload-bank-letter] Uploaded for user ${user.id}: ${publicUrl} | verified=${visionResult.verified}`);
@@ -7906,7 +7906,7 @@ app.post("/api/onboarding/complete", async (req, res) => {
 
         await db
           .from("user_onboarding")
-          .update({ sumsub_raw: JSON.stringify(rawData) })
+          .update({ sumsub_raw: rawData })
           .eq("id", onboardingId);
       } catch (rawErr) {
         console.warn("[Onboarding] Failed to save bank details to sumsub_raw:", rawErr?.message);
