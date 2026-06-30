@@ -129,66 +129,71 @@ function Row({ label, value, bold }) {
   );
 }
 
-function SwipeableRow({ b, onSelect, onDeleteRequest }) {
+function SwipeableRow({ b, onSelect, onDeleteRequest, index }) {
   const x = useMotionValue(0);
   const [revealed, setRevealed] = useState(false);
+  const isEven = index % 2 === 0;
 
   function snapOpen() {
     setRevealed(true);
-    animate(x, -72, { type: "spring", stiffness: 500, damping: 40 });
+    animate(x, -76, { type: "spring", stiffness: 500, damping: 40 });
   }
   function snapClose() {
     setRevealed(false);
     animate(x, 0, { type: "spring", stiffness: 500, damping: 40 });
   }
 
+  const rowBg = isEven ? "#ffffff" : "#f8f9fb";
+
   return (
-    <div className="relative overflow-hidden border-b border-slate-100 last:border-b-0">
-      {/* Red delete area (behind) */}
-      <div className="absolute right-0 top-0 bottom-0 w-[72px] bg-red-500 flex items-center justify-center">
+    <div className="relative overflow-hidden" style={{ borderBottom: "1px solid #eef0f4" }}>
+      {/* Delete zone */}
+      <div className="absolute right-0 top-0 bottom-0 w-[76px] flex items-center justify-center"
+           style={{ background: "linear-gradient(135deg,#ff3b3b,#e00)" }}>
         <button
           type="button"
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); snapClose(); onDeleteRequest(b); }}
-          className="flex flex-col items-center gap-1 w-full h-full justify-center"
+          className="flex flex-col items-center gap-0.5 w-full h-full justify-center"
         >
-          <Trash2 size={16} className="text-white" />
-          <span className="text-[9px] text-white font-semibold">Remove</span>
+          <Trash2 size={15} className="text-white" />
+          <span className="text-[9px] text-white font-bold tracking-wide uppercase">Remove</span>
         </button>
       </div>
 
       {/* Foreground row */}
       <motion.div
-        style={{ x, backgroundColor: "white" }}
+        style={{ x, backgroundColor: rowBg }}
         drag="x"
-        dragConstraints={{ right: 0, left: -72 }}
-        dragElastic={0.05}
+        dragConstraints={{ right: 0, left: -76 }}
+        dragElastic={0.04}
         onDragEnd={(_, info) => {
-          if (info.offset.x < -36) snapOpen();
+          if (info.offset.x < -38) snapOpen();
           else snapClose();
         }}
         onClick={() => {
           if (revealed) { snapClose(); return; }
           onSelect(b);
         }}
-        className="flex items-center gap-3.5 px-4 py-3 relative z-10 cursor-pointer select-none"
+        className="flex items-center gap-3 px-4 py-3.5 relative z-10 cursor-pointer select-none"
       >
-        {/* Gradient avatar */}
-        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${avatarGradient(b.firstName)} flex items-center justify-center shrink-0 shadow-sm`}>
-          <span className="text-[17px] font-black text-white drop-shadow-sm">
+        {/* Avatar */}
+        <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarGradient(b.firstName)} flex items-center justify-center shrink-0`}
+             style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}>
+          <span className="text-[15px] font-bold text-white">
             {b.firstName?.[0]?.toUpperCase() || "?"}
           </span>
         </div>
 
-        {/* Name + subtitle */}
+        {/* Name + detail */}
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-bold text-slate-900 leading-tight">
+          <p className="text-[13.5px] font-semibold text-slate-800 leading-snug truncate">
             {b.firstName} {b.lastName}
           </p>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-[3px]">
             {b.mintNumber ? (
               <>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-[9px] font-bold text-violet-600 uppercase tracking-wide">MINT</span>
+                <span className="inline-flex items-center px-1.5 py-[1.5px] rounded bg-violet-100 text-[8.5px] font-bold text-violet-600 uppercase tracking-wider">MINT</span>
                 <span className="text-[11px] text-slate-400 font-mono truncate">{b.mintNumber}</span>
               </>
             ) : (
@@ -197,10 +202,12 @@ function SwipeableRow({ b, onSelect, onDeleteRequest }) {
           </div>
         </div>
 
-        {/* Chevron */}
-        <svg width="7" height="12" viewBox="0 0 7 12" fill="none" className="shrink-0 text-slate-300">
-          <path d="M1 1l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        {/* Right indicator */}
+        <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: isEven ? "#f1f3f7" : "#eaecf2" }}>
+          <svg width="6" height="10" viewBox="0 0 6 10" fill="none">
+            <path d="M1 1l4 4-4 4" stroke="#94a3b8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
       </motion.div>
     </div>
   );
@@ -628,6 +635,7 @@ export default function GiftToggleV2({
                             <SwipeableRow
                               key={`${b.email}-${i}`}
                               b={b}
+                              index={i}
                               onSelect={handleSelectBeneficiary}
                               onDeleteRequest={setDeleteCandidate}
                             />
