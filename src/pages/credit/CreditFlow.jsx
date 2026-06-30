@@ -500,21 +500,35 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || "";
       const lenderIds = [...providerSel];
-      const results = await Promise.allSettled(
-        lenderIds.map((lenderId) =>
-          fetch(`${ALGOLEND_URL}/api/marketplace/offers`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${ALGOLEND_KEY}`,
-            },
-            body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
-          }).then(async (res) => {
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "rejected"); }
-            return lenderId;
-          })
-        )
-      );
+
+      // AlgoLend's offers endpoint can transiently 404 (cold start) or 5xx — the
+      // user saw it fail on the first tap and succeed on the second. Retry each
+      // submission up to 5 times with a short backoff before giving up, so a
+      // transient blip doesn't surface as "couldn't be submitted".
+      const TRANSIENT = [404, 408, 425, 429, 500, 502, 503, 504];
+      const submitOne = async (lenderId, attempts = 5) => {
+        let lastErr;
+        for (let i = 0; i < attempts; i++) {
+          try {
+            const res = await fetch(`${ALGOLEND_URL}/api/marketplace/offers`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${ALGOLEND_KEY}` },
+              body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
+            });
+            if (res.ok) return lenderId;
+            const e = await res.json().catch(() => ({}));
+            lastErr = new Error(e.error || `HTTP ${res.status}`);
+            // Permanent error (auth/validation) → stop retrying immediately.
+            if (!TRANSIENT.includes(res.status)) throw lastErr;
+          } catch (err) {
+            lastErr = err; // network error → also retryable
+          }
+          if (i < attempts - 1) await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        }
+        throw lastErr || new Error("rejected");
+      };
+
+      const results = await Promise.allSettled(lenderIds.map((lenderId) => submitOne(lenderId)));
       const accepted = lenderIds.filter((_, i) => results[i].status === "fulfilled");
       if (accepted.length === 0) throw new Error("None of your selected lenders could be submitted. Please try again.");
       const selected = accepted.map((lenderId) => {
@@ -835,9 +849,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         {step === "checking" && (
           <>
             <Header title="Credit" />
-            <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-              <Loader2 className="h-7 w-7 animate-spin" />
-              <p className="mt-3 text-sm">Checking your verification…</p>
+            <div className="flex flex-col items-center justify-center py-20">
+              <BouncyCoin />
+              <div className="mt-2 flex items-center gap-2 text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                <p className="text-sm font-medium">Loading your credit hub…</p>
+              </div>
             </div>
           </>
         )}
