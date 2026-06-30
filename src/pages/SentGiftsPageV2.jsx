@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Gift, Copy, Check, Clock, CheckCircle2, XCircle, Timer, ChevronDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -227,8 +228,8 @@ function ActiveGiftCard({ gift, onCancel, onRefund, onRetry }) {
             {!refunded && (
               <button
                 onClick={handleRefundClick}
-                disabled={refunding || retrying}
-                className="w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
+                disabled={refunding || retrying || isAdminPreview()}
+                className={`w-full py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60${isAdminPreview() ? " cursor-not-allowed pointer-events-none" : ""}`}
               >
                 {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
               </button>
@@ -251,7 +252,7 @@ function ActiveGiftCard({ gift, onCancel, onRefund, onRetry }) {
         {/* Cancel footer — only while the gift is still active */}
         {!isExpired && (
         <div className="border-t border-slate-100 px-5 py-3">
-          {showCancelConfirm ? (
+          {showCancelConfirm && !isAdminPreview() ? (
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-500 flex-1">Cancel this gift?</p>
               <button
@@ -272,7 +273,8 @@ function ActiveGiftCard({ gift, onCancel, onRefund, onRetry }) {
           ) : (
             <div className="flex justify-end">
               <button
-                onClick={() => setShowCancelConfirm(true)}
+                disabled={isAdminPreview()}
+                onClick={() => { if (!isAdminPreview()) setShowCancelConfirm(true); }}
                 className="text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors"
               >
                 Cancel gift
@@ -369,8 +371,8 @@ function HistoryCard({ gift, onRefund, onRetry }) {
             {canRefund && (
               <button
                 onClick={handleRefundClick}
-                disabled={refunding || retrying}
-                className="w-full py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60"
+                disabled={refunding || retrying || isAdminPreview()}
+                className={`w-full py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 active:scale-95 transition-all disabled:opacity-60${isAdminPreview() ? " cursor-not-allowed pointer-events-none" : ""}`}
               >
                 {refunding ? "Refunding…" : `Refund ${fmt(gift.amount)} to wallet`}
               </button>

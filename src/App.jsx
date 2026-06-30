@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
+import { initAdminPreview, clearAdminPreview } from "./lib/adminPreview.js";
 import { getMarketsSecuritiesWithMetrics } from "./lib/marketData.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
@@ -255,6 +256,7 @@ const App = () => {
     enabled: isAuthenticated,
     onLogout: () => {
       intentionalLogoutRef.current = true;
+      clearAdminPreview();
       if (supabase) supabase.auth.signOut({ scope: 'local' });
       setCurrentPage("welcome");
     },
@@ -272,6 +274,7 @@ const App = () => {
       if (!enabled && !hasBypass) {
         setAppEnabled(false);
         intentionalLogoutRef.current = true;
+        clearAdminPreview();
         await supabase.auth.signOut({ scope: 'local' });
         setCurrentPage('welcome');
       } else {
@@ -313,6 +316,7 @@ const App = () => {
   const ozowRecordedRef = useRef(false);
 
   useEffect(() => {
+    initAdminPreview();
     if (ozowReturnParam.current) {
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -378,6 +382,7 @@ const App = () => {
               // are already navigating to welcome — that conflict was the
               // root cause of the infinite-refresh loop.
               intentionalLogoutRef.current = true;
+              clearAdminPreview();
               if (supabase) supabase.auth.signOut({ scope: 'local' });
               sessionStorage.removeItem('mint_pin_unlocked');
               setShowPinLock(false);
@@ -808,6 +813,7 @@ const App = () => {
               const json = await res.json();
               if (json.success && json.valid === false) {
                 console.log('[session-check] Session revoked remotely');
+                clearAdminPreview();
                 await supabase.auth.signOut({ scope: 'local' });
                 setShowPinLock(false);
                 setCurrentPage("welcome");
@@ -1307,6 +1313,7 @@ const App = () => {
   }, [previousPageName, currentPage, renderPageContent]);
 
   const handleLockLogout = useCallback(() => {
+    clearAdminPreview();
     if (supabase) supabase.auth.signOut({ scope: 'local' });
     sessionStorage.removeItem('mint_pin_unlocked');
     setShowPinLock(false);
@@ -2700,7 +2707,7 @@ const App = () => {
   if (currentPage === "activeSessions") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <ActiveSessionsPage onBack={goBack} onLogout={() => { if (supabase) supabase.auth.signOut(); setCurrentPage("welcome"); }} />
+        <ActiveSessionsPage onBack={goBack} onLogout={() => { clearAdminPreview(); if (supabase) supabase.auth.signOut(); setCurrentPage("welcome"); }} />
       </SwipeBackWrapper>
     );
   }

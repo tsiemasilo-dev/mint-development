@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
 async function fetchBeneficiaries() {
@@ -1067,7 +1068,7 @@ export default function GiftToggleV2({
                       {error && <p className="text-xs text-red-500 flex items-center gap-1.5"><AlertCircle size={11} />{error}</p>}
                       <div className="flex gap-2 pt-1">
                         <button type="button" onClick={() => setStep("form")} className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-600 active:scale-[0.98] transition-all">Edit</button>
-                        <button type="button" onClick={handleConfirm} className="flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg">Confirm & Send</button>
+                        <button type="button" onClick={handleConfirm} disabled={isAdminPreview()} className={`flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}>Confirm & Send</button>
                       </div>
                     </div>
                   </div>
