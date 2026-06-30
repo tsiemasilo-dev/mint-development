@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload, Download } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload, Download, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -197,6 +197,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [activeApplication, setActiveApplication] = useState(null);
   const [creatingApplication, setCreatingApplication] = useState(false);
+  const [deletingAppId, setDeletingAppId] = useState(null); // app being deleted (un-sent only)
+  const [adjustAmount, setAdjustAmount] = useState(0);      // lower-amount control on the offers page
+  const [adjustSaving, setAdjustSaving] = useState(false);
   const [providerSel, setProviderSel] = useState(new Set());
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [providerSubmitted, setProviderSubmitted] = useState(false);
@@ -373,6 +376,54 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, []);
 
+  // Delete an application that hasn't been sent to any provider yet. Owner-RLS
+  // protects it server-side; the button only renders when selected_providers is
+  // empty, so a submitted application can never be deleted from here.
+  const deleteApplication = useCallback(async (appId) => {
+    setDeletingAppId(appId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) return;
+      const { error } = await supabase
+        .from("credit_marketplace_applications")
+        .delete()
+        .eq("id", appId)
+        .eq("user_id", uid);
+      if (error) throw error;
+      setApplications((prev) => prev.filter((a) => a.id !== appId));
+    } catch (e) {
+      console.warn("[CreditFlow] deleteApplication failed:", e?.message || e);
+    } finally {
+      setDeletingAppId(null);
+    }
+  }, []);
+
+  // Lower the active application's requested amount when no lender made an offer.
+  // The new (lower) amount becomes the OFFICIAL requested_amount, then we
+  // re-evaluate AlgoLend against it.
+  const applyAdjustedAmount = useCallback(async () => {
+    const amt = Number(adjustAmount) || 0;
+    const current = Number(activeApplication?.requested_amount) || 0;
+    if (!activeApplication || amt < 100 || amt >= current) return;
+    setAdjustSaving(true);
+    try {
+      const { error } = await supabase
+        .from("credit_marketplace_applications")
+        .update({ requested_amount: amt, updated_at: new Date().toISOString() })
+        .eq("id", activeApplication.id);
+      if (error) throw error;
+      const updated = { ...activeApplication, requested_amount: amt };
+      setActiveApplication(updated);
+      setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      await evaluateWithAlgoLend(updated);
+    } catch (e) {
+      console.warn("[CreditFlow] applyAdjustedAmount failed:", e?.message || e);
+    } finally {
+      setAdjustSaving(false);
+    }
+  }, [adjustAmount, activeApplication, evaluateWithAlgoLend]);
+
   const goMarketplace = useCallback(() => { setStep("marketplace"); loadApplications(); }, [loadApplications]);
 
   // Ask AlgoLend to evaluate every active lender policy and return ranked
@@ -419,6 +470,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const openApplication = useCallback((app) => {
     setActiveApplication(app);
+    setAdjustAmount(Number(app.requested_amount) || 0); // seed the lower-amount control
     const existing = Array.isArray(app.selected_providers) ? app.selected_providers : [];
     setProviderSel(new Set(existing.map((p) => p.provider_id)));
     setProviderSubmitted(existing.length > 0);
@@ -1337,10 +1389,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       const isComplete = app.status === "complete";
                       return (
                         <li key={app.id} className="cf-fade" style={{ animationDelay: `${0.1 + idx * 0.08}s` }}>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => openApplication(app)}
-                            className="block w-full rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-violet-200 hover:shadow-md active:scale-[0.99]"
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openApplication(app); } }}
+                            className="block w-full cursor-pointer rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-violet-200 hover:shadow-md active:scale-[0.99]"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -1374,7 +1428,25 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                               <span className="text-[12px] font-semibold text-violet-600">{sel.length > 0 ? (isComplete ? "View offers" : "Edit lenders") : "Choose lenders"}</span>
                               <ChevronRight className="h-4 w-4 text-slate-300" />
                             </div>
-                          </button>
+
+                            {/* Delete — only while the application hasn't been sent to any
+                                provider (no selected_providers). Disappears once submitted. */}
+                            {sel.length === 0 && (
+                              <div className="mt-3 border-t border-slate-100 pt-3">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); deleteApplication(app.id); }}
+                                  disabled={deletingAppId === app.id}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-slate-700 active:scale-95 disabled:opacity-50"
+                                >
+                                  {deletingAppId === app.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Trash2 className="h-3.5 w-3.5" />}
+                                  {deletingAppId === app.id ? "Deleting…" : "Delete"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </li>
                       );
                     })}
@@ -1604,6 +1676,41 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               )}
               {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
                 <p className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-700">No lender made an offer for R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} yet — here's where each one stands.</p>
+              )}
+
+              {/* No offers → let the client LOWER their requested amount. The new,
+                  lower figure becomes the official requested_amount, then we
+                  re-evaluate against it. */}
+              {!algolendLoading && !algolendError && count === 0 && Number(activeApplication.requested_amount) > 100 && (
+                <div className="mb-3 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-800">Try a lower amount</p>
+                  <p className="mt-1 text-xs text-slate-500">Lowering your request can unlock offers. This becomes your official requested amount.</p>
+                  <div className="mt-4 flex items-end gap-1">
+                    <span className="mb-1 text-lg font-light text-slate-400">R</span>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={adjustAmount ? adjustAmount.toLocaleString("en-ZA") : ""}
+                      onChange={(e) => setAdjustAmount(Math.min(Number(activeApplication.requested_amount) || 0, Number(e.target.value.replace(/\D/g, "")) || 0))}
+                      className="w-full bg-transparent text-3xl font-light leading-none text-slate-900 outline-none"
+                    />
+                  </div>
+                  <input
+                    type="range" min={100} max={Number(activeApplication.requested_amount)} step={100}
+                    value={Math.max(100, Math.min(adjustAmount || 100, Number(activeApplication.requested_amount)))}
+                    onChange={(e) => setAdjustAmount(Number(e.target.value))}
+                    className="mt-3 w-full accent-violet-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyAdjustedAmount}
+                    disabled={adjustSaving || !(adjustAmount >= 100 && adjustAmount < Number(activeApplication.requested_amount))}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {adjustSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {adjustSaving ? "Updating…" : "Update amount & recheck"}
+                  </button>
+                  <p className="mt-2 text-center text-[10px] text-slate-400">Current request: R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} · minimum R100</p>
+                </div>
               )}
 
               <div className="space-y-3">
