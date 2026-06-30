@@ -36,7 +36,11 @@ export default async function handler(req, res) {
       try { existingRaw = typeof currentRow.sumsub_raw === "string" ? JSON.parse(currentRow.sumsub_raw) : currentRow.sumsub_raw; } catch (e) { existingRaw = {}; }
     }
     existingRaw.mandate_data = JSON.parse(mandateJson);
-    const mergedRaw = JSON.stringify(existingRaw);
+    // Store the OBJECT into the jsonb column — NOT JSON.stringify(...). Writing a
+    // stringified value leaves a string scalar in jsonb that downstream merges
+    // mangle (and can drop sibling keys like the credit flow's). Readers already
+    // tolerate both shapes, so storing the object is safe + backward-compatible.
+    const mergedRaw = existingRaw;
 
     if (onboardingId) {
       const { error } = await db

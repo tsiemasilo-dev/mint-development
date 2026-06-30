@@ -700,7 +700,7 @@ export default function AccountAgreementStep({
 
         let raw = {};
         if (existing?.sumsub_raw) {
-          raw = typeof existing.sumsub_raw === "string" ? JSON.parse(existing.sumsub_raw) : existing.sumsub_raw;
+          try { raw = typeof existing.sumsub_raw === "string" ? JSON.parse(existing.sumsub_raw) : existing.sumsub_raw; } catch { raw = {}; }
         }
         // Stamp all prior step flags (reaching signing = all prior steps done)
         raw.tax_details_saved = raw.tax_details_saved || true;
@@ -717,7 +717,10 @@ export default function AccountAgreementStep({
 
         const updatePayload = {
           kyc_status: "onboarding_complete",
-          sumsub_raw: JSON.stringify(raw),
+          // Store the OBJECT, not JSON.stringify(...) — a stringified value in the
+          // jsonb column becomes a string scalar that later merges mangle into a
+          // char-indexed blob and drop sibling keys (e.g. the credit flow's).
+          sumsub_raw: raw,
         };
 
         if (targetId) {
