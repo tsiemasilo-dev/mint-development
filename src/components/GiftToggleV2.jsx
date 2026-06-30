@@ -5,28 +5,51 @@ import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion"
 import { supabase } from "../lib/supabase";
 
 const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
-const BENEFICIARIES_KEY = "mint_gift_beneficiaries";
-
-function getBeneficiaries() {
-  try { return JSON.parse(localStorage.getItem(BENEFICIARIES_KEY) || "[]"); }
-  catch { return []; }
+async function fetchBeneficiaries() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return [];
+    const { data, error } = await supabase
+      .from("Beneficiary")
+      .select("id, first_name, last_name, email, mint_number, used_at")
+      .eq("user_id", session.user.id)
+      .order("used_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return (data || []).map(r => ({
+      id: r.id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      email: r.email,
+      mintNumber: r.mint_number,
+      usedAt: r.used_at,
+    }));
+  } catch { return []; }
 }
 
-function saveBeneficiary({ firstName, lastName, email, mintNumber }) {
+async function saveBeneficiary({ firstName, lastName, email, mintNumber }) {
   try {
-    const existing = getBeneficiaries();
-    const key = email.toLowerCase();
-    const filtered = existing.filter(b => b.email.toLowerCase() !== key);
-    const updated = [{ firstName, lastName, email, mintNumber: mintNumber || null, usedAt: Date.now() }, ...filtered].slice(0, 20);
-    localStorage.setItem(BENEFICIARIES_KEY, JSON.stringify(updated));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    await supabase.from("Beneficiary").upsert({
+      user_id: session.user.id,
+      first_name: firstName,
+      last_name: lastName,
+      email: email.toLowerCase(),
+      mint_number: mintNumber || null,
+      used_at: new Date().toISOString(),
+    }, { onConflict: "user_id,email" });
   } catch {}
 }
 
-function removeBeneficiary(email) {
+async function removeBeneficiary(email) {
   try {
-    const existing = getBeneficiaries();
-    const updated = existing.filter(b => b.email.toLowerCase() !== email.toLowerCase());
-    localStorage.setItem(BENEFICIARIES_KEY, JSON.stringify(updated));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    await supabase.from("Beneficiary")
+      .delete()
+      .eq("user_id", session.user.id)
+      .eq("email", email.toLowerCase());
   } catch {}
 }
 
@@ -226,7 +249,7 @@ export default function GiftToggleV2({
   const [confirmBackStep, setConfirmBackStep] = useState("form");
 
   useEffect(() => {
-    if (enabled) setBeneficiaries(getBeneficiaries());
+    if (enabled) fetchBeneficiaries().then(setBeneficiaries);
   }, [enabled]);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim());
@@ -274,10 +297,10 @@ export default function GiftToggleV2({
     setStep("confirming");
   }
 
-  function handleConfirmDelete() {
+  async function handleConfirmDelete() {
     if (!deleteCandidate) return;
-    removeBeneficiary(deleteCandidate.email);
-    setBeneficiaries(getBeneficiaries());
+    await removeBeneficiary(deleteCandidate.email);
+    fetchBeneficiaries().then(setBeneficiaries);
     setDeleteCandidate(null);
   }
 
@@ -784,7 +807,7 @@ export default function GiftToggleV2({
                                   <p className="text-[11px] text-slate-700 font-medium flex-1">
                                     Save <span className="font-semibold text-violet-700">{mintSearchResult.first_name}</span> as a recipient?
                                   </p>
-                                  <button type="button" onClick={() => { saveBeneficiary({ firstName: mintSearchResult.first_name, lastName: mintSearchResult.last_name, email: mintSearchResult.email, mintNumber: mintSearchResult.mint_number }); setBeneficiaries(getBeneficiaries()); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(true); }} className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all">Yes</button>
+                                  <button type="button" onClick={async () => { await saveBeneficiary({ firstName: mintSearchResult.first_name, lastName: mintSearchResult.last_name, email: mintSearchResult.email, mintNumber: mintSearchResult.mint_number }); fetchBeneficiaries().then(setBeneficiaries); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(true); }} className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all">Yes</button>
                                   <button type="button" onClick={() => setShowAddBeneficiaryPrompt(false)} className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all">No</button>
                                 </div>
                               )}
@@ -890,7 +913,7 @@ export default function GiftToggleV2({
                                   <p className="text-[11px] text-slate-700 font-medium flex-1">
                                     Save <span className="font-semibold text-violet-700">{idSearchResult.first_name}</span> as a recipient?
                                   </p>
-                                  <button type="button" onClick={() => { saveBeneficiary({ firstName: idSearchResult.first_name, lastName: idSearchResult.last_name, email: idSearchResult.email, mintNumber: idSearchResult.mint_number }); setBeneficiaries(getBeneficiaries()); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(true); }} className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all">Yes</button>
+                                  <button type="button" onClick={async () => { await saveBeneficiary({ firstName: idSearchResult.first_name, lastName: idSearchResult.last_name, email: idSearchResult.email, mintNumber: idSearchResult.mint_number }); fetchBeneficiaries().then(setBeneficiaries); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(true); }} className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all">Yes</button>
                                   <button type="button" onClick={() => setShowAddBeneficiaryPrompt(false)} className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all">No</button>
                                 </div>
                               )}
@@ -1065,7 +1088,7 @@ export default function GiftToggleV2({
                   <div className="mb-4 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
                     <p className="text-[11px] font-semibold text-violet-800 mb-2">Save {pendingBeneficiary.firstName} as a recipient?</p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => { saveBeneficiary(pendingBeneficiary); setBeneficiaries(getBeneficiaries()); setAskSaveBeneficiary(false); setPendingBeneficiary(null); }} className="flex-1 rounded-lg bg-violet-600 py-1.5 text-[11px] font-semibold text-white active:scale-95 transition-all">Yes, save</button>
+                      <button type="button" onClick={async () => { await saveBeneficiary(pendingBeneficiary); fetchBeneficiaries().then(setBeneficiaries); setAskSaveBeneficiary(false); setPendingBeneficiary(null); }} className="flex-1 rounded-lg bg-violet-600 py-1.5 text-[11px] font-semibold text-white active:scale-95 transition-all">Yes, save</button>
                       <button type="button" onClick={() => { setAskSaveBeneficiary(false); setPendingBeneficiary(null); }} className="flex-1 rounded-lg bg-white border border-violet-200 py-1.5 text-[11px] font-semibold text-violet-600 active:scale-95 transition-all">No thanks</button>
                     </div>
                   </div>
