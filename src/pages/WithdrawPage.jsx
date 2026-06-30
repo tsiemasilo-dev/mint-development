@@ -111,6 +111,10 @@ export default function WithdrawPage({ onBack }) {
             change: e.change,
             up: e.up,
             pendingSell: isSellHolding(h),
+            // Breakdown inputs: a single asset's proceeds = its value; any unused
+            // reserve is computed/returned at settlement (not pre-estimated here).
+            positionsValue: e.value,
+            reserveRefundCents: 0,
           };
         });
 
@@ -172,6 +176,10 @@ export default function WithdrawPage({ onBack }) {
             change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
             up: pnl >= 0,
             pendingSell: s.pendingSell,
+            // Breakdown inputs: proceeds = the holdings' market value; the unused
+            // 8% execution reserve (held buffer) is returned on top at full exit.
+            positionsValue: s.value,
+            reserveRefundCents: Math.max(0, bufferCentsByStrategy[sid] || 0),
           };
         });
 
@@ -649,11 +657,32 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
               </div>
             </div>
 
+            {(() => {
+              const proceeds = Number(item.positionsValue ?? item.value ?? 0);
+              const reserve = Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
+              const net = proceeds + reserve;
+              const row = (label, val, opts = {}) => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: opts.last ? "none" : "0.5px solid rgba(127,119,221,0.14)" }}>
+                  <span style={{ fontSize: opts.strong ? 13 : 12.5, color: opts.strong ? "#26215C" : "#7d72a8", fontWeight: opts.strong ? 500 : 400 }}>{label}</span>
+                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : ""}{fmtR(val)}</span>
+                </div>
+              );
+              return (
+                <div style={{ marginTop: 16, padding: "4px 16px", borderRadius: 16, background: "#faf8ff", border: "0.5px solid rgba(127,119,221,0.16)" }}>
+                  {row("Estimated proceeds", proceeds)}
+                  {row("Sell fee", 0)}
+                  {reserve > 0 && row("Unused 8% reserve returned", reserve, { green: true })}
+                  {row("Estimated to your wallet", net, { strong: true, last: true })}
+                </div>
+              );
+            })()}
+
             <div className="wd-warn">
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.6 }}>
                 <p style={{ margin: "0 0 6px" }}>Processed at the next market window and <span style={{ color: "#5a4d1a", fontWeight: 500 }}>cannot be cancelled</span> once submitted.</p>
-                <p style={{ margin: 0 }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: "0 0 6px" }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: 0 }}>No sell fee is charged. {Number(item.reserveRefundCents || 0) > 0 ? "Any unused 8% execution reserve from your purchase is returned to your wallet on this full exit." : "Any unused execution reserve from your purchase is returned to your wallet at settlement."}</p>
               </div>
             </div>
 
