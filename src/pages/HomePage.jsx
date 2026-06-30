@@ -1971,7 +1971,7 @@ const HomePage = ({
           });
 
           // Groups: [{key, strat, txs}]
-          const stratGroups = Object.entries(stratTxMap).map(([key, { strat, txs }]) => ({
+          let stratGroups = Object.entries(stratTxMap).map(([key, { strat, txs }]) => ({
             key,
             strat,
             txs: txs.sort((a, b) =>
@@ -1979,6 +1979,24 @@ const HomePage = ({
               new Date(a?.transaction_date || a?.created_at || 0)
             ),
           }));
+
+          // Hard guard: collapse any duplicate cards for the SAME strategy id into
+          // one. Two independent data sources feed this section (the strategies
+          // poll and the transactions cache) on different clocks, so a brief sync
+          // gap could otherwise surface the same strategy twice — once matched to
+          // its transaction (real date) and once via the txs:[null] fallback
+          // (no date). When both exist, keep the one carrying real transactions.
+          const byStratId = new Map();
+          for (const g of stratGroups) {
+            const id = g.strat?.id || g.strat?.name || g.key;
+            const existing = byStratId.get(id);
+            if (!existing) { byStratId.set(id, g); continue; }
+            const gHasReal = g.txs.some(Boolean);
+            const exHasReal = existing.txs.some(Boolean);
+            if (gHasReal && !exHasReal) byStratId.set(id, g);
+            // else keep existing (it already has real txs, or neither does)
+          }
+          stratGroups = [...byStratId.values()];
 
           const pendingAssetItems = pendingAssets.map(a => {
             const allBatches = Array.isArray(a.batches) ? a.batches : [];
