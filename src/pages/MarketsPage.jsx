@@ -1974,8 +1974,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
             ) : (
               <>
-              {/* Strategies grouped by sector */}
-              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))].map((sector) => {
+              {/* Strategies grouped by sector — Equities first, ETFs last */}
+              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))].sort((a, b) => {
+                const order = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
+                return (order[a] ?? 2) - (order[b] ?? 2);
+              }).map((sector) => {
                 const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
