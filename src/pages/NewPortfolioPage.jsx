@@ -1180,7 +1180,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           {/* Tabs: Strategy, Holdings */}
           <section className="flex gap-2 mt-1 justify-center">
             {[
-              { id: "strategy", label: "Strategies" },
+              { id: "strategy", label: "Baskets" },
               { id: "holdings", label: "Holdings" },
             ].map((tab) => (
               <button
