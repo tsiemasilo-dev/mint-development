@@ -6869,6 +6869,8 @@ app.post("/api/credit-check", async (req, res) => {
     res.json({
       success: result?.success === true, ok: result?.success === true,
       applicationId, userId, creditScore: creditScoreValue,
+      reportPdfBase64: result?.reportPdfBase64 || null,
+      reportPdfFilename: result?.reportPdfFilename || 'experian-credit-report.pdf',
       recommendation: result?.recommendation, riskFlags: result?.riskFlags,
       breakdown: engineResultPayload, loanEngineScore, loanEngineScoreMax, loanEngineScoreNormalized,
       creditExposure, scoreReasons, employmentHistory,

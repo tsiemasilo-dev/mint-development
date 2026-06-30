@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload, Download } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -162,6 +162,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [scoreError, setScoreError] = useState("");
   const [creditDone, setCreditDone] = useState(false);
   const [creditAt, setCreditAt] = useState(null); // when the bureau check last ran
+  // Official Experian report PDF (base64) returned by the last run — powers the
+  // download button so the client can verify the score straight from the bureau.
+  const [reportPdf, setReportPdf] = useState(null); // { base64, filename }
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
   const [loanTermMonths, setLoanTermMonths] = useState(3);
@@ -705,6 +708,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setScoreReasons(reasons);
       setCreditDone(true);
       setCreditAt(nowIso);
+      // Stash the official Experian PDF (if the bureau returned one) for download.
+      if (data.reportPdfBase64) {
+        setReportPdf({ base64: data.reportPdfBase64, filename: data.reportPdfFilename || "experian-credit-report.pdf" });
+      }
       await saveCreditFlag({
         credit_score: hasScore ? s : null,
         credit_score_band: band,
@@ -720,6 +727,26 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setBureauRunning(false);
     }
   }, [idOnFile, profile, addr1, addr2, addr3, addrPostal, poaPath, saveCreditFlag, fetchKycAddress]);
+
+  // Download the official Experian report PDF (base64 → blob) so the client has
+  // proof of the exact bureau result, straight from Experian.
+  const downloadReportPdf = useCallback(() => {
+    if (!reportPdf?.base64) return;
+    try {
+      const chars = atob(reportPdf.base64);
+      const bytes = new Uint8Array(chars.length);
+      for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = reportPdf.filename || "experian-credit-report.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[CreditFlow] PDF download failed:", e?.message || e);
+    }
+  }, [reportPdf]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -893,7 +920,20 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           <>
             <Header title="Credit check" />
 
-            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="relative rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              {/* Download the official Experian report PDF — proof of the score,
+                  straight from the bureau. Shown only once a run returns a PDF. */}
+              {reportPdf?.base64 && (
+                <button
+                  type="button"
+                  onClick={downloadReportPdf}
+                  title="Download your Experian report (PDF)"
+                  aria-label="Download your Experian report (PDF)"
+                  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white shadow-md transition active:scale-95 hover:bg-violet-700"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              )}
               <ScoreGauge value={score} />
               <p className="mt-1 text-center text-xs text-slate-400">
                 {creditDone ? `${scoreBand} · one enquiry, reused across all lenders` : "We run a single credit bureau enquiry — reused across every lender, so your score is protected."}
@@ -1085,18 +1125,30 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                         )}
                         <div className="relative mt-3 flex items-end gap-1">
                           <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
-                          <input
-                            type="text" inputMode="numeric"
-                            value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
-                            onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
-                            placeholder="0"
-                            className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
-                          />
+                          {found ? (
+                            // AI-detected salary is authoritative — read-only, not user-editable.
+                            <div className="w-full text-[36px] font-light leading-none text-slate-900">
+                              {monthlyIncome.toLocaleString("en-ZA")}
+                            </div>
+                          ) : (
+                            // Only when detection fails do we let the user type a figure in.
+                            <input
+                              type="text" inputMode="numeric"
+                              value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
+                              onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                              placeholder="0"
+                              className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
+                            />
+                          )}
                         </div>
                         {found && lastTxn?.salary_date && (
                           <p className="mt-1 text-[11px] text-slate-400">Last deposit detected on {lastTxn.salary_date}{lastTxn.employer_name ? ` from ${lastTxn.employer_name}` : ""}.</p>
                         )}
-                        <p className="mt-2 text-[11px] text-slate-400">Edit the amount above if this isn't quite right, then continue.</p>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {found
+                            ? "This figure is taken from your bank statement and can't be edited. Upload a different statement if it's not right."
+                            : "We couldn't detect a salary automatically — enter your monthly income to continue."}
+                        </p>
                       </div>
                     );
                   })()}
