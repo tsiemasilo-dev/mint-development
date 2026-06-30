@@ -1900,6 +1900,10 @@ const HomePage = ({
 
           // Inject a simulated pending order during the coach tour or right after a payment
           const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
+          if (coachSimName) {
+            // During the coach tour suppress real pending orders — only the mock should show
+            stratGroups.splice(0);
+          }
           if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
             const realStrat = safeStrategies.find(s =>
               (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
@@ -1930,7 +1934,8 @@ const HomePage = ({
             });
           }
 
-          const totalGroups = stratGroups.length + pendingAssetItems.length;
+          const visiblePendingAssetItems = coachSimName ? [] : pendingAssetItems;
+          const totalGroups = stratGroups.length + visiblePendingAssetItems.length;
           if (totalGroups === 0) return null;
 
           const fmtDate = (tx) => {
@@ -2060,7 +2065,7 @@ const HomePage = ({
                 })}
 
                 {/* Single-security pending items */}
-                {pendingAssetItems.map(item => {
+                {visiblePendingAssetItems.map(item => {
                   const isStack = item.batches.length > 1;
                   const isExpanded = expandedPendingKey === item.key;
 
