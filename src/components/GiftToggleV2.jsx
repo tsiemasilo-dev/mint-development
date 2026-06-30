@@ -70,9 +70,22 @@ const AVATAR_GRADIENTS = [
   "from-indigo-400 to-blue-600",
   "from-cyan-400 to-sky-600",
 ];
+const AVATAR_ACCENTS = [
+  "#7c3aed",
+  "#10b981",
+  "#38bdf8",
+  "#f59e0b",
+  "#fb7185",
+  "#d946ef",
+  "#818cf8",
+  "#22d3ee",
+];
 
 function avatarGradient(name) {
   return AVATAR_GRADIENTS[(name?.charCodeAt(0) || 0) % AVATAR_GRADIENTS.length];
+}
+function avatarAccent(name) {
+  return AVATAR_ACCENTS[(name?.charCodeAt(0) || 0) % AVATAR_ACCENTS.length];
 }
 
 function ConfettiBurst({ active }) {
@@ -129,10 +142,16 @@ function Row({ label, value, bold }) {
   );
 }
 
-function SwipeableRow({ b, onSelect, onDeleteRequest, index }) {
+function SwipeableRow({ b, onSelect, onDeleteRequest, index, isLast }) {
   const x = useMotionValue(0);
   const [revealed, setRevealed] = useState(false);
   const isEven = index % 2 === 0;
+  const accent = avatarAccent(b.firstName);
+  const rowBg = isEven ? "#ffffff" : "#faf8ff";
+
+  const usedLabel = b.used_at
+    ? new Date(b.used_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+    : null;
 
   function snapOpen() {
     setRevealed(true);
@@ -143,10 +162,8 @@ function SwipeableRow({ b, onSelect, onDeleteRequest, index }) {
     animate(x, 0, { type: "spring", stiffness: 500, damping: 40 });
   }
 
-  const rowBg = isEven ? "#ffffff" : "#f8f9fb";
-
   return (
-    <div className="relative overflow-hidden" style={{ borderBottom: "1px solid #eef0f4" }}>
+    <div className="relative overflow-hidden" style={{ borderBottom: isLast ? "none" : "1px solid #ede9fe" }}>
       {/* Delete zone */}
       <div className="absolute right-0 top-0 bottom-0 w-[76px] flex items-center justify-center"
            style={{ background: "linear-gradient(135deg,#ff3b3b,#e00)" }}>
@@ -177,16 +194,22 @@ function SwipeableRow({ b, onSelect, onDeleteRequest, index }) {
         }}
         className="flex items-center gap-3 px-4 py-3.5 relative z-10 cursor-pointer select-none"
       >
+        {/* Left accent bar */}
+        <div style={{
+          position: "absolute", left: 0, top: "18%", bottom: "18%",
+          width: 3, borderRadius: 2, background: accent,
+        }} />
+
         {/* Avatar */}
         <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarGradient(b.firstName)} flex items-center justify-center shrink-0`}
-             style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}>
+             style={{ boxShadow: `0 0 0 2px ${accent}28, 0 2px 8px rgba(0,0,0,0.13)` }}>
           <span className="text-[15px] font-bold text-white">
             {b.firstName?.[0]?.toUpperCase() || "?"}
           </span>
         </div>
 
         {/* Name + detail */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 pl-0.5">
           <p className="text-[13.5px] font-semibold text-slate-800 leading-snug truncate">
             {b.firstName} {b.lastName}
           </p>
@@ -202,11 +225,17 @@ function SwipeableRow({ b, onSelect, onDeleteRequest, index }) {
           </div>
         </div>
 
-        {/* Right indicator */}
-        <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: isEven ? "#f1f3f7" : "#eaecf2" }}>
-          <svg width="6" height="10" viewBox="0 0 6 10" fill="none">
-            <path d="M1 1l4 4-4 4" stroke="#94a3b8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+        {/* Right */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {usedLabel && (
+            <span className="text-[9px] font-medium text-slate-300 leading-none">{usedLabel}</span>
+          )}
+          <div className="w-6 h-6 rounded-full flex items-center justify-center"
+               style={{ background: `${accent}18` }}>
+            <svg width="6" height="10" viewBox="0 0 6 10" fill="none">
+              <path d="M1 1l4 4-4 4" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -630,12 +659,22 @@ export default function GiftToggleV2({
                           </p>
                         </div>
                       ) : (
-                        <div>
+                        <div className="mx-4 rounded-2xl overflow-hidden border border-violet-100 shadow-sm">
+                          {/* Header strip */}
+                          <div className="flex items-center justify-between px-4 py-2.5"
+                               style={{ background: "linear-gradient(90deg,#f5f3ff,#faf9ff)", borderBottom: "1px solid #ede9fe" }}>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-violet-400">Saved recipients</span>
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-violet-600"
+                                  style={{ background: "#ede9fe" }}>
+                              {filteredBeneficiaries.length}
+                            </span>
+                          </div>
                           {filteredBeneficiaries.map((b, i) => (
                             <SwipeableRow
                               key={`${b.email}-${i}`}
                               b={b}
                               index={i}
+                              isLast={i === filteredBeneficiaries.length - 1}
                               onSelect={handleSelectBeneficiary}
                               onDeleteRequest={setDeleteCandidate}
                             />
