@@ -2040,7 +2040,9 @@ const HomePage = ({
           if (totalGroups === 0) return null;
 
           const fmtDate = (tx) => {
-            const d = new Date(tx?.transaction_date || tx?.created_at || 0);
+            const raw = tx?.transaction_date || tx?.created_at;
+            if (!raw) return null;
+            const d = new Date(raw);
             if (isNaN(d)) return null;
             return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
           };
