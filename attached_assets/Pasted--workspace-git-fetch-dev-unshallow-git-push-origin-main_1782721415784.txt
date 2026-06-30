@@ -1,0 +1,43 @@
+~/workspace$ git fetch dev --unshallow
+git push origin main --force
+fatal: Unable to create '/home/runner/workspace/.git/shallow.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+Enumerating objects: 169, done.
+Counting objects: 100% (140/140), done.
+Delta compression using up to 2 threads
+Compressing objects: 100% (24/24), done.
+Writing objects: 100% (26/26), 609.11 KiB | 121.82 MiB/s, done.
+Total 26 (delta 15), reused 13 (delta 2), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (15/15), completed with 15 local objects.
+remote: fatal: did not receive expected object 8b7ff159c66cb5e518951f2876cfee1bcd6bfe1d
+error: remote unpack failed: index-pack failed
+To https://github.com/tsiemasilo-dev/MINT-LIVE.git
+ ! [remote rejected]   main -> main (failed)
+error: failed to push some refs to 'https://github.com/tsiemasilo-dev/MINT-LIVE.git'
+~/workspace$ git fetch dev --depth=2147483647
+git push origin main --force
+fatal: Unable to create '/home/runner/workspace/.git/shallow.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+Enumerating objects: 169, done.
+Counting objects: 100% (140/140), done.
+Delta compression using up to 2 threads
+Compressing objects: 100% (24/24), done.
+Writing objects: 100% (26/26), 609.11 KiB | 152.28 MiB/s, done.
+Total 26 (delta 15), reused 13 (delta 2), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (15/15), completed with 15 local objects.
+remote: fatal: did not receive expected object 8b7ff159c66cb5e518951f2876cfee1bcd6bfe1d
+error: remote unpack failed: index-pack failed
+To https://github.com/tsiemasilo-dev/MINT-LIVE.git
+ ! [remote rejected]   main -> main (failed)
+error: failed to push some refs to 'https://github.com/tsiemasilo-dev/MINT-LIVE.git'
+~/workspace$ 
