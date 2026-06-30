@@ -399,31 +399,6 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, []);
 
-  // Lower the active application's requested amount when no lender made an offer.
-  // The new (lower) amount becomes the OFFICIAL requested_amount, then we
-  // re-evaluate AlgoLend against it.
-  const applyAdjustedAmount = useCallback(async () => {
-    const amt = Number(adjustAmount) || 0;
-    const current = Number(activeApplication?.requested_amount) || 0;
-    if (!activeApplication || amt < 100 || amt >= current) return;
-    setAdjustSaving(true);
-    try {
-      const { error } = await supabase
-        .from("credit_marketplace_applications")
-        .update({ requested_amount: amt, updated_at: new Date().toISOString() })
-        .eq("id", activeApplication.id);
-      if (error) throw error;
-      const updated = { ...activeApplication, requested_amount: amt };
-      setActiveApplication(updated);
-      setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-      await evaluateWithAlgoLend(updated);
-    } catch (e) {
-      console.warn("[CreditFlow] applyAdjustedAmount failed:", e?.message || e);
-    } finally {
-      setAdjustSaving(false);
-    }
-  }, [adjustAmount, activeApplication, evaluateWithAlgoLend]);
-
   const goMarketplace = useCallback(() => { setStep("marketplace"); loadApplications(); }, [loadApplications]);
 
   // Ask AlgoLend to evaluate every active lender policy and return ranked
@@ -477,6 +452,32 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     setStep("marketplaceOffers");
     evaluateWithAlgoLend(app);
   }, [evaluateWithAlgoLend]);
+
+  // Lower the active application's requested amount when no lender made an offer.
+  // The new (lower) amount becomes the OFFICIAL requested_amount, then we
+  // re-evaluate AlgoLend against it. Declared AFTER evaluateWithAlgoLend so its
+  // dependency reference is initialised (avoids a TDZ crash on render).
+  const applyAdjustedAmount = useCallback(async () => {
+    const amt = Number(adjustAmount) || 0;
+    const current = Number(activeApplication?.requested_amount) || 0;
+    if (!activeApplication || amt < 100 || amt >= current) return;
+    setAdjustSaving(true);
+    try {
+      const { error } = await supabase
+        .from("credit_marketplace_applications")
+        .update({ requested_amount: amt, updated_at: new Date().toISOString() })
+        .eq("id", activeApplication.id);
+      if (error) throw error;
+      const updated = { ...activeApplication, requested_amount: amt };
+      setActiveApplication(updated);
+      setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      await evaluateWithAlgoLend(updated);
+    } catch (e) {
+      console.warn("[CreditFlow] applyAdjustedAmount failed:", e?.message || e);
+    } finally {
+      setAdjustSaving(false);
+    }
+  }, [adjustAmount, activeApplication, evaluateWithAlgoLend]);
 
   // Multi-select — the CEO's model lets a borrower apply to several lenders.
   const toggleProviderSel = useCallback((id) => {
