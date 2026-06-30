@@ -8,6 +8,10 @@
     {
       "path": "/api/prices/eod-save",
       "schedule": "5 15 * * 1-5"
+    },
+    {
+      "path": "/api/aum-fee/run",
+      "schedule": "30 21 * * *"
     }
   ],
   "rewrites": [
