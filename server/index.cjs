@@ -1170,7 +1170,9 @@ app.post("/api/user/request-sell", async (req, res) => {
       return res.status(404).json({ success: false, error: "Holding not found or not sellable" });
 
     // Don't double-request: if everything is already a pending sell, bail early.
-    const sellable = rows.filter((r) => r.side !== "sell");
+    // Check BOTH side fields — trade_side is the canonical one the CRM reads.
+    const isSell = (r) => String(r.trade_side || "").toUpperCase() === "SELL" || String(r.side || "").toLowerCase() === "sell";
+    const sellable = rows.filter((r) => !isSell(r));
     if (sellable.length === 0)
       return res.status(409).json({ success: false, error: "A sell is already pending for this holding", alreadyPending: true });
 
@@ -1193,10 +1195,11 @@ app.post("/api/user/request-sell", async (req, res) => {
     const reference = "SELL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     const now = new Date().toISOString();
 
-    // Flip the holding(s) to a pending SELL.
+    // Flip the holding(s) to a pending SELL. Set BOTH fields so the CRM order
+    // book (which reads trade_side first) recognises it as a SELL, not a BUY.
     const { error: updErr } = await db
       .from("stock_holdings_c")
-      .update({ side: "sell", sell_requested_at: now, updated_at: now })
+      .update({ side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now })
       .in("id", ids);
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);

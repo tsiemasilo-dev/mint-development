@@ -97,12 +97,18 @@ export default async function handler(req, res) {
 
     const holdingsByStratId = {};
     const holdingStrategyIds = [];
+    // A strategy only belongs on the dashboard while it has at least one OPEN
+    // (is_active) holding. A fully-sold strategy keeps its rows (flipped to
+    // is_active=false) for history/realised-P&L, but must NOT resurface as a
+    // live card — otherwise selling out leaves a ghost strategy behind.
+    const activeHoldingStrategyIds = new Set();
     for (const h of (userHoldings || [])) {
       if (!holdingsByStratId[h.strategy_id]) {
         holdingsByStratId[h.strategy_id] = [];
         holdingStrategyIds.push(h.strategy_id);
       }
       holdingsByStratId[h.strategy_id].push(h);
+      if (h.is_active !== false) activeHoldingStrategyIds.add(h.strategy_id);
     }
 
     // If no holdings and no transaction names, return empty
@@ -252,16 +258,16 @@ export default async function handler(req, res) {
     // 7. Match and build response
     const matchedStrategies = [];
     for (const strategy of (allStrategies || [])) {
-      const matchedByHoldings = holdingStrategyIds.includes(strategy.id);
+      const matchedByHoldings = activeHoldingStrategyIds.has(strategy.id);
       const matchedByTxName = strategyNames.find(sn =>
         sn.toLowerCase() === (strategy.name || "").toLowerCase() ||
         sn.toLowerCase() === (strategy.short_name || "").toLowerCase()
       );
 
-      // Only include strategies the user has active stock_holdings_c rows for.
-      // A lingering transaction alone (e.g. holdings row was deleted) must not
-      // resurrect the strategy on the dashboard — that produced "bought"-looking
-      // cards from orphaned tx data.
+      // Only include strategies the user has at least one OPEN (is_active)
+      // holding for. A lingering transaction alone (e.g. holdings deleted) or a
+      // fully-sold strategy (all holdings is_active=false) must NOT resurrect the
+      // strategy on the dashboard — that produced ghost "bought"-looking cards.
       if (!matchedByHoldings) continue;
 
       const latestMetric = returnsMap[strategy.id] || null;

@@ -52,6 +52,7 @@ export default function WithdrawPage({ onBack }) {
   const [invested, setInvested] = useState(0);
   const [cash, setCash] = useState(0);
   const [sinceDate, setSinceDate] = useState(null);
+  const [justSold, setJustSold] = useState(() => new Set()); // ids sold this session
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +92,8 @@ export default function WithdrawPage({ onBack }) {
           return { qty, value, cost, change: cost > 0 ? (pnl / cost) * 100 : 0, up: pnl >= 0 };
         };
 
+        const isSellHolding = (h) => String(h.trade_side || "").toUpperCase() === "SELL" || String(h.side || "").toLowerCase() === "sell";
+
         const singleAssets = holdings.filter((h) => !h.strategy_id).map((h) => {
           const e = enrich(h);
           return {
@@ -107,6 +110,11 @@ export default function WithdrawPage({ onBack }) {
             cost: e.cost,
             change: e.change,
             up: e.up,
+            pendingSell: isSellHolding(h),
+            // Breakdown inputs: a single asset's proceeds = its value; any unused
+            // reserve is computed/returned at settlement (not pre-estimated here).
+            positionsValue: e.value,
+            reserveRefundCents: 0,
           };
         });
 
@@ -116,10 +124,12 @@ export default function WithdrawPage({ onBack }) {
           const sid = h.strategy_id;
           if (!sid) return;
           const e = enrich(h);
-          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null };
+          if (!stratMap[sid]) stratMap[sid] = { value: 0, cost: 0, count: 0, name: null, logo: null, assets: [], pendingSell: false };
           stratMap[sid].value += e.value;
           stratMap[sid].cost += e.cost;
           stratMap[sid].count += 1;
+          stratMap[sid].assets.push({ logo: h.logo_url || null, symbol: h.symbol || "" });
+          if (isSellHolding(h)) stratMap[sid].pendingSell = true;
         });
         const stratIds = Object.keys(stratMap);
         if (stratIds.length) {
@@ -160,10 +170,16 @@ export default function WithdrawPage({ onBack }) {
             symbol: s.name || "Strategy",
             name: `${s.count} asset${s.count === 1 ? "" : "s"}`,
             logo: s.logo,
+            assets: s.assets.slice(0, 3),
             value: adjustedValue,
             cost: adjustedCost,
             change: adjustedCost > 0 ? (pnl / adjustedCost) * 100 : 0,
             up: pnl >= 0,
+            pendingSell: s.pendingSell,
+            // Breakdown inputs: proceeds = the holdings' market value; the unused
+            // 8% execution reserve (held buffer) is returned on top at full exit.
+            positionsValue: s.value,
+            reserveRefundCents: Math.max(0, bufferCentsByStrategy[sid] || 0),
           };
         });
 
@@ -201,6 +217,9 @@ export default function WithdrawPage({ onBack }) {
     return () => { cancelled = true; };
   }, []);
 
+  // An item is pending-sell if the server says so OR we just sold it this session.
+  const isItemSelling = (item) => item.pendingSell || justSold.has(item.id);
+
   const totalValue = useMemo(
     () => [...strategies, ...singles].reduce((s, x) => s + x.value, 0),
     [strategies, singles]
@@ -208,77 +227,112 @@ export default function WithdrawPage({ onBack }) {
   const totalPnl = totalValue - invested;
   const totalPct = invested > 0 ? (totalPnl / invested) * 100 : 0;
 
+  // Total value tied up in pending sells — shown as the amount the portfolio
+  // will drop by once the broker fills, and a projected "after" value.
+  const pendingSellTotal = useMemo(
+    () => [...strategies, ...singles].filter(isItemSelling).reduce((s, x) => s + x.value, 0),
+    [strategies, singles, justSold]
+  );
+
   const totalAnim = useCountUp(totalValue);
   const investedAnim = useCountUp(invested);
   const cashAnim = useCountUp(cash);
 
-  // ── Cosmic particle header ────────────────────────────────────────────────
+  // ── WebGL2 shader header (purple & black) ─────────────────────────────────
   const canvasRef = useRef(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let W, H, raf;
-    let particles = [];
-    const dpr = window.devicePixelRatio || 1;
+    const gl = canvas.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+    if (!gl) return; // no WebGL2 → leave the header blank (CSS bg shows through)
+
+    const VERT = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`;
+    // Recoloured to purple/black: accumulate a single intensity, then ramp it
+    // through purple with a lilac highlight; black where there's no energy.
+    const FRAG = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec3 iResolution;
+uniform float iTime;
+void mainImage(out vec4 fragColor, in vec2 fragCoord){
+  vec2 r = iResolution.xy;
+  float t = iTime;
+  vec2 p = fragCoord - r * 0.5;
+  vec4 o = vec4(0.0);
+  for (float i = 0.0, a; i++ < 9.0; ) {
+    a = (i * i) / 80.0 - length(p) / r.y;
+    float denom = max(a, -a * 3.0) + 2.0 / r.y;
+    a = cos(i - t);
+    float edge0 = a;
+    a = atan(p.y, p.x) + a + i * i;
+    float sm = smoothstep(edge0, 2.0, cos(a));
+    o += 0.03 / denom * sm * 1.2;
+  }
+  float v = tanh(o.r);
+  vec3 base   = vec3(0.10, 0.03, 0.20);   // dark purple background
+  vec3 purple = vec3(0.45, 0.16, 0.85);
+  vec3 lilac  = vec3(0.80, 0.60, 1.0);
+  vec3 col = base + purple * v + lilac * pow(v, 4.0) * 0.7;
+  fragColor = vec4(col, 1.0);
+}
+void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
+
+    const compile = (type, src) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+      return s;
+    };
+    const vs = compile(gl.VERTEX_SHADER, VERT);
+    const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) return;
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return; }
+    gl.deleteShader(vs); gl.deleteShader(fs);
+
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    const uRes = gl.getUniformLocation(prog, "iResolution");
+    const uTime = gl.getUniformLocation(prog, "iTime");
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
 
     const resize = () => {
-      const r = canvas.getBoundingClientRect();
-      W = canvas.width = r.width * dpr;
-      H = canvas.height = r.height * dpr;
+      const rct = canvas.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(rct.width * dpr));
+      const h = Math.max(1, Math.floor(rct.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
     };
     resize();
     window.addEventListener("resize", resize);
 
-    const CX = () => W / 2, CY = () => H * 0.32;
-    const mk = () => ({
-      angle: Math.random() * Math.PI * 2,
-      dist: Math.random() * 0.3,
-      speed: 0.0015 + Math.random() * 0.004,
-      size: Math.random() * 1.6 + 0.4,
-      life: Math.random(),
-    });
-    for (let i = 0; i < 90; i++) particles.push(mk());
-
-    const draw = () => {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#1a0a3a";
-      ctx.fillRect(0, 0, W, H);
-      const g = ctx.createRadialGradient(CX(), CY(), 0, CX(), CY(), W * 0.7);
-      g.addColorStop(0, "rgba(83,74,183,0.5)");
-      g.addColorStop(0.5, "rgba(38,33,92,0.3)");
-      g.addColorStop(1, "rgba(26,10,58,0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-
-      particles.forEach((p) => {
-        p.dist += p.speed;
-        p.life -= 0.004;
-        if (p.dist > 0.95 || p.life <= 0) { Object.assign(p, mk()); p.dist = 0.02; p.life = 1; }
-        const r = p.dist * W * 0.62;
-        const x = CX() + Math.cos(p.angle) * r;
-        const y = CY() + Math.sin(p.angle) * r * 0.75;
-        const op = Math.min(p.dist * 2.2, 1) * Math.min(p.life * 1.5, 1) * 0.9;
-        const sz = p.size * (1 + p.dist * 2.5) * dpr;
-        ctx.beginPath();
-        ctx.arc(x, y, sz, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${op})`;
-        ctx.fill();
-        if (p.dist > 0.4) {
-          ctx.beginPath();
-          const tx = CX() + Math.cos(p.angle) * (r - sz * 4);
-          const ty = CY() + Math.sin(p.angle) * (r - sz * 4) * 0.75;
-          ctx.moveTo(x, y); ctx.lineTo(tx, ty);
-          ctx.strokeStyle = `rgba(255,255,255,${op * 0.3})`;
-          ctx.lineWidth = sz * 0.5;
-          ctx.stroke();
-        }
-      });
-      raf = requestAnimationFrame(draw);
+    let raf, disposed = false;
+    const start = performance.now();
+    const tick = (now) => {
+      if (disposed) return;
+      if (gl.isContextLost()) { raf = requestAnimationFrame(tick); return; }
+      resize();
+      gl.useProgram(prog);
+      gl.uniform3f(uRes, canvas.width, canvas.height, dpr);
+      gl.uniform1f(uTime, (now - start) / 1000);
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      raf = requestAnimationFrame(tick);
     };
-    draw();
+    raf = requestAnimationFrame(tick);
 
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+    return () => {
+      disposed = true;
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      try { gl.deleteBuffer(vbo); gl.deleteVertexArray(vao); gl.deleteProgram(prog); } catch {}
+    };
   }, []);
 
   const Avatar = ({ item, size = 42 }) => (
@@ -292,25 +346,71 @@ export default function WithdrawPage({ onBack }) {
     </div>
   );
 
+  // Strategy/basket: show its underlying asset icons, stacked (up to 3).
+  const StackedAvatar = ({ assets, size = 42 }) => {
+    const list = (assets || []).slice(0, 3);
+    const overlap = Math.round(size * 0.34);
+    return (
+      <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+        {list.map((a, i) => (
+          <div
+            key={i}
+            className="wd-avatar"
+            style={{
+              height: size, width: size,
+              marginLeft: i === 0 ? 0 : -overlap,
+              zIndex: list.length - i,
+              border: "2px solid #fff",
+              boxShadow: "0 1px 5px rgba(60,52,137,0.18)",
+              background: a.logo ? "#fff" : colorFor(a.symbol),
+              fontSize: 11,
+            }}
+          >
+            {a.logo
+              ? <img src={a.logo} alt="" style={{ height: "100%", width: "100%", objectFit: "cover", borderRadius: 13 }} />
+              : String(a.symbol || "?").slice(0, 2).toUpperCase()}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const Card = ({ item, delay }) => {
     const sub = item.name + (item.kind === "security" && item.qty ? ` · ${item.qty} sh` : "");
     const chCol = item.up ? "#1D9E75" : "#D4537E";
+    const selling = isItemSelling(item);
     return (
       <div
         className="wd-hcard"
-        onClick={() => setSelected(item)}
-        style={{ animation: `wd-floatIn 0.5s cubic-bezier(0.34,1.4,0.64,1) ${delay}s forwards` }}
+        onClick={selling ? undefined : () => setSelected(item)}
+        style={{
+          animation: `wd-floatIn 0.5s cubic-bezier(0.34,1.4,0.64,1) ${delay}s forwards`,
+          ...(selling ? { opacity: 0.55, cursor: "default", filter: "grayscale(0.6)" } : {}),
+        }}
       >
-        <Avatar item={item} />
+        {item.kind === "strategy" && item.assets?.length
+          ? <StackedAvatar assets={item.assets} />
+          : <Avatar item={item} />}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="wd-name">{item.symbol}</div>
-          <div className="wd-sub">{sub}</div>
+          {selling ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 2, fontSize: 11, fontWeight: 600, color: "#D4537E" }}>
+              <span style={{ height: 6, width: 6, borderRadius: "50%", background: "#D4537E", display: "inline-block" }} />
+              Selling · pending
+            </div>
+          ) : (
+            <div className="wd-sub">{sub}</div>
+          )}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0, minWidth: 74 }}>
           <div className="wd-cardval">{fmtR(item.value)}</div>
-          <div style={{ fontSize: 11.5, fontWeight: 500, color: chCol }}>
-            {item.up ? "↑" : "↓"} {Math.abs(item.change).toFixed(1)}%
-          </div>
+          {selling ? (
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: "#D4537E" }}>−{fmtR(item.value)}</div>
+          ) : (
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: chCol }}>
+              {item.up ? "↑" : "↓"} {Math.abs(item.change).toFixed(1)}%
+            </div>
+          )}
         </div>
       </div>
     );
@@ -345,6 +445,19 @@ export default function WithdrawPage({ onBack }) {
             }}>
               {totalPnl >= 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
               <span>{(totalPnl >= 0 ? "+" : "−") + fmtR(Math.abs(totalPnl)) + " · " + Math.abs(totalPct).toFixed(1) + "%"}</span>
+            </div>
+          )}
+          {pendingSellTotal > 0 && (
+            <div style={{ marginTop: 12, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div className="wd-pill" style={{
+                background: "rgba(212,83,126,0.18)", borderColor: "rgba(212,83,126,0.4)", color: "#F2A6BE",
+              }}>
+                <TrendingDown size={15} />
+                <span>−{fmtR(pendingSellTotal)} selling</span>
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(207,188,255,0.65)" }}>
+                After fills ≈ <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>{fmtR(Math.max(0, totalValue - pendingSellTotal))}</span>
+              </div>
             </div>
           )}
           {sinceDate && (
@@ -436,6 +549,7 @@ export default function WithdrawPage({ onBack }) {
       {selected && (
         <SellSheet
           item={selected}
+          onSold={() => setJustSold((prev) => new Set(prev).add(selected.id))}
           onClose={() => setSelected(null)}
           onSubmit={async () => {
             const session = await getSession();
@@ -448,9 +562,17 @@ export default function WithdrawPage({ onBack }) {
               headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
               body: JSON.stringify(body),
             });
-            const json = await res.json().catch(() => ({}));
+            // Read as text first so we can surface the real reason even when the
+            // response isn't JSON (e.g. a 404 HTML page from an older server build).
+            let json = {};
+            const rawText = await res.text().catch(() => "");
+            try { json = rawText ? JSON.parse(rawText) : {}; } catch { json = {}; }
             if (!res.ok || !json.success) {
-              throw new Error(json.error || "Could not submit your sell. Please try again.");
+              const detail = json.error
+                || (res.status === 404
+                  ? "Sell service not found (404) — the server may be running an older build. Try again after it redeploys/restarts."
+                  : `Could not submit your sell (server returned ${res.status}). Please try again.`);
+              throw new Error(detail);
             }
             return json.reference;
           }}
@@ -463,7 +585,7 @@ export default function WithdrawPage({ onBack }) {
 /* ── Confirmation bottom-sheet ──────────────────────────────────────────────
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
-function SellSheet({ item, onClose, onSubmit }) {
+function SellSheet({ item, onClose, onSubmit, onSold }) {
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -479,6 +601,7 @@ function SellSheet({ item, onClose, onSubmit }) {
       const reference = await onSubmit();
       setRef(reference || "—");
       setDone(true);
+      onSold?.(); // grey out the sold card + reflect the pending drop immediately
     } catch (e) {
       setErr(e.message || "Could not submit your sell. Please try again.");
     } finally {
@@ -534,11 +657,32 @@ function SellSheet({ item, onClose, onSubmit }) {
               </div>
             </div>
 
+            {(() => {
+              const proceeds = Number(item.positionsValue ?? item.value ?? 0);
+              const reserve = Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
+              const net = proceeds + reserve;
+              const row = (label, val, opts = {}) => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: opts.last ? "none" : "0.5px solid rgba(127,119,221,0.14)" }}>
+                  <span style={{ fontSize: opts.strong ? 13 : 12.5, color: opts.strong ? "#26215C" : "#7d72a8", fontWeight: opts.strong ? 500 : 400 }}>{label}</span>
+                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : ""}{fmtR(val)}</span>
+                </div>
+              );
+              return (
+                <div style={{ marginTop: 16, padding: "4px 16px", borderRadius: 16, background: "#faf8ff", border: "0.5px solid rgba(127,119,221,0.16)" }}>
+                  {row("Estimated proceeds", proceeds)}
+                  {row("Sell fee", 0)}
+                  {reserve > 0 && row("Unused 8% reserve returned", reserve, { green: true })}
+                  {row("Estimated to your wallet", net, { strong: true, last: true })}
+                </div>
+              );
+            })()}
+
             <div className="wd-warn">
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.6 }}>
                 <p style={{ margin: "0 0 6px" }}>Processed at the next market window and <span style={{ color: "#5a4d1a", fontWeight: 500 }}>cannot be cancelled</span> once submitted.</p>
-                <p style={{ margin: 0 }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: "0 0 6px" }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: 0 }}>No sell fee is charged. {Number(item.reserveRefundCents || 0) > 0 ? "Any unused 8% execution reserve from your purchase is returned to your wallet on this full exit." : "Any unused execution reserve from your purchase is returned to your wallet at settlement."}</p>
               </div>
             </div>
 
@@ -578,7 +722,7 @@ function SellSheet({ item, onClose, onSubmit }) {
 
 const WD_CSS = `
 .wd-root { position:relative; min-height:100vh; background:#fff; font-family:var(--font-sans, system-ui, sans-serif); overflow:hidden; }
-.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; }
+.wd-canvas { position:absolute; top:0; left:0; width:100%; height:340px; z-index:0; background:#1a0833; }
 .wd-fade { position:absolute; top:0; left:0; right:0; height:340px; z-index:1; pointer-events:none;
   background:linear-gradient(180deg, rgba(26,10,58,0) 0%, rgba(26,10,58,0) 55%, rgba(255,255,255,0.4) 82%, #fff 100%); }
 .wd-topbar { display:flex; align-items:center; justify-content:space-between; padding:16px; }

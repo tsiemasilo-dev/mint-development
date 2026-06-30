@@ -104,11 +104,11 @@ const CreditHome = ({ profile, onOpenNotifications, onTabChange }) => {
           return;
         }
       }
-      // No active loan — go to the apply flow (resolves to step 4 calculator if eligible)
-      onTabChange("creditApply");
+      // No active loan — enter the new unsecured credit flow (consent → KYC → bureau → marketplace)
+      onTabChange("creditFlow");
     } catch (err) {
       console.warn("Unsecured checkpoint check failed:", err?.message || err);
-      onTabChange("creditApply");
+      onTabChange("creditFlow");
     } finally {
       setNavigating(false);
     }
